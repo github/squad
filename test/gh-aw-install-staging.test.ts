@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -73,6 +73,33 @@ function seedUnownedMutableRouter(root: string): void {
     'Load mutable prompts from the current github/gh-aw repository.',
     '',
   ].join('\n'));
+}
+
+/** The indented commands the verifier prints after a heading, as one shell script. */
+function printedCommands(stderr: string, heading: string): string {
+  const lines = stderr.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex(line => line.startsWith(heading));
+  expect(start, `verifier output must print "${heading}":\n${stderr}`).toBeGreaterThan(-1);
+  const end = lines.findIndex((line, index) => index > start && !line.startsWith('  '));
+  return lines.slice(start + 1, end < 0 ? undefined : end).map(line => line.slice(2)).join('\n');
+}
+
+function runPrintedCommands(root: string, commands: string, addStatus: number) {
+  // No `set -e`: pasted commands keep running after a failure unless they stop themselves.
+  const script = `
+exec 3>&2
+gh() {
+  printf 'CALL gh %s\\n' "$*" >&3
+  if [ "$1 $2" = "aw add" ]; then return "$ADD_STATUS"; fi
+  return 0
+}
+node() { printf 'CALL node %s\\n' "$*" >&3; }
+${commands}
+`;
+  const result = spawnSync('bash', ['-c', script], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, ADD_STATUS: String(addStatus) },
+  });
+  return result.stderr.split('\n').filter(line => line.startsWith('CALL '));
 }
 
 afterEach(() => {
@@ -233,10 +260,10 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
       `Unowned mutable gh-aw router skill must be removed: ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
     );
     expect(rejected.stderr, `recovery must also delete ${LEGACY_OWNERSHIP}`).toContain([
-      `  gh aw add github/squad/workflows@${revision} --force`,
-      '  rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json',
-      `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
-      '  gh aw compile --strict',
+      `  gh aw add github/squad/workflows@${revision} --force &&`,
+      '  rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json &&',
+      `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL} &&`,
+      '  gh aw compile --strict &&',
       '  node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
     ].join('\n'));
 
@@ -331,7 +358,8 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
       + `of this ${LEGACY_PACKAGE_NAME} installation; do not delete it.`,
     );
     expect(failure, state).toContain(
-      `Reinstall with gh aw add ${PACKAGE_NAME}@${revision} --force, delete ${LEGACY_OWNERSHIP}, and stage both changes`,
+      `Reinstall with gh aw add ${PACKAGE_NAME}@${revision} --force; only after it succeeds, `
+      + `delete ${LEGACY_OWNERSHIP} and stage both changes`,
     );
     expect(failure, state).not.toContain('delete it and stage the deletion');
   }, 120_000);
@@ -344,12 +372,52 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(legacy.stderr, `a ${LEGACY_PACKAGE_NAME} install must print the move notice`).toContain([
       `Notice: verified under the legacy ${LEGACY_PACKAGE_NAME} package identity, which remains supported.`,
       `To move to ${PACKAGE_NAME}, follow the gh-aw guide's Upgrading steps, starting with:`,
-      `  gh aw add ${PACKAGE_NAME}@${revision} --force`,
+      `  gh aw add ${PACKAGE_NAME}@${revision} --force &&`,
       `  rm -f ${LEGACY_OWNERSHIP}`,
     ].join('\n'));
     const canonical = spawnSync(process.execPath, args, { cwd: consumer(), encoding: 'utf8' });
     expect(canonical.status, canonical.stderr).toBe(0);
     expect(canonical.stderr, `a ${PACKAGE_NAME} install must not print the legacy notice`).not.toContain('Notice:');
+  }, 120_000);
+
+  it.each([
+    [1, [LEGACY_OWNERSHIP, UNOWNED_MUTABLE_ROUTER_SKILL], []],
+    [0, [], ['CALL gh aw compile --strict',
+      'CALL node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile']],
+  ] as const)('runs the printed recovery cleanup only after the reinstall succeeds (gh aw add exits %i)',
+    (addStatus, remaining, afterReinstall) => {
+      const root = mkdtempSync(join(tmpdir(), 'squad-install-staging-'));
+      roots.push(root);
+      write(root, LEGACY_OWNERSHIP, `${JSON.stringify({ package: LEGACY_PACKAGE_NAME })}\n`);
+      seedUnownedMutableRouter(root);
+      const failed = spawnSync(process.execPath, [verifier, '--verify-install', '--source-revision', revision], {
+        cwd: root, encoding: 'utf8',
+      });
+      expect(failed.status, failed.stderr).toBe(1);
+      const commands = printedCommands(failed.stderr, 'Safe recovery');
+      const calls = runPrintedCommands(root, commands, addStatus);
+      const input = `printed recovery commands with gh aw add exiting ${addStatus}:\n${commands}`;
+      expect([LEGACY_OWNERSHIP, UNOWNED_MUTABLE_ROUTER_SKILL].filter(path => existsSync(join(root, path))),
+        `files left by the ${input}`).toEqual(remaining);
+      expect(calls, input).toEqual([`CALL gh aw add ${PACKAGE_NAME}@${revision} --force`, ...afterReinstall]);
+    });
+
+  it.each([
+    [1, [LEGACY_OWNERSHIP]],
+    [0, []],
+  ] as const)('removes the legacy record with the printed move commands only after the reinstall succeeds '
+    + '(gh aw add exits %i)', (addStatus, remaining) => {
+    const root = consumer(LEGACY_PACKAGE_NAME);
+    const verified = spawnSync(process.execPath, [verifier, '--verify-install', '--source-revision', revision], {
+      cwd: root, encoding: 'utf8',
+    });
+    expect(verified.status, verified.stderr).toBe(0);
+    const commands = printedCommands(verified.stderr, `To move to ${PACKAGE_NAME}`);
+    const calls = runPrintedCommands(root, commands, addStatus);
+    const input = `printed legacy move commands with gh aw add exiting ${addStatus}:\n${commands}`;
+    expect([LEGACY_OWNERSHIP].filter(path => existsSync(join(root, path))), `files left by the ${input}`)
+      .toEqual(remaining);
+    expect(calls, input).toEqual([`CALL gh aw add ${PACKAGE_NAME}@${revision} --force`]);
   }, 120_000);
 
   it('fails clearly when Git cannot force-stage the required ignored metadata', () => {

@@ -1142,8 +1142,8 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
       throw new Error(path === OWNERSHIP_DESTINATION
         ? `Squad package ownership record ${path} (${PACKAGE_NAME}) remains in the staged tree of this `
           + `${result.packageName} installation; do not delete it. Reinstall with `
-          + `gh aw add ${PACKAGE_NAME}@${result.revision} --force, delete ${ownershipDestination}, `
-          + 'and stage both changes before commit/push.'
+          + `gh aw add ${PACKAGE_NAME}@${result.revision} --force; only after it succeeds, delete `
+          + `${ownershipDestination} and stage both changes before commit/push.`
         : `Superseded Squad package ownership record remains in staged tree: ${path}; `
           + 'delete it and stage the deletion before commit/push.');
     }
@@ -1227,15 +1227,22 @@ export function writeLocalTestOwnership(root, revision) {
   }));
 }
 
+// One && chain, so a failed reinstall stops before any ownership-record or router cleanup.
+function chainedCommands(commands) {
+  return commands.map((command, index) => `  ${command}${index < commands.length - 1 ? ' &&' : ''}`);
+}
+
 function recoveryMessage(revision) {
   const ref = REVISION_PATTERN.test(revision) ? revision : '<40-character-squad-commit-sha>';
   return [
-    'Safe recovery:',
-    `  gh aw add ${PACKAGE_NAME}@${ref} --force`,
-    ...LEGACY_OWNERSHIP_DESTINATIONS.map(path => `  rm -f ${path}`),
-    `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
-    '  gh aw compile --strict',
-    '  node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
+    'Safe recovery (one command; it stops at the first failure):',
+    ...chainedCommands([
+      `gh aw add ${PACKAGE_NAME}@${ref} --force`,
+      ...LEGACY_OWNERSHIP_DESTINATIONS.map(path => `rm -f ${path}`),
+      `rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
+      'gh aw compile --strict',
+      'node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
+    ]),
   ].join('\n');
 }
 
@@ -1243,8 +1250,10 @@ function legacyIdentityNotice(packageName, revision) {
   return [
     `Notice: verified under the legacy ${packageName} package identity, which remains supported.`,
     `To move to ${PACKAGE_NAME}, follow the gh-aw guide's Upgrading steps, starting with:`,
-    `  gh aw add ${PACKAGE_NAME}@${revision} --force`,
-    ...LEGACY_OWNERSHIP_DESTINATIONS.map(path => `  rm -f ${path}`),
+    ...chainedCommands([
+      `gh aw add ${PACKAGE_NAME}@${revision} --force`,
+      ...LEGACY_OWNERSHIP_DESTINATIONS.map(path => `rm -f ${path}`),
+    ]),
   ].join('\n');
 }
 

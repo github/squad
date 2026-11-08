@@ -11,11 +11,15 @@
  *      compile, never-auto-merge, read-only token, explicit staging).
  *   4. The canonical source and all four mirrors are byte-for-byte identical
  *      (the sync invariant every canonical skill upholds).
+ *   5. Every upgrade block stops before any cleanup when the forced reinstall fails.
+ *   6. The strict-compile warning gate accepts the four squad-init replacement
+ *      warnings that the real compiler emits while legacy locks are committed,
+ *      and nothing broader.
  */
 
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSkillFile } from '@bradygaster/squad-sdk/skills';
@@ -25,6 +29,8 @@ import {
   OWNERSHIP_DESTINATION,
   PACKAGE_NAME,
   UNOWNED_MUTABLE_ROUTER_SKILL,
+  WORKFLOW_TUPLES,
+  compileWithPinnedActions,
 } from '../workflows/shared/squad-install-verifier.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,6 +53,7 @@ const INSTALL_COMMAND = `gh aw add "${PACKAGE_NAME}@\${SQUAD_SHA}"`;
 const [LEGACY_PACKAGE_NAME] = LEGACY_PACKAGE_NAMES;
 const [LEGACY_OWNERSHIP] = LEGACY_OWNERSHIP_DESTINATIONS;
 const SQUAD_INIT_ACTION = `${PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
+const LEGACY_SQUAD_INIT_ACTION = `${LEGACY_PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
 const DELETION_FILTER = [
   `    grep -vxF -e '${UNOWNED_MUTABLE_ROUTER_SKILL}' \\`,
   `      -e '${LEGACY_OWNERSHIP}' || true`,
@@ -198,11 +205,161 @@ function assertCompileWarningContract(content: string): void {
   expect(regions[0][1].split('\n')).toEqual(COMPILE_WARNINGS);
   const flat = content.replace(/\s+/g, ' ');
   expect(flat).toContain('require exactly two warnings, one occurrence of each exact diagnostic header');
-  expect(flat).toContain('**STOP** on any error, or on **any additional warning** beyond these two exact documented diagnostics.');
-  expect(flat).toContain('Also STOP if either warning is missing, duplicated, changed, or attributed to another path');
+  expect(flat).toContain(
+    '**STOP** on any error, or on **any additional warning** beyond these two exact documented diagnostics and, '
+    + 'during that migration only, the four exact squad-init replacement warnings.',
+  );
+  expect(flat).toContain('Also STOP if an allowed warning is missing, duplicated, changed, or attributed to another path');
   expect(flat).toContain('Compiled 8 workflows: 8 succeeded, 2 warnings');
   expect(flat).toContain('or if any required control is absent.');
   expect(flat).toContain('Do not suppress warnings or use `--approve` to bypass this gate.');
+}
+
+const SAFE_UPDATE_WARNING = 'warning: safe update mode detected unapproved changes';
+// Each package workflow that runs the squad-init action reports the owner change.
+const SQUAD_INIT_WORKFLOWS: string[] = WORKFLOW_TUPLES
+  .filter(([, source]: string[]) => readLF(source).includes(`uses: ${SQUAD_INIT_ACTION}@`))
+  .map(([name]: string[]) => name);
+const MIGRATION_WARNINGS = SQUAD_INIT_WORKFLOWS.map(name => `.github/workflows/${name}.md: ${SAFE_UPDATE_WARNING}`);
+const MIGRATION_CHANGES = [
+  'New unapproved action(s):',
+  `  - ${SQUAD_INIT_ACTION}`,
+  'Previously-approved action(s) removed:',
+  `  - ${LEGACY_SQUAD_INIT_ACTION}`,
+];
+
+function textRegions(content: string, name: string): string[][] {
+  const pattern = new RegExp(`^<!-- ${name}-start -->\\n\`\`\`text\\n([\\s\\S]*?)\\n\`\`\`\\n<!-- ${name}-end -->$`, 'gm');
+  return [...content.matchAll(pattern)].map(match => match[1].split('\n'));
+}
+
+function assertMigrationWarningContract(content: string): void {
+  expect(textRegions(content, 'compile-warning-migration-allowlist'), 'one region with exactly the four warnings')
+    .toEqual([MIGRATION_WARNINGS]);
+  expect(textRegions(content, 'compile-warning-migration-changes'), 'one region with exactly the owner replacement')
+    .toEqual([MIGRATION_CHANGES]);
+  const flat = content.replace(/\s+/g, ' ');
+  expect(flat).toContain('**Legacy-identity migration only.**');
+  expect(flat).toContain(
+    `whose locks committed at \`HEAD\` still use \`${LEGACY_SQUAD_INIT_ACTION}\`, gh-aw v0.91.5 compares safe updates `
+    + 'against those committed locks, and `--approve` cannot clear that comparison before the upgrade is committed.',
+  );
+  expect(flat).toContain(
+    'During that migration, also require exactly these four warnings, one occurrence of each exact diagnostic header',
+  );
+  expect(flat).toContain('with no other secret, action, redirect, or change');
+  expect(flat).toContain('The summary is then `Compiled 8 workflows: 8 succeeded, 6 warnings`.');
+  expect(flat).toContain('`Compiled 8 workflows: 8 succeeded, 2 warnings` (`6 warnings` during that migration)');
+}
+
+interface CompileWarning {
+  header: string;
+  changes: string[];
+}
+
+function parseCompileOutput(output: string): { warnings: CompileWarning[]; summary?: string } {
+  const lines = output.replace(/\r\n/g, '\n').split('\n');
+  const warnings: CompileWarning[] = [];
+  lines.forEach((line, index) => {
+    const match = /^(.+?\.md): (warning: .+)$/.exec(line);
+    if (!match) return;
+    const changes: string[] = [];
+    if (match[2] === SAFE_UPDATE_WARNING) {
+      for (const next of lines.slice(index + 1)) {
+        if (next === 'Remediation options:') break;
+        if (next.trim()) changes.push(next);
+      }
+    }
+    // gh-aw prints native path separators; the documented gate uses POSIX paths.
+    warnings.push({ header: `${match[1].replaceAll('\\', '/')}: ${match[2]}`, changes });
+  });
+  return { warnings, summary: /Compiled \d+ workflows?: \d+ succeeded, \d+ warnings?/.exec(output)?.[0] };
+}
+
+/** Applies a document's strict-compile warning gate to real compiler output; returns its STOP reasons. */
+function compileGateFailures(content: string, output: string, migration: boolean): string[] {
+  const [base = []] = textRegions(content, 'compile-warning-allowlist');
+  const [migrationWarnings = []] = migration ? textRegions(content, 'compile-warning-migration-allowlist') : [];
+  const [migrationChanges = []] = textRegions(content, 'compile-warning-migration-changes');
+  const allowed = [...base, ...migrationWarnings];
+  const { warnings, summary } = parseCompileOutput(output);
+  const failures: string[] = [];
+  for (const { header, changes } of warnings) {
+    if (!allowed.includes(header)) {
+      failures.push(`undocumented warning: ${header}`);
+    } else if (header.endsWith(SAFE_UPDATE_WARNING) && changes.join('\n') !== migrationChanges.join('\n')) {
+      failures.push(`undocumented safe-update change in ${header}: ${changes.join(' | ')}`);
+    }
+  }
+  for (const header of allowed) {
+    const count = warnings.filter(warning => warning.header === header).length;
+    if (count !== 1) failures.push(`expected one "${header}", found ${count}`);
+  }
+  const expectedSummary = `Compiled 8 workflows: 8 succeeded, ${allowed.length} warnings`;
+  if (summary !== expectedSummary) failures.push(`expected summary "${expectedSummary}", found "${summary}"`);
+  return failures;
+}
+
+const MIGRATION_REVISION = 'e'.repeat(40);
+
+/** Writes the package workflows that `gh aw add <packageName>@<revision>` installs, with a squad-init owner. */
+function installPackageWorkflows(root: string, packageName: string, action: string): void {
+  for (const [name, source] of WORKFLOW_TUPLES as string[][]) {
+    const text = readLF(source).replaceAll(`uses: ${SQUAD_INIT_ACTION}@`, `uses: ${action}@`);
+    const end = text.indexOf('\n---\n', 4);
+    writeFileSync(
+      resolve(root, `.github/workflows/${name}.md`),
+      `${text.slice(0, end)}\nsource: ${packageName}@${MIGRATION_REVISION}${text.slice(end)}`,
+    );
+  }
+}
+
+/**
+ * Commits locks compiled under the legacy squad-init owner, then reinstalls under the canonical
+ * owner and runs the strict compiles a migration runs: with --approve, without it, and after the
+ * upgrade commit. gh-aw v0.91.5 takes the safe-update baseline from the locks committed at HEAD.
+ */
+function compileCommittedLegacyMigration(): { approved: string; upgraded: string; committed: string } {
+  const root = mkdtempSync(resolve(ROOT, '.squad-legacy-lock-migration-'));
+  const git = (...args: string[]) => execFileSync('git', [
+    '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+    '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args,
+  ], { cwd: root, encoding: 'utf8' });
+  const binary = process.env.SQUAD_GH_AW_BIN || 'gh';
+  const prefix = process.env.SQUAD_GH_AW_BIN ? [] : ['aw'];
+  const compile = (...flags: string[]) => {
+    const result = spawnSync(binary, [...prefix, 'compile', '--strict', '--no-check-update', ...flags], {
+      cwd: root, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' }, timeout: 300_000,
+    });
+    const output = `${result.stdout}${result.stderr}`;
+    expect(result.error ?? result.status, `gh aw compile --strict ${flags.join(' ')} failed:\n${output}`).toBe(0);
+    return output;
+  };
+  try {
+    git('init', '--quiet');
+    git('config', 'core.autocrlf', 'false');
+    // Like a real consumer: without a remote, gh-aw adds schedule-scattering warnings.
+    git('remote', 'add', 'origin', 'https://github.com/octo/example.git');
+    mkdirSync(resolve(root, '.github/workflows'), { recursive: true });
+    cpSync(resolve(ROOT, 'workflows/shared'), resolve(root, '.github/workflows/shared'), { recursive: true });
+    installPackageWorkflows(root, LEGACY_PACKAGE_NAME, LEGACY_SQUAD_INIT_ACTION);
+    compileWithPinnedActions(root);
+    for (const name of SQUAD_INIT_WORKFLOWS) {
+      expect(readFileSync(resolve(root, `.github/workflows/${name}.lock.yml`), 'utf8'),
+        `the committed legacy ${name}.lock.yml must use ${LEGACY_SQUAD_INIT_ACTION}`)
+        .toContain(`uses: ${LEGACY_SQUAD_INIT_ACTION}@`);
+    }
+    git('add', '--', '.github');
+    git('commit', '--quiet', '-m', `legacy ${LEGACY_PACKAGE_NAME} install`);
+    installPackageWorkflows(root, PACKAGE_NAME, SQUAD_INIT_ACTION);
+    const approved = compile('--approve');
+    const upgraded = compile();
+    git('add', '--', '.github');
+    git('commit', '--quiet', '-m', `move to ${PACKAGE_NAME}`);
+    return { approved, upgraded, committed: compile() };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 describe.each([CANONICAL, ...MIRRORS, GUIDE])('%s strict compile warning contract', path => {
@@ -240,6 +397,166 @@ describe.each([CANONICAL, ...MIRRORS, GUIDE])('%s strict compile warning contrac
     const mutated = content.replace('**STOP** on any error', 'Continue on any error');
     expect(mutated).not.toBe(content);
     expect(() => assertCompileWarningContract(mutated)).toThrow();
+  });
+
+  it('allows the four squad-init replacement warnings only during the legacy-identity migration', () => {
+    expect(SQUAD_INIT_WORKFLOWS, 'package workflows that run squad-init').toHaveLength(4);
+    assertMigrationWarningContract(content);
+  });
+
+  it.each([
+    ['a fifth workflow', MIGRATION_WARNINGS.join('\n'),
+      `${MIGRATION_WARNINGS.join('\n')}\n.github/workflows/squad-review.md: ${SAFE_UPDATE_WARNING}`],
+    ['a missing workflow', MIGRATION_WARNINGS.join('\n'), MIGRATION_WARNINGS.slice(1).join('\n')],
+    ['a new secret', MIGRATION_CHANGES.join('\n'),
+      `New restricted secret(s):\n  - ACME_DEPLOY_KEY\n${MIGRATION_CHANGES.join('\n')}`],
+    ['another removed action', MIGRATION_CHANGES.join('\n'),
+      MIGRATION_CHANGES.join('\n').replace(LEGACY_SQUAD_INIT_ACTION, 'acme/squad/.github/actions/squad-init')],
+    ['every upgrade', '**Legacy-identity migration only.**', '**Every upgrade.**'],
+  ])('rejects a migration contract mutation allowing %s', (_label, original, replacement) => {
+    const mutated = content.replace(original, replacement);
+    expect(mutated).not.toBe(content);
+    expect(() => assertMigrationWarningContract(mutated)).toThrow();
+  });
+});
+
+const UPGRADE_SHA = 'd'.repeat(40);
+const UPGRADE_CLEANUP = [LEGACY_OWNERSHIP, UNOWNED_MUTABLE_ROUTER_SKILL];
+
+function upgradeBlock(path: string, content: string): string {
+  const blocks = fencedBlocks(content).filter(block => block.includes(`${INSTALL_COMMAND} --force`));
+  expect(blocks, `${path} must contain exactly one upgrade block`).toHaveLength(1);
+  // The guide's block starts with a placeholder that the reader replaces.
+  return blocks[0].replace(/^SQUAD_SHA="<40-character-commit-sha>"$/m, `SQUAD_SHA="${UPGRADE_SHA}"`);
+}
+
+function runUpgradeBlock(block: string, addStatus: number) {
+  const root = mkdtempSync(resolve(ROOT, '.squad-upgrade-block-'));
+  try {
+    for (const path of UPGRADE_CLEANUP) {
+      mkdirSync(dirname(resolve(root, path)), { recursive: true });
+      writeFileSync(resolve(root, path), `${path}\n`);
+    }
+    // No `set -e`: a pasted or agent-run block keeps going after a failed command,
+    // so the block itself must stop.
+    const script = `
+exec 3>&2
+gh() {
+  printf 'CALL gh %s\\n' "$*" >&3
+  if [ "$1" = "api" ]; then printf '%s\\n' "${PACKAGE_NAME}"; return 0; fi
+  if [ "$1 $2" = "aw add" ]; then return "$ADD_STATUS"; fi
+  return 0
+}
+node() { printf 'CALL node %s\\n' "$*" >&3; }
+SQUAD_SHA="${UPGRADE_SHA}"
+${block}
+echo "UPGRADE BLOCK COMPLETED"
+`;
+    const result = spawnSync('bash', ['-c', script], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, ADD_STATUS: String(addStatus) },
+    });
+    return {
+      ...result,
+      calls: result.stderr.split('\n').filter(line => line.startsWith('CALL ')),
+      remaining: UPGRADE_CLEANUP.filter(path => existsSync(resolve(root, path))),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe.each([CANONICAL, ...MIRRORS, GUIDE])('%s upgrade block', path => {
+  const block = upgradeBlock(path, readLF(path));
+
+  it('stops before any cleanup when the forced reinstall fails', () => {
+    const result = runUpgradeBlock(block, 1);
+    const input = `${path} upgrade block with \`gh aw add ${PACKAGE_NAME}@${UPGRADE_SHA} --force\` exiting 1`;
+    expect(result.remaining, `${input} must keep ${UPGRADE_CLEANUP.join(' and ')}`).toEqual(UPGRADE_CLEANUP);
+    expect(result.status, `${input} must exit 1:\n${result.stderr}`).toBe(1);
+    expect(result.stderr, `${input} must say why it stopped`)
+      .toContain('STOP: gh aw add --force failed, so this block removed nothing.');
+    expect(result.calls.at(-1), `${input} must not run anything after the reinstall`)
+      .toBe(`CALL gh aw add ${PACKAGE_NAME}@${UPGRADE_SHA} --force`);
+    expect(result.stdout, input).not.toContain('UPGRADE BLOCK COMPLETED');
+  });
+
+  it('removes the superseded files and verifies after the reinstall succeeds', () => {
+    const result = runUpgradeBlock(block, 0);
+    const input = `${path} upgrade block with \`gh aw add ${PACKAGE_NAME}@${UPGRADE_SHA} --force\` exiting 0`;
+    expect(result.status, `${input}:\n${result.stderr}`).toBe(0);
+    expect(result.remaining, `${input} must delete ${UPGRADE_CLEANUP.join(' and ')}`).toEqual([]);
+    expect(result.calls, input).toEqual([
+      'CALL gh api --hostname github.com -H Accept: application/vnd.github.raw+json '
+        + `repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${UPGRADE_SHA} --jq .package`,
+      `CALL gh aw add ${PACKAGE_NAME}@${UPGRADE_SHA} --force`,
+      'CALL node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime',
+      'CALL gh aw compile --strict',
+      'CALL node .github/workflows/shared/squad-install-verifier.mjs --verify-install '
+        + `--source-revision ${UPGRADE_SHA} --strict-compile`,
+    ]);
+    expect(result.stdout, input).toContain('UPGRADE BLOCK COMPLETED');
+  });
+});
+
+describe('gh-aw legacy-identity migration with committed legacy locks', () => {
+  let outputs: { approved: string; upgraded: string; committed: string };
+  beforeAll(() => {
+    outputs = compileCommittedLegacyMigration();
+  }, 900_000);
+
+  const headers = (output: string) => parseCompileOutput(output).warnings.map(warning => warning.header).sort();
+
+  it('repeats the squad-init owner replacement in every strict compile until the upgrade is committed', () => {
+    const summary = (output: string) => parseCompileOutput(output).summary;
+    expect(headers(outputs.approved), `gh aw compile --strict --approve output:\n${outputs.approved}`)
+      .toEqual([...COMPILE_WARNINGS].sort());
+    expect(summary(outputs.approved), outputs.approved).toBe('Compiled 8 workflows: 8 succeeded, 2 warnings');
+    expect(headers(outputs.upgraded), `gh aw compile --strict output after --approve:\n${outputs.upgraded}`)
+      .toEqual([...COMPILE_WARNINGS, ...MIGRATION_WARNINGS].sort());
+    expect(summary(outputs.upgraded), outputs.upgraded).toBe('Compiled 8 workflows: 8 succeeded, 6 warnings');
+    for (const warning of parseCompileOutput(outputs.upgraded).warnings) {
+      if (warning.header.endsWith(SAFE_UPDATE_WARNING)) expect(warning.changes, warning.header).toEqual(MIGRATION_CHANGES);
+    }
+    expect(headers(outputs.committed), `gh aw compile --strict output after the upgrade commit:\n${outputs.committed}`)
+      .toEqual([...COMPILE_WARNINGS].sort());
+    expect(summary(outputs.committed), outputs.committed).toBe('Compiled 8 workflows: 8 succeeded, 2 warnings');
+  });
+
+  describe.each([CANONICAL, ...MIRRORS, GUIDE])('%s warning gate', path => {
+    const content = readLF(path);
+
+    it('accepts that migration compile, and those four warnings only during the migration', () => {
+      const accepted = compileGateFailures(content, outputs.upgraded, true);
+      expect(accepted, `${path} must accept the four squad-init replacement warnings of a migration whose `
+        + `legacy locks are committed; compiler warnings: ${headers(outputs.upgraded).join('; ')}`).toEqual([]);
+      expect(compileGateFailures(content, outputs.upgraded, false).sort(),
+        `${path} must stop on those warnings outside the migration`).toEqual([
+        ...MIGRATION_WARNINGS.map(header => `undocumented warning: ${header}`),
+        'expected summary "Compiled 8 workflows: 8 succeeded, 2 warnings", '
+          + 'found "Compiled 8 workflows: 8 succeeded, 6 warnings"',
+      ].sort());
+      expect(compileGateFailures(content, outputs.committed, false),
+        `${path} must accept the compile after the upgrade commit`).toEqual([]);
+    });
+
+    const safeUpdateBlock = (workflow: string) =>
+      `.github/workflows/${workflow}.md: ${SAFE_UPDATE_WARNING}\n\n${MIGRATION_CHANGES.join('\n')}\n\nRemediation options:\n`;
+
+    it.each([
+      ['a new secret', (output: string) => output.replace(MIGRATION_CHANGES[0],
+        `New restricted secret(s):\n  - ACME_DEPLOY_KEY\n${MIGRATION_CHANGES[0]}`)],
+      ['another removed action', (output: string) => output.replace(MIGRATION_CHANGES[3],
+        '  - acme/squad/.github/actions/squad-init')],
+      ['a replacement in another workflow', (output: string) => `${output}\n${safeUpdateBlock('squad-review')}`],
+      ['a duplicated replacement', (output: string) => `${output}\n${safeUpdateBlock(SQUAD_INIT_WORKFLOWS[0])}`],
+    ])('stops on a migration compile with %s', (label, mutate) => {
+      const mutated = mutate(outputs.upgraded);
+      expect(mutated).not.toBe(outputs.upgraded);
+      expect(compileGateFailures(content, mutated, true), `${path} must stop on a migration compile with ${label}`)
+        .not.toEqual([]);
+    });
   });
 });
 
@@ -402,9 +719,12 @@ describe('gh-aw-enlistment skill', () => {
       );
       expect(flat, why).toContain('**STOP** on any other new secret or action.');
       expect(flat, 'skill must say how to stay on a legacy-only revision').toContain(
-        `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
+        'drop the identity check below, keep the `gh aw add` line\'s STOP guard but replace its command '
+        + `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
         + 'that ownership record is the only one such an installation has.',
       );
+      expect(flat, 'skill must say a failed reinstall removes nothing')
+        .toContain('If the forced reinstall fails, the block stops before it removes anything.');
       const upgrade = fencedBlocks(content).find(block => block.includes(`${INSTALL_COMMAND} --force`));
       expect(upgrade, 'skill must include an executable upgrade block').toBeDefined();
       const steps = [
@@ -426,15 +746,24 @@ describe('gh-aw-enlistment skill', () => {
       };
       const compileStep = stepNumber('Always run the final strict compile WITHOUT `--approve`');
       const stageStep = stepNumber('Inspect generated files, then stage only the documented surfaces');
+      const installStep = stepNumber('Install the native package at an explicit, maintainer-approved revision');
+      expect(flat, 'the migration allowlist must name the step that holds the upgrade block')
+        .toContain(`**Legacy-identity migration only.** While step ${installStep}'s upgrade block moves an installation`);
       const compileSection = content.slice(
         content.indexOf(`### ${compileStep}. `),
         content.indexOf(`### ${Number(compileStep) + 1}. `),
       );
       expect(compileSection.replace(/\s+/g, ' '), `step ${compileStep} must hold the two-warning check`)
         .toContain('require exactly two warnings');
+      expect(compileSection, `step ${compileStep} must hold the legacy-identity migration allowlist`)
+        .toContain('<!-- compile-warning-migration-allowlist-start -->');
+      expect(flat, 'skill must route the migration warnings to the warning check by its current number').toContain(
+        'Until the upgrade is committed, every strict compile repeats that change as four warnings, '
+        + `which step ${compileStep} allows only for this migration.`,
+      );
       expect(flat, 'the upgrade block must hand off to the warning check and staging steps by their current numbers')
-        .toContain(`Apply step ${compileStep}'s two-warning check to the compile output above, `
-          + `then stage and verify as in step ${stageStep}.`);
+        .toContain(`Apply step ${compileStep}'s warning check, including its legacy-identity migration allowlist, `
+          + `to the compile output above, then stage and verify as in step ${stageStep}.`);
     });
 
     it('gates installation on the revision declaring the canonical package identity', () => {
@@ -838,9 +1167,18 @@ describe('gh-aw-enlistment skill', () => {
       expect(upgrade.indexOf(gate), 'Upgrading must run the identity gate').toBeGreaterThan(-1);
       expect(upgrade.indexOf(gate), 'Upgrading must check the identity before reinstalling').toBeLessThan(add);
       expect(flatUpgrade, 'Upgrading must say how to stay on a legacy-only revision').toContain(
-        `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
+        'drop the identity check, keep the `gh aw add` line\'s STOP guard but replace its command '
+        + `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
         + 'that ownership record is the only one such an installation has.',
       );
+      expect(flatUpgrade, 'Upgrading must say a failed reinstall removes nothing')
+        .toContain('If the forced reinstall fails, the block stops before it removes anything.');
+      expect(flatUpgrade, 'Upgrading must route the migration warnings to the strict compile allowlist').toContain(
+        'Until the upgrade is committed, every strict compile repeats that change as four warnings; accept them '
+        + 'only through the legacy-identity migration allowlist in '
+        + '[Strictly compile the installed workflows](#strictly-compile-the-installed-workflows).',
+      );
+      expect(guide, 'the linked strict compile section must exist').toContain('\n### Strictly compile the installed workflows\n');
     });
   });
 

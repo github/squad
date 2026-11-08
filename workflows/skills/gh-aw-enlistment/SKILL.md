@@ -260,18 +260,21 @@ installation to a revision that declares `github/squad/workflows` with the block
 below. gh-aw keeps the superseded
 `.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json` after the
 forced reinstall, so the block deletes exactly that file before verifying; the
-verifier fails closed while both ownership records exist. That first upgrade
+verifier fails closed while both ownership records exist. If the forced
+reinstall fails, the block stops before it removes anything. That first upgrade
 also makes `gh aw add` report one safe-update change: action
 `github/squad/.github/actions/squad-init` added and
 `bradygaster/squad/.github/actions/squad-init` removed. It is the same
 squad-init action under the repository's new owner; list it in the PR's
-security review note. **STOP** on any other new secret or action. Until an
+security review note. **STOP** on any other new secret or action. Until the
+upgrade is committed, every strict compile repeats that change as four
+warnings, which step 5 allows only for this migration. Until an
 installation moves, `--verify-install` still passes and prints a notice naming
 the legacy identity. To stay on a revision that declares
-`bradygaster/squad/workflows`, replace the identity check and the `gh aw add`
-line below with `gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}" --force`,
-and skip the second `rm -f`: that ownership record is the only one such an
-installation has.
+`bradygaster/squad/workflows`, drop the identity check below, keep the
+`gh aw add` line's STOP guard but replace its command with
+`gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}" --force`, and skip the
+second `rm -f`: that ownership record is the only one such an installation has.
 
 ```bash
 : "${SQUAD_SHA:?STOP: set SQUAD_SHA to an explicit, maintainer-approved 40-character Squad commit SHA before upgrading.}"
@@ -292,7 +295,10 @@ test "${squad_package}" = "github/squad/workflows" || {
   fi
   exit 1
 }
-gh aw add "github/squad/workflows@${SQUAD_SHA}" --force
+gh aw add "github/squad/workflows@${SQUAD_SHA}" --force || {
+  echo "STOP: gh aw add --force failed, so this block removed nothing. Fix the error above, then rerun the block." >&2
+  exit 1
+}
 rm -f .github/skills/agentic-workflows/SKILL.md
 rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json
 node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime
@@ -303,7 +309,7 @@ node .github/workflows/shared/squad-install-verifier.mjs \
   --strict-compile
 ```
 
-Apply step 5's two-warning check to the compile output above, then stage and verify as in step 7.
+Apply step 5's warning check, including its legacy-identity migration allowlist, to the compile output above, then stage and verify as in step 7.
 
 Report/proposal-only is the default. Ordinary fixes require the explicit
 `"squadRetroAutoImplement": "allow"` setting in `.squad/config.json`;
@@ -390,11 +396,48 @@ least-privilege jobs, advisory verdict, and independent human approval.
 `pull_request_target` is not generally safe; this narrow exception neither
 weakens those controls nor authorizes PR-head execution.
 
+**Legacy-identity migration only.** While step 3's upgrade block moves an
+installation whose locks committed at `HEAD` still use
+`bradygaster/squad/.github/actions/squad-init`, gh-aw v0.91.5 compares safe
+updates against those committed locks, and `--approve` cannot clear that
+comparison before the upgrade is committed. During that migration, also
+require exactly these four warnings, one occurrence of each exact diagnostic
+header:
+
+<!-- compile-warning-migration-allowlist-start -->
+```text
+.github/workflows/squad.md: warning: safe update mode detected unapproved changes
+.github/workflows/squad-implement-worker.md: warning: safe update mode detected unapproved changes
+.github/workflows/squad-deps-worker.md: warning: safe update mode detected unapproved changes
+.github/workflows/squad-retro.md: warning: safe update mode detected unapproved changes
+```
+<!-- compile-warning-migration-allowlist-end -->
+
+Each of these four warnings must report exactly this squad-init owner
+replacement, with no other secret, action, redirect, or change:
+
+<!-- compile-warning-migration-changes-start -->
+```text
+New unapproved action(s):
+  - github/squad/.github/actions/squad-init
+Previously-approved action(s) removed:
+  - bradygaster/squad/.github/actions/squad-init
+```
+<!-- compile-warning-migration-changes-end -->
+
+The remediation text under each warning and the closing `SECURITY REVIEW
+REQUIRED` prompts belong to these four warnings; they are not additional
+warnings. The summary is then `Compiled 8 workflows: 8 succeeded, 6 warnings`.
+Name the replacement in the PR's security review note. The four warnings no
+longer appear once the upgrade is committed.
+
 **STOP** on any error, or on **any additional warning** beyond these two exact
-documented diagnostics. Also STOP if either warning is missing, duplicated,
-changed, or attributed to another path, if the summary is not
-`Compiled 8 workflows: 8 succeeded, 2 warnings`, or if any required control is
-absent. Do not suppress warnings or use `--approve` to bypass this gate.
+documented diagnostics and, during that migration only, the four exact
+squad-init replacement warnings. Also STOP if an allowed warning is missing,
+duplicated, changed, or attributed to another path, if the summary is not
+`Compiled 8 workflows: 8 succeeded, 2 warnings` (`6 warnings` during that
+migration), or if any required control is absent. Do not suppress warnings or
+use `--approve` to bypass this gate.
 
 ### 6. Require the verifier to prove the complete consumer contract
 
@@ -672,8 +715,9 @@ gh pr merge --squash                # auto-merge before human review. NEVER.
 - ❌ **Treating `--approve` as the final compile.** Always finish with a plain
   `gh aw compile --strict` (no `--approve`).
 - ❌ **Tolerating extra warnings.** Only the documented `squad-review.md`
-  `pull_request_target` advisory and `squad.md` bot-trigger warning are allowed;
-  every other warning or error halts the run.
+  `pull_request_target` advisory and `squad.md` bot-trigger warning are allowed,
+  plus step 5's four squad-init replacement warnings during the legacy-identity
+  migration only; every other warning or error halts the run.
 - ❌ **Committing diagnostics.** Never commit `.github/aw/logs/` output; add the
   log `.gitignore` if missing.
 - ❌ **Clobbering existing workflows.** The install is additive; preserve unrelated
