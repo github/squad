@@ -278,6 +278,8 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
         isIP: net.isIP,
         connect: () => require('node:net').connect(),
         socket: () => new net.Socket(),
+        tls: () => require('tls').connect(),
+        database: () => new (require('node:sqlite').DatabaseSync)('/outside-fixture.db'),
       };
     `]]);
     const runtime = diagnosticRuntime(sources, scratch, [], {});
@@ -286,8 +288,11 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
     expect(probe.isIP('::1')).toBe(6);
     expect(() => probe.connect()).toThrow('Forbidden external IO: node:net.connect');
     expect(() => probe.socket()).toThrow('Forbidden external IO: net.Socket');
+    expect(() => probe.tls()).toThrow('Forbidden external IO: tls.connect');
+    expect(() => probe.database()).toThrow('Forbidden external IO: node:sqlite.DatabaseSync');
     expect(runtime.ioErrors).toEqual([
       'Forbidden external IO: node:net.connect', 'Forbidden external IO: net.Socket',
+      'Forbidden external IO: tls.connect', 'Forbidden external IO: node:sqlite.DatabaseSync',
     ]);
   });
 
@@ -439,7 +444,7 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
     expect(Object.keys(comment).sort()).toEqual(['body', 'data', 'item_number', 'temporary_id', 'type']);
     expect(comment.temporary_id).toMatch(/^aw_[A-Za-z0-9]{8}$/);
     expect(comment.data).toEqual(data);
-    expect(comment.body).toBe(`${requests[0].arguments.body}\n\nStructured data:\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``);
+    expect(comment.body).toBe(`## Plan\n\nDraft implementation tasks.\n\nStructured data:\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``);
     expect(lifecycle).toEqual({ type: 'upsert_lifecycle_state', body });
     const result = await runGuard({ payload: payloadFor('plan'), permission: 'read', items: output.items });
     const withoutMetadata = structuredClone(output.items);
@@ -721,7 +726,7 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
     },
   );
 
-  it('real pinned handlers expose the original tracking and completion writes when enabled', async () => {
+  it('real pinned handlers expose tracking and diagnostic writes when enabled', async () => {
     for (const existingIssue of [false, true]) {
       for (const [handler, items, env] of [
         ['handle_agent_failure.cjs', [{ type: 'report_incomplete', reason: 'Could not finish' }], { GH_AW_FAILURE_REPORT_AS_ISSUE: 'true' }],
@@ -742,7 +747,8 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
         expect(runtime.ioErrors, `${handler}\n${runtime.logs.join('\n')}`).toEqual([]);
         expect(runtime.writes.length, `${handler}\n${runtime.logs.join('\n')}\n${runtime.failures}`).toBeGreaterThan(0);
         if (handler === 'notify_comment_error.cjs') {
-          expect(runtime.writes[0].params.body).toContain('"squad_artifact":"activated"');
+          expect(runtime.writes[0].params.body).toContain('failed to deliver outputs');
+          expect(runtime.writes[0].params.body).not.toContain('"squad_artifact":"activated"');
         }
       }
     }

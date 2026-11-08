@@ -7,6 +7,7 @@ Bootstrap this repository with GitHub's Squad agentic workflows from `github/squ
 
 Before editing:
 - Check the default branch, working tree, authentication, and existing `.github/aw/`, `.github/workflows/`, and `.github/skills/` files.
+- Record whether `.vscode/settings.json` and `.github/workflows/agentics-maintenance.yml` already exist. Never delete or overwrite pre-existing settings or maintenance workflows; stop and report their diff if gh-aw changes them.
 - If an installation is already present, or files conflict and you can't verify their ownership, stop and report the paths; don't overwrite them.
 - Check `gh aw --version` against current official stable 1.x releases. Do not install an exact patch version or downgrade to 0.x to bypass a failed prerequisite.
 - Obtain an approved, immutable 40-character lowercase `SQUAD_SHA` from published guidance or a maintainer. Never guess or use a moving branch.
@@ -22,9 +23,9 @@ Run and require success:
 1. `node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime`
 2. `gh aw compile --strict --no-check-update`
 3. `node .github/workflows/shared/squad-install-verifier.mjs --verify-install --source-revision "${SQUAD_SHA}" --strict-compile`
-4. Stage only newly installed/materialized changed/owned paths within `.gitattributes`, `.github/aw/`, `.github/workflows/`, and `.github/skills/`; never stage whole directories containing unrelated files. Review the staged diff, then run `node .github/workflows/shared/squad-install-verifier.mjs --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}"`.
+4. Stage only newly installed/materialized changed/owned paths within `.gitattributes`, `.github/aw/`, `.github/workflows/`, and `.github/skills/`; never stage whole directories containing unrelated files. Leave `.vscode/settings.json` and `.github/workflows/agentics-maintenance.yml` outside the PR unless explicitly approved: they are tool-generated auxiliary outputs, not Squad-manifest-authenticated files. Only remove either file if it was absent beforehand and this invocation created it. Review the staged diff, then run `node .github/workflows/shared/squad-install-verifier.mjs --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}"`.
 
-Confirm eight workflows and their generated lockfiles are present and review the compiled artifacts. Require the approved revision's documented warning policy: one `pull_request_target` warning for `squad-review.md` and one combined `slash_command`/`bots` warning for `squad.md` under the current v1.0.1 contract. Stop on any undocumented warning, error, unexpected deletion, or unrelated change. Review the staged diff before committing.
+Confirm eight workflows and their generated lockfiles are present and review the compiled artifacts. Require the approved revision's documented warning policy: one `pull_request_target` warning for `squad-review.md` and one combined `slash_command`/`bots` warning for `squad.md` under the current v1.0.1 contract. Known, newly generated auxiliary files left untracked are expected output, not an unrelated-change failure. Stop on any undocumented warning, error, unexpected deletion, or other unrelated change. Review the staged diff before committing.
 
 Open a PR against the default branch captured during inspection only after all checks pass. If you can't verify a prerequisite, validate the install, push, or create the PR, report the exact blocker instead of claiming success. Report the PR URL and validation results if created; leave merge and post-merge activation to a human.
 ```

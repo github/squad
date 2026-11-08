@@ -104,6 +104,9 @@ git status --short
   account for — the bootstrap must land as an isolated, reviewable change.
 - Confirm Copilot is enabled for the repository where checkable; the activation
   run and the requested `@copilot` review both depend on it.
+- Before installation, record whether `.vscode/settings.json` and
+  `.github/workflows/agentics-maintenance.yml` already exist. Preserve pre-existing
+  files; stop and report their diff if gh-aw changes them.
 
 ### 1. Require GitHub Issues, then allow Actions-created PRs with a read-only token
 
@@ -337,15 +340,22 @@ If `.github/aw/logs/` lacks a `.gitignore`, add one there:
 !.gitignore
 ```
 
-`gh aw add` may also create `.vscode/settings.json` (enables Copilot for Markdown
-workflow files). This is an **optional editor setting** — the stage command below
-intentionally leaves it untracked. Delete it if unwanted, or stage it explicitly
-if your team wants to share it. Decide deliberately; do not stage it by accident.
+gh-aw v1.0.1 may generate two auxiliary outputs: `.vscode/settings.json`
+(optional Markdown editor settings) and `.github/workflows/agentics-maintenance.yml`
+(the compiler's maintenance workflow). Neither is authenticated by Squad's
+package manifest. Leave both outside the bootstrap PR by default; the staging
+commands below exclude them. Review and stage an auxiliary file by its exact
+path only after explicit approval.
+
+Only remove an unwanted auxiliary file if it was absent before installation
+and was created by this invocation. Never delete or overwrite pre-existing
+editor settings or maintenance workflows. Known, newly generated auxiliary
+files left untracked are expected output, not an unrelated-change failure.
 
 Stage **only** the documented generated surfaces, then verify the staged set:
 
 ```bash
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -510,7 +520,7 @@ gh aw compile --strict           # final, no --approve; exactly the two document
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-install --source-revision "${SQUAD_SHA}" --strict-compile
 
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git commit -m "ci: add Squad agentic workflow"

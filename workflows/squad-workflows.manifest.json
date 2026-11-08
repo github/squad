@@ -15,9 +15,9 @@
       "source": "workflows/package/squad.md",
       "destination": ".github/workflows/squad.md",
       "lock": ".github/workflows/squad.lock.yml",
-      "source_sha256": "061c84111a71a5b4d5f544f9f77e345188e4029fac6bbe80abb6d1bb331d8f88",
-      "lock_sha256": "35ec170c53f7268fcc1421d2afd60b61519e2e12bf70271b2021c93b9d200a53",
-      "package_lock_sha256": "3e842fbb1ad5e878929fbbf7c5c693e3fd09d2fa732b91ee232bff515309d480"
+      "source_sha256": "eecfd5137baabea6a8d17caeb3ff76133d27d5c0a8fad387682d6ecb0d126be8",
+      "lock_sha256": "1b1fca60b28d5578218fb0c0ab6602a811af02f1483f4f35315c31c94c89d55d",
+      "package_lock_sha256": "1289746d1486a32d6fb9c9ebdc212a58433c62245c7c69c269d5985549eeb3bc"
     },
     {
       "name": "squad-implement-worker",
@@ -89,8 +89,8 @@
       "workflows": [
         {
           "name": "squad",
-          "lock_sha256": "35ec170c53f7268fcc1421d2afd60b61519e2e12bf70271b2021c93b9d200a53",
-          "package_lock_sha256": "3e842fbb1ad5e878929fbbf7c5c693e3fd09d2fa732b91ee232bff515309d480"
+          "lock_sha256": "1b1fca60b28d5578218fb0c0ab6602a811af02f1483f4f35315c31c94c89d55d",
+          "package_lock_sha256": "1289746d1486a32d6fb9c9ebdc212a58433c62245c7c69c269d5985549eeb3bc"
         },
         {
           "name": "squad-implement-worker",
@@ -177,7 +177,7 @@
       "package_destination": ".github/workflows/shared/squad-command-contract.mjs",
       "destination": ".github/workflows/shared/squad-command-contract.mjs",
       "ownership": "manifest",
-      "sha256": "b78b13008d720832e6ad24768f00b164222565c030f55c41f14e42fb64cd04db"
+      "sha256": "5bb8db22d1bcadc28bbc424bb4c732b698208fe78c056bb5e814024aff28fadd"
     },
     {
       "path": "shared/squad-evidence-provider.mjs",
@@ -305,7 +305,7 @@
       "name": "gh-aw-enlistment",
       "source": "workflows/skills/gh-aw-enlistment/SKILL.md",
       "destination": ".github/skills/gh-aw-enlistment/SKILL.md",
-      "sha256": "f32f89d0a035d10198877da77c53edd4e024ba3994b08e5197894c3b13875816"
+      "sha256": "90eb31539115f11ee1399e5b305a96dabb83b03d9ab23d17867d0a327b13be61"
     }
   ],
   "bootstrap": {

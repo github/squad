@@ -105,6 +105,8 @@ export function diagnosticRuntime(
   };
   const runtimeEnv: Record<string, string> = {
     GITHUB_REPOSITORY: 'owner/repo', RUNNER_TEMP: scratch, GITHUB_WORKSPACE: scratch,
+    GITHUB_REPOSITORY_ID: '123456789', GITHUB_RUN_ID: '1', GITHUB_RUN_ATTEMPT: '1',
+    GITHUB_JOB: 'safe_outputs', GH_AW_JOB_CHECK_RUN_ID: '101', GH_AW_WORKFLOW_ID: 'squad',
     GH_AW_WORKFLOW_NAME: 'Squad', GH_AW_RUN_URL: 'https://github.com/owner/repo/actions/runs/1',
     GH_AW_JOB_RESULTS: JSON.stringify({ upsert_lifecycle_state: { result: 'failure' } }),
     GH_AW_JOB_DISPLAY_NAMES: JSON.stringify({ upsert_lifecycle_state: 'upsert_lifecycle_state' }),
@@ -154,8 +156,10 @@ export function diagnosticRuntime(
       if (request === 'os' || request === 'node:os') return { ...requireNode(request), tmpdir: () => scratch };
       if (['path', 'node:path', 'crypto', 'node:crypto', 'util', 'node:util', 'vm', 'node:vm',
         'buffer', 'events', 'string_decoder', 'node:string_decoder',
-        'async_hooks', 'node:async_hooks', 'perf_hooks', 'node:perf_hooks'].includes(request)) return requireNode(request);
-      if (['https', 'http', 'child_process', 'net'].includes(request.replace(/^node:/, ''))) return new Proxy({}, {
+        'async_hooks', 'node:async_hooks', 'perf_hooks', 'node:perf_hooks',
+        'stream', 'node:stream', 'stream/promises', 'node:stream/promises',
+        'zlib', 'node:zlib'].includes(request)) return requireNode(request);
+      if (['https', 'http', 'child_process', 'net', 'tls', 'sqlite'].includes(request.replace(/^node:/, ''))) return new Proxy({}, {
         get: (_target, method: string) => {
           if (['net', 'node:net'].includes(request)
             && ['isIP', 'isIPv4', 'isIPv6'].includes(method)) return requireNode('node:net')[method];

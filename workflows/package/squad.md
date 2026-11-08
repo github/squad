@@ -411,7 +411,11 @@ safe-outputs:
               const actionsDir = join(process.env.RUNNER_TEMP, 'gh-aw/actions');
               const { setupGlobals, createIssue } = require(join(actionsDir, 'index.cjs'));
               const { sanitizeContent } = require(join(actionsDir, 'sanitize_content.cjs'));
-              const { formatIssueBody } = require(join(actionsDir, 'issue_body.cjs'));
+              const { buildIssueBodyReport } = require(join(actionsDir, 'issue_body.cjs'));
+              const { renderReport } = require(join(actionsDir, 'report_ast.cjs'));
+              // Measure before the pinned runtime can redact oversized plan context.
+              const formatIssueBody = (body, options) =>
+                renderReport(buildIssueBodyReport('Issue', body, options)).body.trimEnd();
               setupGlobals(core, github, context, exec, io, getOctokit);
               const activation = await import(pathToFileURL(join(process.env.GITHUB_WORKSPACE,
                 '.squad-activation-trusted-base/.github/workflows/shared/squad-activation.mjs')).href);

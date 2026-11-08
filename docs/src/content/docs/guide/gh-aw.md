@@ -138,7 +138,7 @@ node .github/workflows/shared/squad-install-verifier.mjs \
   --strict-compile
 
 # 7. Commit the generated files and open the bootstrap PR
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -720,7 +720,7 @@ node .github/workflows/shared/squad-install-verifier.mjs \
 ### Open the bootstrap pull request
 
 ```bash
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -764,10 +764,19 @@ omitted required files or staged digest mismatches stop the install before
 commit/push. Never force-add a directory or glob; rerun the gate after edits or
 restaging, including package upgrades.
 
-`gh aw add` may also create `.vscode/settings.json` to enable Copilot for
-Markdown workflow files. The command above intentionally leaves that optional
-editor setting untracked. Delete it if you do not want the local setting, or
-stage it explicitly if your team wants to share it.
+gh-aw v1.0.1 may also generate `.vscode/settings.json` (optional Markdown editor
+settings) and `.github/workflows/agentics-maintenance.yml` (the compiler's
+maintenance workflow). Neither auxiliary file is authenticated by Squad's
+package manifest. The staging commands intentionally exclude both from the
+bootstrap PR; review and stage an exact auxiliary path only after explicit
+approval.
+
+Before installation, record whether these paths already exist. Never delete
+or overwrite pre-existing editor settings or maintenance workflows; stop and
+report their diff if gh-aw changes them. Remove an unwanted auxiliary file
+only when it was absent beforehand and this invocation created it. Known,
+newly generated auxiliary files left untracked are expected output, not an
+unrelated-change failure.
 
 > **Troubleshooting:** If the lock files are missing, rerun `gh aw compile
 > --strict`. Do not open or merge the bootstrap PR until all eight source/lock

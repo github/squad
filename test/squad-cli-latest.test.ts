@@ -117,8 +117,9 @@ describe('Squad standalone activation latest-release default', () => {
 
     expect(install, 'workflows/shared/squad.md must retain the standalone install step').toBeDefined();
     expect(install).toContain(
-      `uses: bradygaster/squad/.github/actions/squad-init@${revision}`,
+      `uses: github/squad/.github/actions/squad-init@${revision}`,
     );
+    expect(install).toContain("repository: 'github/squad'");
     expect(install).toContain("skip-init: 'true'");
     expect(install, 'workflows/shared/squad.md must use the action default, not a version input')
       .not.toMatch(/^\s+version:/m);

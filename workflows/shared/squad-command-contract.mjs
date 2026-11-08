@@ -347,9 +347,9 @@ export async function authorizeSquadCommand({ payload, eventName, actor, resolve
 }
 
 function serializedPlanBody(body, data) {
-  // gh-aw v1.0.1 appends this suffix in safe_output_type_validator.cjs.
+  // gh-aw v1.0.1's report renderer separates the data label and fence.
   // Validate, rather than rewrite, so the writer retains the planning artifact.
-  const match = /(?:^|\n\n)Structured data:\n```json\n([\s\S]*?)\n```$/.exec(body);
+  const match = /(?:^|\n\n)Structured data:\n(?:\n)?```json\n([\s\S]*?)\n```$/.exec(body);
   let envelope;
   try {
     envelope = match && JSON.parse(match[1]);

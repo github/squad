@@ -75,6 +75,27 @@ afterEach(() => {
 });
 
 describe('gh-aw: verified ownership staging under consumer ignore rules', () => {
+  it('excludes unapproved gh-aw auxiliary outputs without deleting existing editor settings', () => {
+    const root = consumer();
+    const settings = '.vscode/settings.json';
+    const maintenance = '.github/workflows/agentics-maintenance.yml';
+    const editorContent = '{"editor.tabSize":3,"github.copilot.enable":{"markdown":false}}\n';
+    write(root, settings, editorContent);
+    write(root, maintenance, 'name: tool-generated maintenance\n');
+    const guide = readFileSync(resolve('docs/src/content/docs/guide/gh-aw.md'), 'utf8');
+    const staging = guide.match(/^git add -- .*$/m)![0];
+    const args = staging.match(/'[^']*'|\S+/g)!.slice(1)
+      .map(argument => argument.startsWith("'") ? argument.slice(1, -1) : argument);
+    git(root, ...args);
+    expect(stagedPaths(root), `Unapproved auxiliary output staged by: ${staging}`)
+      .not.toContain(maintenance);
+    expect(stagedPaths(root)).not.toContain(settings);
+    expect(readFileSync(join(root, settings), 'utf8')).toBe(editorContent);
+    expect(readFileSync(join(root, maintenance), 'utf8')).toBe('name: tool-generated maintenance\n');
+    expect(verifyStagedInstall(root, { expectedRevision: revision, stageOwnership: true }).failures)
+      .toEqual([]);
+  });
+
   it('installs a coherent reset-capable package and excludes only the named historical Cast', async () => {
     const root = consumer();
     const reset = {
