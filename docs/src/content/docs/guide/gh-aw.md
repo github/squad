@@ -25,6 +25,12 @@ This guide covers setup, every slash command, and daily usage patterns.
 
 ## Quick start
 
+> **Compatibility prerequisite:** Read [gh-aw 1.x compatibility](#gh-aw-1x-compatibility)
+> before running these commands. This block describes the legacy v0.91.5 fork
+> package contract, not a validated upstream 1.x bootstrap. Do not run it to
+> downgrade an installed 1.x compiler or replace the package/action names with
+> `github/squad` without the corresponding integrity migration.
+
 Seven steps from zero to a validated, reviewable Squad bootstrap:
 
 > **Agent action required:** When a user asks an AI coding agent to install Squad
@@ -1614,7 +1620,7 @@ comment, ignore a missing proof, or dispatch partial bindings.
 #### Run the existing executable example
 
 The repository's
-[activation finalization integration fixture](https://github.com/bradygaster/squad/blob/dev/test/gh-aw-activation-finalization.test.ts)
+[activation finalization integration fixture](https://github.com/github/squad/blob/dev/test/gh-aw-activation-finalization.test.ts)
 is the executable producer/consumer example. In
 `continues after a later-phase pending-source recovery and validates the complete transitive reader chain`,
 it obtains proofs through the real workflow `verifyReconciliationRequest`,
@@ -1623,7 +1629,7 @@ both the SDK selector and canonical checker. These helpers belong to
 `workflows/shared/squad-activation.mjs`; they are **not** public `/casting` verifier
 exports. The `trusted synchronous publication completion (source and strict-compiled jobs)`
 group also executes emitted job scripts and the pinned issue-creation API adapter.
-The companion [selector contract tests](https://github.com/bradygaster/squad/blob/dev/test/agent-provenance.test.ts)
+The companion [selector contract tests](https://github.com/github/squad/blob/dev/test/agent-provenance.test.ts)
 cover selection, no-record results and rejection cases; their hand-built evidence
 is test data, not production authorization.
 
@@ -2608,9 +2614,63 @@ other refs.
 
 ---
 
+## gh-aw 1.x compatibility
+
+The upstream bootstrap target is `github/squad` with a current stable gh-aw 1.x
+release, **without an exact patch-version lock in the bootstrap prompt**. The
+[repository-agent prompt](https://github.com/github/squad/blob/dev/agents-agentic-workflows.md)
+preserves the inspection, immutable-revision, installation-verification,
+explicit-staging, and human-review gates. It stops before installation until the
+upstream package and 1.x compiler are supported together.
+
+On November 8, 2026, the official latest release was
+[gh-aw v1.0.1](https://github.com/github/gh-aw/releases/tag/v1.0.1).
+Its `darwin-arm64` binary matched the published SHA256 checksum
+`e159eca9db8d9fed6eee61695c6b9a9235c8fcc83bda3a0915773ca0a50e4288`.
+A disposable local Git repository tested upstream revision
+`7b731ec97f35346bdc4fa87c3edaf16b808fc0ae` without changing hosted repository
+settings or creating secrets:
+
+| Check using the v1.0.1 binary as `gh-aw` | Result |
+| --- | --- |
+| `gh-aw add github/squad/workflows@7b731ec97f35346bdc4fa87c3edaf16b808fc0ae` | Passed; installed the package and emitted `github/squad/workflows` ownership. |
+| `node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime` | Passed. |
+| `gh-aw compile --strict --no-check-update` | Passed; all eight workflows compiled. |
+| `node .github/workflows/shared/squad-install-verifier.mjs --verify-install --source-revision 7b731ec97f35346bdc4fa87c3edaf16b808fc0ae` | Failed: `Expected exactly one bradygaster/squad/workflows ownership record; found 0.` |
+
+The compiler reported the two existing source warnings (`pull_request_target`
+and combined `slash_command`/`bots`) and two fuzzy-schedule warnings because the
+disposable repository had no remote. It also reported outdated source action
+versions. These observations do not establish a 1.x warning allowlist or hosted
+runtime compatibility.
+
+Compilation is not installation verification. The current verifier additionally
+requires exactly v0.91.5 for package installer metadata and canonical compilation,
+checks immutable compiler-action pins, and compares complete normalized lock
+digests. The v1.0.1 `setup` action uses
+`221ba4f4319de6b8e809d1a15528b3ae6a818aa5`, which fails the current
+v0.91.5 pin check (`16b430146d5d5646eccef5a1ceb72152333b18b9`).
+Running `--check-source` with `SQUAD_GH_AW_BIN` pointing at v1.0.1 fails with
+`Compilation requires gh-aw v0.91.5 with matching immutable action pins.`
+
+The current safe-update report also names
+`bradygaster/squad/.github/actions/squad-init`, **not**
+`github/squad/.github/actions/squad-init`. Consequently, the legacy package,
+action, and source-annotation examples elsewhere in this guide retain their
+actual contract identities; changing only those strings would make their
+verification or approval instructions incorrect. The canonical upstream links
+below do not imply that the install contract has migrated.
+
+**Migration remains pending:** package ownership and source bindings, referenced
+actions, compiler pins, generated integrity manifests/package sources, compiled
+locks, and their regression tests must migrate and be validated as one contract.
+This is broader than the bootstrap documentation revision. Do not approve an
+unsupported install, relax the verifier, or treat the successful local compile
+as hosted activation evidence.
+
 ## See also
 
-- [Squad README](https://github.com/bradygaster/squad#readme) — project overview and local CLI usage
-- [Workflow definition](https://github.com/bradygaster/squad/blob/dev/workflows/squad.md) — full slash command specification
-- [Implementation worker](https://github.com/bradygaster/squad/blob/dev/workflows/squad-implement-worker.md) — isolated issue implementation workflow
-- [Bootstrap component](https://github.com/bradygaster/squad/blob/dev/workflows/shared/squad.md) — activation and artifact lifecycle
+- [Squad README](https://github.com/github/squad#readme) — project overview and local CLI usage
+- [Workflow definition](https://github.com/github/squad/blob/dev/workflows/squad.md) — full slash command specification
+- [Implementation worker](https://github.com/github/squad/blob/dev/workflows/squad-implement-worker.md) — isolated issue implementation workflow
+- [Bootstrap component](https://github.com/github/squad/blob/dev/workflows/shared/squad.md) — activation and artifact lifecycle
