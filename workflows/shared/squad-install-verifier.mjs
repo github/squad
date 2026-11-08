@@ -134,6 +134,11 @@ function assertAcceptedPackageName(packageName) {
   }
 }
 
+function isCaseVariantPackageName(packageName) {
+  return typeof packageName === 'string' && !ACCEPTED_PACKAGE_NAMES.includes(packageName)
+    && ACCEPTED_PACKAGE_NAMES.some(accepted => accepted.toLowerCase() === packageName.toLowerCase());
+}
+
 // Mirrors gh-aw v0.91.5 stablePackageID: lowercase slug plus the first 12 hex digits of
 // SHA-256 over the package identity exactly as installed.
 export function packageOwnershipDestination(packageName) {
@@ -777,8 +782,7 @@ function findOwnershipRecord(root) {
     }
     if (ACCEPTED_PACKAGE_NAMES.includes(record?.package)) {
       matches.push({ path: relativePath, record });
-    } else if (typeof record?.package === 'string' && ACCEPTED_PACKAGE_NAMES
-      .some(accepted => accepted.toLowerCase() === record.package.toLowerCase())) {
+    } else if (isCaseVariantPackageName(record?.package)) {
       caseVariants.push({ path: relativePath, record });
     }
   }
@@ -1116,10 +1120,13 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
     }
     // Snapshot the index, not HEAD or the working tree, including unchanged tracked files.
     const tree = spawnChecked('git', ['write-tree'], root).stdout.trim();
-    // Exact allowlisted paths bound output; no recursion into unrelated or substituted trees.
+    // Exact allowlisted paths bound output; no recursion into unrelated or substituted trees. The
+    // ownership-record directory is listed one level deep: a case variant's record name hashes the
+    // identity as typed, so its path cannot be predicted.
     const entries = spawnChecked(
       'git',
-      ['ls-tree', '-z', tree, '--', ...required, REPO_CONFIG_PATH, UNOWNED_MUTABLE_ROUTER_SKILL, ...superseded],
+      ['ls-tree', '-z', tree, '--', ...required, REPO_CONFIG_PATH, UNOWNED_MUTABLE_ROUTER_SKILL, ...superseded,
+        '.github/aw/packages/'],
       root,
     ).stdout
       .split('\0').filter(Boolean);
@@ -1149,7 +1156,7 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
     }
     for (const path of superseded) {
       if (!staged.has(path)) continue;
-      // The skill's deletion gate permits deleting only legacy records, so a staged canonical
+      // The skill's deletion gate never permits deleting the canonical record, so a staged canonical
       // record in a legacy-owned install must move forward instead of being deleted.
       throw new Error(path === OWNERSHIP_DESTINATION
         ? `Squad package ownership record ${path} (${PACKAGE_NAME}) remains in the staged tree of this `
@@ -1158,6 +1165,24 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
           + `${ownershipDestination} and stage both changes before commit/push.`
         : `Superseded Squad package ownership record remains in staged tree: ${path}; `
           + 'delete it and stage the deletion before commit/push.');
+    }
+    // A record deleted only from the working tree still reaches a clean checkout, where
+    // findOwnershipRecord rejects a case variant beside the verified record.
+    for (const [path, [, type, object]] of staged) {
+      if (type !== 'blob' || required.has(path) || !/^\.github\/aw\/packages\/[^/]+\.json$/.test(path)) continue;
+      const bytes = spawnChecked('git', ['cat-file', 'blob', object], root).stdout;
+      let packageName;
+      try {
+        packageName = JSON.parse(bytes)?.package;
+      } catch {
+        continue;
+      }
+      if (isCaseVariantPackageName(packageName)) {
+        throw new Error(
+          `Case-variant Squad package ownership record remains in staged tree: ${path} (${packageName}); `
+          + 'delete it and stage the deletion before commit/push.',
+        );
+      }
     }
   } catch (error) {
     result.failures.push(error instanceof Error ? error.message : String(error));
@@ -1261,7 +1286,8 @@ function recoveryMessage(revision) {
 
 function legacyIdentityNotice(packageName, revision) {
   return [
-    `Notice: verified under the legacy ${packageName} package identity, which remains supported.`,
+    `Notice: verified under the legacy ${packageName} package identity, accepted only so that existing `
+      + `installations can move; ${packageRepository(packageName)} is now a separately controlled fork.`,
     `To move to ${PACKAGE_NAME}, follow the gh-aw guide's Upgrading steps, starting with:`,
     ...chainedCommands([
       `gh aw add ${PACKAGE_NAME}@${revision} --force`,

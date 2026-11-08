@@ -18,6 +18,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
@@ -54,10 +55,12 @@ const [LEGACY_PACKAGE_NAME] = LEGACY_PACKAGE_NAMES;
 const [LEGACY_OWNERSHIP] = LEGACY_OWNERSHIP_DESTINATIONS;
 const SQUAD_INIT_ACTION = `${PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
 const LEGACY_SQUAD_INIT_ACTION = `${LEGACY_PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
-const DELETION_FILTER = [
+const DELETION_ALLOWLIST = [
   `    grep -vxF -e '${UNOWNED_MUTABLE_ROUTER_SKILL}' \\`,
-  `      -e '${LEGACY_OWNERSHIP}' || true`,
+  `      -e '${LEGACY_OWNERSHIP}' |`,
+  '    while IFS= read -r path; do',
 ].join('\n');
+const DELETION_FILTER_END = '    done || true\n';
 
 function extractDeletionGate(content: string): string {
   const start = content.indexOf('unexpected_deletions="$(');
@@ -67,17 +70,56 @@ function extractDeletionGate(content: string): string {
   return content.slice(start, end + 2);
 }
 
-function runDeletionGate(gate: string, deletions: readonly string[]) {
+/** The gate's filter: the exact allowlist, then the loop that admits only case-variant ownership records. */
+function extractDeletionFilter(content: string): string {
+  const gate = extractDeletionGate(content);
+  const start = gate.indexOf(DELETION_ALLOWLIST);
+  const end = gate.indexOf(DELETION_FILTER_END, start);
+  expect(start, 'the staged-deletion filter must start with the exact allowlist').toBeGreaterThan(-1);
+  expect(end, 'the staged-deletion filter must end its case-variant loop').toBeGreaterThan(start);
+  return gate.slice(start, end + DELETION_FILTER_END.length);
+}
+
+/** Runs the gate with stubbed staged deletions; `head` holds the HEAD blob of each deleted path. */
+function runDeletionGate(gate: string, deletions: readonly string[], head: Readonly<Record<string, string>> = {}) {
   const script = `
 set -euo pipefail
-git() { printf '%s' "$STAGED_DELETIONS"; }
+git() {
+  case "$1" in
+    show) node -e '
+      const head = JSON.parse(process.env.HEAD_BLOBS);
+      const path = process.argv[1].replace(/^HEAD:/, "");
+      if (!Object.hasOwn(head, path)) {
+        console.error("fatal: path " + path + " does not exist in HEAD");
+        process.exit(128);
+      }
+      process.stdout.write(head[path]);' "$2" ;;
+    *) printf '%s' "$STAGED_DELETIONS" ;;
+  esac
+}
 ${gate}
 `;
   return spawnSync('bash', ['-c', script], {
     encoding: 'utf8',
-    env: { ...process.env, STAGED_DELETIONS: deletions.map(path => `${path}\n`).join('') },
+    env: {
+      ...process.env,
+      STAGED_DELETIONS: deletions.map(path => `${path}\n`).join(''),
+      HEAD_BLOBS: JSON.stringify(head),
+    },
   });
 }
+
+/** gh-aw v0.91.5 names an ownership record by the identity exactly as typed (see packageOwnershipDestination). */
+function typedOwnershipRecord(packageName: string): string {
+  const slug = packageName.toLowerCase().replace(/[/\\:@]/g, '-').replace(/^-+|-+$/g, '');
+  return `.github/aw/packages/${slug}-${createHash('sha256').update(packageName).digest('hex').slice(0, 12)}.json`;
+}
+
+const CASE_VARIANT_PACKAGE = 'GitHub/Squad/workflows';
+const CASE_VARIANT_OWNERSHIP = typedOwnershipRecord(CASE_VARIANT_PACKAGE);
+const LEGACY_CASE_VARIANT_PACKAGE = 'Bradygaster/Squad/workflows';
+const LEGACY_CASE_VARIANT_OWNERSHIP = typedOwnershipRecord(LEGACY_CASE_VARIANT_PACKAGE);
+const ownershipBlob = (packageName: string) => `${JSON.stringify({ schemaVersion: 1, package: packageName })}\n`;
 
 const IDENTITY_GATE_START = '# squad-package-identity-start';
 const IDENTITY_GATE_END = '# squad-package-identity-end';
@@ -85,8 +127,9 @@ const IDENTITY_SHA = 'c'.repeat(40);
 const LEGACY_INSTALL_PREFIX = `gh aw add "${LEGACY_PACKAGE_NAME}@`;
 const MANIFEST_RULE = `\`${PACKAGE_NAME}\` verifies only at Squad revisions whose `
   + `\`workflows/squad-workflows.manifest.json\` declares \`"package": "${PACKAGE_NAME}"\``;
-const IDENTITY_LEGACY_HINT = `Install a revision that declares ${LEGACY_PACKAGE_NAME} under that identity, `
-  + 'or ask the Squad maintainers for a newer revision.';
+const IDENTITY_CANONICAL_HINT = `Use a revision whose manifest declares ${PACKAGE_NAME}, or ask the Squad maintainers `
+  + `for one. Older revisions download the Squad CLI from the ${LEGACY_PACKAGE_NAME.replace(/\/workflows$/, '')} `
+  + 'fork, which has no releases.';
 const IDENTITY_UNREADABLE_STOP = 'STOP: cannot read workflows/squad-workflows.manifest.json from github/squad '
   + `at ${IDENTITY_SHA}.`;
 const IDENTITY_UNREADABLE_HINT = 'Check gh auth status --hostname github.com and network access, '
@@ -587,6 +630,92 @@ describe('SQUAD_SHA guard before every manifest identity check', () => {
   );
 });
 
+const VERIFIER = 'workflows/shared/squad-install-verifier.mjs';
+const LEGACY_HINT_SURFACES = [
+  CANONICAL, ...MIRRORS, GUIDE, 'README.md', AGENT_GUIDE, 'workflows/README.md', VERIFIER,
+] as const;
+// Revisions that declare only the legacy identity download the Squad CLI from the bradygaster/squad
+// fork, so no install hint may send users there. Each shape is one way earlier text did that.
+const LEGACY_INSTALL_SHAPES: ReadonlyArray<readonly [string, RegExp]> = [
+  ['legacy install command', /gh aw add "?bradygaster\/squad\/workflows@/g],
+  ['install under the legacy identity', /\binstall\b[^.;:]*?\bunder (?:that|the legacy|this) identity\b/gi],
+  ['install an older revision', /(?<!\bnot )\binstall (?:it |an? |the )?(?:older|earlier)\b[^.;:]*?\brevisions? (?:as|under)\b/gi],
+  ['install a legacy-only revision',
+    /(?<!\bnot )\binstall (?:a|an|the)\b[^.;:]*?\bdeclares `?bradygaster\/squad\/workflows/gi],
+  ['stay on a legacy revision', /\bstay on (?:a|an|the|that|such)\b[^.;:]*?\brevision/gi],
+  ['keep installing', /\bkeep installing\b/gi],
+  ['accept the legacy squad-init action name',
+    /\breported as `?bradygaster\/squad\/\.github\/actions\/squad-init|\bnames the same squad-init action as `?bradygaster\/|\bAccept that name only\b/g],
+  ['legacy identity as a steady state', /\bremains supported\b/gi],
+];
+// Any clause of prose or of a printed message that tells the reader to install the legacy identity.
+const LEGACY_INSTALL_CLAUSE =
+  /(?<!\b(?:not|never) )(?<![-/\w])(?:install|reinstall)\b(?:(?![.;:!?](?:\s|$))[\s\S])*?bradygaster\/squad\/workflows/gi;
+
+/** Whitespace-flattened text, with the 1-based source line of every flattened character. */
+function flattenLines(text: string): { flat: string; lines: number[] } {
+  const chars: string[] = [];
+  const lines: number[] = [];
+  let line = 1;
+  let lastSpace = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const space = /\s/.test(char);
+    if (!space || !lastSpace) {
+      chars.push(space ? ' ' : char);
+      lines.push(line);
+    }
+    lastSpace = space;
+    if (char === '\n') line += 1;
+  }
+  return { flat: chars.join(''), lines };
+}
+
+/** Markdown prose plus only the messages that runnable blocks print, line-aligned with the source. */
+function readableMarkdown(text: string): string {
+  return text.replace(/^```[^\n]*\n[\s\S]*?^```$/gm, block => block.split('\n').map(line =>
+    [...line.matchAll(/\b(?:echo|printf)\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/g)]
+      .map(match => match[1] ?? match[2]).join(' ')).join('\n'));
+}
+
+function legacyInstallHints(path: string): string[] {
+  const text = readLF(path);
+  const findings: string[] = [];
+  const scan = (source: string, shapes: ReadonlyArray<readonly [string, RegExp]>) => {
+    const { flat, lines } = flattenLines(source);
+    for (const [label, shape] of shapes) {
+      for (const match of flat.matchAll(shape)) {
+        findings.push(`${path}:${lines[match.index!]}: ${label}: "${match[0].slice(0, 200)}"`);
+      }
+    }
+  };
+  scan(text, LEGACY_INSTALL_SHAPES);
+  if (path.endsWith('.md')) scan(readableMarkdown(text), [['install the legacy identity', LEGACY_INSTALL_CLAUSE]]);
+  return findings;
+}
+
+describe('no install-time fallback to the legacy package identity', () => {
+  it.each(LEGACY_HINT_SURFACES)('%s never tells users to install or stay on the legacy identity', path => {
+    expect(legacyInstallHints(path), `${path}: install hints or STOP messages that send users to `
+      + `${LEGACY_PACKAGE_NAME} (file:line: shape: text)`).toEqual([]);
+  });
+
+  it('keeps the legacy-to-canonical move and the verifier\'s transitional acceptance of the legacy identity', () => {
+    for (const path of [CANONICAL, GUIDE]) {
+      const text = readLF(path);
+      expect(fencedBlocks(text).some(block => block.includes(`${INSTALL_COMMAND} --force`)
+        && block.includes(`\nrm -f ${LEGACY_OWNERSHIP}\n`)), `${path} must keep the upgrade's legacy-record cleanup`)
+        .toBe(true);
+      expect(text, `${path} must keep the staged-deletion allowance for ${LEGACY_OWNERSHIP}`)
+        .toContain(`-e '${LEGACY_OWNERSHIP}'`);
+      expect(text, `${path} must keep the migration warning allowlist`).toContain(`- ${LEGACY_SQUAD_INIT_ACTION}\n`);
+    }
+    expect(LEGACY_PACKAGE_NAMES, `${VERIFIER} must keep accepting existing legacy installations`)
+      .toEqual(['bradygaster/squad/workflows']);
+    expect(readLF(VERIFIER)).toContain('Object.freeze([PACKAGE_NAME, ...LEGACY_PACKAGE_NAMES])');
+  });
+});
+
 describe('gh-aw legacy-identity migration with committed legacy locks', () => {
   let outputs: { approved: string; upgraded: string; committed: string };
   beforeAll(() => {
@@ -771,7 +900,8 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('not part of the Squad package');
       expect(content).toContain('Do not adopt or vendor the rest');
       expect(content).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
-      expect(content).toContain(DELETION_FILTER);
+      expect(content, `${CANONICAL} must use the exact staged-deletion allowlist, then its case-variant loop`)
+        .toContain(DELETION_ALLOWLIST);
     });
 
     it.each([
@@ -790,6 +920,49 @@ describe('gh-aw-enlistment skill', () => {
       }
     });
 
+    // gh-aw keys records by the identity as typed, so `gh aw add GitHub/Squad/workflows@SHA` leaves a
+    // record that the verifier requires to be deleted, and the gate must let exactly that deletion through.
+    it.each([
+      [`the ${CASE_VARIANT_PACKAGE} record`, [CASE_VARIANT_OWNERSHIP],
+        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, []],
+      [`the ${LEGACY_CASE_VARIANT_PACKAGE} record`, [LEGACY_CASE_VARIANT_OWNERSHIP],
+        { [LEGACY_CASE_VARIANT_OWNERSHIP]: ownershipBlob(LEGACY_CASE_VARIANT_PACKAGE) }, []],
+      ['the router, the legacy record and a case-variant record together',
+        [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP, CASE_VARIANT_OWNERSHIP],
+        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, []],
+      [`an exact ${PACKAGE_NAME} record at a case-variant path`, [CASE_VARIANT_OWNERSHIP],
+        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(PACKAGE_NAME) }, [CASE_VARIANT_OWNERSHIP]],
+      ['the canonical ownership record', [OWNERSHIP_DESTINATION],
+        { [OWNERSHIP_DESTINATION]: ownershipBlob(PACKAGE_NAME) }, [OWNERSHIP_DESTINATION]],
+      ['another package\'s ownership record', ['.github/aw/packages/acme-tools-0123456789ab.json'],
+        { '.github/aw/packages/acme-tools-0123456789ab.json': ownershipBlob('acme/tools') },
+        ['.github/aw/packages/acme-tools-0123456789ab.json']],
+      ['a record that is not JSON', [CASE_VARIANT_OWNERSHIP],
+        { [CASE_VARIANT_OWNERSHIP]: `${CASE_VARIANT_PACKAGE}\n` }, [CASE_VARIANT_OWNERSHIP]],
+      ['a record without a package', [CASE_VARIANT_OWNERSHIP],
+        { [CASE_VARIANT_OWNERSHIP]: '{"schemaVersion":1}\n' }, [CASE_VARIANT_OWNERSHIP]],
+      ['a record missing from HEAD', [CASE_VARIANT_OWNERSHIP], {}, [CASE_VARIANT_OWNERSHIP]],
+      ['a case-variant record outside .github/aw/packages/', ['.github/aw/github-squad-workflows.json'],
+        { '.github/aw/github-squad-workflows.json': ownershipBlob(CASE_VARIANT_PACKAGE) },
+        ['.github/aw/github-squad-workflows.json']],
+      ['a case-variant record nested below .github/aw/packages/', ['.github/aw/packages/old/record.json'],
+        { '.github/aw/packages/old/record.json': ownershipBlob(CASE_VARIANT_PACKAGE) },
+        ['.github/aw/packages/old/record.json']],
+      ['a case-variant record without the .json suffix', [`${CASE_VARIANT_OWNERSHIP}.bak`],
+        { [`${CASE_VARIANT_OWNERSHIP}.bak`]: ownershipBlob(CASE_VARIANT_PACKAGE) }, [`${CASE_VARIANT_OWNERSHIP}.bak`]],
+      ['a case-variant record beside an installed workflow', [CASE_VARIANT_OWNERSHIP, '.github/workflows/squad.md'],
+        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, ['.github/workflows/squad.md']],
+    ] as const)('the staged-deletion gate permits only case-variant ownership records: %s', (
+      label, deletions, head, stopped,
+    ) => {
+      const result = runDeletionGate(extractDeletionGate(content), deletions, head);
+      const input = `${CANONICAL} staged-deletion gate with ${label} (${deletions.join(', ')}; HEAD ${JSON.stringify(head)})`;
+      expect(result.status, `${input}: ${result.stderr}`).toBe(stopped.length === 0 ? 0 : 1);
+      if (stopped.length > 0) {
+        expect(result.stderr, input).toContain(`STOP: unexpected staged deletions:\n${stopped.join('\n')}\n`);
+      }
+    });
+
     it('documents the legacy-identity migration that the verifier enforces', () => {
       const flat = content.replace(/\s+/g, ' ');
       const why = `skill must document migrating off ${LEGACY_PACKAGE_NAME} and deleting ${LEGACY_OWNERSHIP}`;
@@ -805,10 +978,14 @@ describe('gh-aw-enlistment skill', () => {
         `action \`${SQUAD_INIT_ACTION}\` added and \`bradygaster/squad/.github/actions/squad-init\` removed.`,
       );
       expect(flat, why).toContain('**STOP** on any other new secret or action.');
-      expect(flat, 'skill must say how to stay on a legacy-only revision').toContain(
-        'drop the identity check below, keep the `gh aw add` line\'s STOP guard but replace its command '
-        + `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
-        + 'that ownership record is the only one such an installation has.',
+      expect(flat, 'skill must say why a legacy-identity installation has to move').toContain(
+        'Those revisions download the Squad CLI from the separately controlled `bradygaster/squad` fork, '
+        + `which has no releases, so move such an installation to a revision that declares \`${PACKAGE_NAME}\` `
+        + 'with the block below.',
+      );
+      expect(flat, 'skill must accept the legacy identity only while an installation moves').toContain(
+        `Verifiers of revisions that declare \`${PACKAGE_NAME}\` still accept the legacy identity, so an existing `
+        + 'installation keeps verifying while it moves, and they print a notice that says to move it.',
       );
       expect(flat, 'skill must say a failed reinstall removes nothing')
         .toContain('If the forced reinstall fails, the block stops before it removes anything.');
@@ -861,9 +1038,10 @@ describe('gh-aw-enlistment skill', () => {
         .toBe(3);
       const flat = content.replace(/\s+/g, ' ');
       expect(flat, 'skill must state the manifest cutoff').toContain(MANIFEST_RULE);
-      expect(flat, 'skill must route older revisions').toContain(
-        `An older maintainer-approved revision declares \`${LEGACY_PACKAGE_NAME}\`: install it under that identity, `
-        + 'because its verifier accepts no other, or ask the Squad maintainers for a newer revision.',
+      expect(flat, 'skill must route older revisions to a canonical revision, not to the legacy identity').toContain(
+        `Do not install an older revision under \`${LEGACY_PACKAGE_NAME}\` instead: its activation downloads the `
+        + 'Squad CLI from the separately controlled `bradygaster/squad` fork, which has no releases. '
+        + `Use a revision whose manifest declares \`${PACKAGE_NAME}\`, or ask the Squad maintainers for one.`,
       );
     });
 
@@ -897,17 +1075,28 @@ describe('gh-aw-enlistment skill', () => {
       expect(result.stderr, label).toContain(
         `STOP: Squad ${IDENTITY_SHA} does not declare the ${PACKAGE_NAME} package (found '${found}').`,
       );
-      expect(result.stderr, `${label}: a readable manifest routes to the legacy identity`)
-        .toContain(IDENTITY_LEGACY_HINT);
+      expect(result.stderr, `${label}: a readable manifest routes to a ${PACKAGE_NAME} revision`)
+        .toContain(IDENTITY_CANONICAL_HINT);
       expect(result.stderr, `${label}: a readable manifest is not an access problem`)
         .not.toContain(IDENTITY_UNREADABLE_HINT);
     });
 
-    it('names the legacy squad-init action only for revisions that declare the legacy identity', () => {
-      const flat = content.replace(/\s+/g, ' ');
-      expect(flat).toContain(
-        `At a revision whose manifest declares \`${LEGACY_PACKAGE_NAME}\`, the same action is reported as `
-        + '`bradygaster/squad/.github/actions/squad-init`. Accept that name only for such a revision.',
+    it('names the legacy squad-init action only for the legacy-identity migration', () => {
+      const lines = content.split('\n');
+      const reviewHeading = lines.find(line => line.startsWith('### ')
+        && line.endsWith('Review the first-install safe-update report — approve ONLY the documented entries'));
+      expect(reviewHeading, `${CANONICAL} must keep its safe-update review step`).toBeDefined();
+      const reviewStart = content.indexOf(`${reviewHeading}\n`);
+      const review = content.slice(reviewStart, content.indexOf('\n### ', reviewStart + 1));
+      const antiPatterns = content.slice(content.indexOf('\n## Anti-Patterns\n'));
+      expect(antiPatterns, `${CANONICAL} must keep its Anti-Patterns section`).toContain('Approving unknown safe updates');
+      for (const [name, text] of [[reviewHeading!, review], ['## Anti-Patterns', antiPatterns]] as const) {
+        expect(text, `${CANONICAL} "${name}" must not offer ${LEGACY_SQUAD_INIT_ACTION} as an approvable name`)
+          .not.toContain(LEGACY_SQUAD_INIT_ACTION);
+      }
+      expect(antiPatterns.replace(/\s+/g, ' ')).toContain(
+        `Approve ONLY \`SQUAD_GITHUB_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_TOKEN\`, and \`${SQUAD_INIT_ACTION}\`. `
+        + 'Anything else is a STOP.',
       );
     });
 
@@ -1090,9 +1279,13 @@ describe('gh-aw-enlistment skill', () => {
         'The only permitted staged deletions are the exact router deletion above',
       );
       expect(flatGuide).toContain(`the superseded \`${LEGACY_OWNERSHIP}\` ownership record`);
+      expect(flatGuide, 'the guide must name the case-variant ownership-record deletion the verifier requires')
+        .toContain(`and a \`.github/aw/packages/*.json\` ownership record whose \`package\` is a case variant of `
+          + `\`${PACKAGE_NAME}\` or \`${LEGACY_PACKAGE_NAME}\`, such as one left by an install typed as `
+          + `\`${CASE_VARIANT_PACKAGE}\`. Any other deletion is a hard stop.`);
       expect(flatGuide).toContain('Any other deletion is a hard stop.');
-      expect(guide.split(DELETION_FILTER).length - 1, 'both guide staging gates must use the skill filter')
-        .toBe(2);
+      expect(guide.split(extractDeletionFilter(readLF(CANONICAL))).length - 1,
+        `both ${GUIDE} staging gates must use the ${CANONICAL} deletion filter`).toBe(2);
       expect(guide).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
       expect(agentGuide).toContain('rm -f .github/skills/agentic-workflows/SKILL.md');
     });
@@ -1111,10 +1304,8 @@ describe('gh-aw-enlistment skill', () => {
       }
       expect(guide).toContain(`# (${SQUAD_INIT_ACTION}) and nothing else. STOP and`);
       expect(guide).toContain(`- Action: \`${SQUAD_INIT_ACTION}\``);
-      expect(guide.replace(/\s+/g, ' ')).toContain(
-        `At a revision whose manifest declares \`${LEGACY_PACKAGE_NAME}\`, the same action is reported as `
-        + '`bradygaster/squad/.github/actions/squad-init`.',
-      );
+      expect(guide.replace(/\s+/g, ' '), `${GUIDE} must not offer ${LEGACY_SQUAD_INIT_ACTION} as a referenced name`)
+        .not.toContain(`reported as \`${LEGACY_SQUAD_INIT_ACTION}\``);
       expect(guide).toContain(`\`${PACKAGE_NAME}@SHA\` for direct package includes`);
       expect(guide).toContain(`\`${PACKAGE_NAME}/package/<workflow>.md@SHA\` when installing dispatched`);
     });
@@ -1144,9 +1335,12 @@ describe('gh-aw-enlistment skill', () => {
       ] as const) {
         const flat = text.replace(/\s+/g, ' ');
         expect(flat, `${path} must state the manifest cutoff`).toContain(MANIFEST_RULE);
-        expect(flat, `${path} must route older revisions to the legacy identity`)
-          .toMatch(/older (?:maintainer-)?approved revision (?:as|under that identity|declares)/);
-        expect(flat, `${path} must offer a newer revision`).toMatch(/ask the (?:Squad )?maintainers for a newer revision/);
+        expect(flat, `${path} must say why older revisions are not installed`).toMatch(
+          /downloads? the Squad CLI from the separately controlled `bradygaster\/squad` fork, which has no releases/,
+        );
+        expect(flat, `${path} must route older revisions to a ${PACKAGE_NAME} revision`).toMatch(
+          new RegExp(`declares \`${PACKAGE_NAME}\`, or ask the (?:Squad )?maintainers for one\\.`),
+        );
       }
     });
 
@@ -1253,10 +1447,13 @@ describe('gh-aw-enlistment skill', () => {
       const gate = extractIdentityGate(readLF(CANONICAL));
       expect(upgrade.indexOf(gate), 'Upgrading must run the identity gate').toBeGreaterThan(-1);
       expect(upgrade.indexOf(gate), 'Upgrading must check the identity before reinstalling').toBeLessThan(add);
-      expect(flatUpgrade, 'Upgrading must say how to stay on a legacy-only revision').toContain(
-        'drop the identity check, keep the `gh aw add` line\'s STOP guard but replace its command '
-        + `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
-        + 'that ownership record is the only one such an installation has.',
+      expect(flatUpgrade, 'Upgrading must say why a legacy-identity installation has to move').toContain(
+        'Those revisions download the Squad CLI from the separately controlled `bradygaster/squad` fork, which has '
+        + 'no releases, so move such an installation with the block above.',
+      );
+      expect(flatUpgrade, 'Upgrading must accept the legacy identity only while an installation moves').toContain(
+        `Verifiers of revisions that declare \`${PACKAGE_NAME}\` still accept the legacy identity, so an existing `
+        + 'installation keeps verifying while it moves, and they print a notice that says to move it.',
       );
       expect(flatUpgrade, 'Upgrading must say a failed reinstall removes nothing')
         .toContain('If the forced reinstall fails, the block stops before it removes anything.');

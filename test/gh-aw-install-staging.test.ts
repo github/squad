@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -182,10 +183,12 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(verifyStagedInstall(root, { expectedRevision: revision, stageOwnership: true }).failures).toEqual([]);
     const queries = spawn.mock.calls.filter(([command, args]) => command === 'git' && args?.[0] === 'ls-tree');
     expect(queries).toHaveLength(1);
-    expect(queries[0][1], `ls-tree must stay bounded to exact paths, including superseded ${LEGACY_OWNERSHIP}`)
+    expect(queries[0][1], `ls-tree must stay bounded to exact paths, including superseded ${LEGACY_OWNERSHIP}, `
+      + 'plus one level of .github/aw/packages/ for case-variant ownership records')
       .toEqual([
         'ls-tree', '-z', expect.any(String), '--', ...new Set(required),
         '.github/workflows/aw.json', UNOWNED_MUTABLE_ROUTER_SKILL, ...LEGACY_OWNERSHIP_DESTINATIONS,
+        '.github/aw/packages/',
       ]);
     const unrelatedObject = git(root, 'rev-parse', `HEAD:${unrelated}/ordinary-file-00000.txt`).trim();
     const blobReads = spawn.mock.calls.filter(([command, args]) => command === 'git' && args?.[0] === 'cat-file');
@@ -350,6 +353,48 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(LEGACY_OWNERSHIP);
   }, 120_000);
 
+  it('rejects a case-variant ownership record deleted only from the working tree until its deletion is staged', () => {
+    const root = consumer();
+    // `gh aw add GitHub/Squad/workflows@SHA` names its record by the identity exactly as typed.
+    const variantName = 'GitHub/Squad/workflows';
+    const variant = `.github/aw/packages/github-squad-workflows-${
+      createHash('sha256').update(variantName).digest('hex').slice(0, 12)}.json`;
+    expect(variant).toBe('.github/aw/packages/github-squad-workflows-9361b4232957.json');
+    write(root, variant, readFileSync(join(root, OWNERSHIP_DESTINATION), 'utf8')
+      .replaceAll(`"package": "${PACKAGE_NAME}"`, `"package": "${variantName}"`));
+    git(root, 'add', '--force', '--', variant, OWNERSHIP_DESTINATION);
+    git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'canonical and case-variant records');
+    expect(verifyInstall(root).failures.join('\n'), `${OWNERSHIP_DESTINATION} beside committed ${variant}`)
+      .toContain(`case-variant record ${variant} (${variantName})`);
+
+    rmSync(join(root, variant));
+    expect(verifyInstall(root).failures, `working tree without ${variant}`).toEqual([]);
+    const args = [verifier, '--verify-staged-install', '--stage-ownership', '--source-revision', revision];
+    const state = `${variant} (${variantName}) deleted only from the working tree, still in the index`;
+    const rejected = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
+    expect(rejected.status, `--verify-staged-install with ${state}:\n${rejected.stderr}`).toBe(1);
+    expect(rejected.stderr, `--verify-staged-install with ${state}`).toContain(
+      `Case-variant Squad package ownership record remains in staged tree: ${variant} (${variantName}); `
+      + 'delete it and stage the deletion before commit/push.',
+    );
+
+    git(root, 'add', '--', '.github/aw/');
+    expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(variant);
+    const accepted = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
+    expect(accepted.status, `--verify-staged-install after staging the deletion of ${variant}:\n${accepted.stderr}`)
+      .toBe(0);
+
+    // The committed result is what a clean checkout verifies.
+    git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'delete the case-variant record');
+    const clone = mkdtempSync(join(tmpdir(), 'squad-install-staging-clone-'));
+    roots.push(clone);
+    execFileSync('git', ['-c', 'core.autocrlf=false', 'clone', '--quiet', root, clone]);
+    expect(existsSync(join(clone, variant)), `clean checkout must not contain ${variant}`).toBe(false);
+    expect(verifyInstall(clone, { expectedRevision: revision }).failures, `clean checkout of ${root}`).toEqual([]);
+  }, 120_000);
+
   it('moves a legacy-owned install with a staged canonical record forward instead of deleting it', () => {
     const root = consumer(LEGACY_PACKAGE_NAME);
     // The canonical record was committed earlier, then removed from the working tree.
@@ -379,7 +424,8 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(legacy.status, legacy.stderr).toBe(0);
     expect(legacy.stdout).toContain(`Squad gh-aw installation verified at ${revision}.`);
     expect(legacy.stderr, `a ${LEGACY_PACKAGE_NAME} install must print the move notice`).toContain([
-      `Notice: verified under the legacy ${LEGACY_PACKAGE_NAME} package identity, which remains supported.`,
+      `Notice: verified under the legacy ${LEGACY_PACKAGE_NAME} package identity, accepted only so that existing `
+        + 'installations can move; bradygaster/squad is now a separately controlled fork.',
       `To move to ${PACKAGE_NAME}, follow the gh-aw guide's Upgrading steps, starting with:`,
       `  gh aw add ${PACKAGE_NAME}@${revision} --force &&`,
       `  rm -f ${LEGACY_OWNERSHIP}`,

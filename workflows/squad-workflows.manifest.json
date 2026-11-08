@@ -69,9 +69,9 @@
       "source": "workflows/package/squad-bootstrap.md",
       "destination": ".github/workflows/squad-bootstrap.md",
       "lock": ".github/workflows/squad-bootstrap.lock.yml",
-      "source_sha256": "1759f8c06533572c2282bafd63a87d33a7c9fe5105738de7a785b5b42853cd5d",
-      "lock_sha256": "6859004e8d6e0f3a61fdf7398c77797f5c06ab0a431807e39bd4c36348d576e5",
-      "package_lock_sha256": "95256d66b3ad79ee13b800a251df09cdd6bfa20ea12d8ca1eda5ddaeaefc80d9"
+      "source_sha256": "c230742d8db6fc4b9be687e0a1cfe5d36bfd1b0b8609b0ef0798c43681bb7ff2",
+      "lock_sha256": "bacf5c2bf4bf34c7a8315aabf3efcd66e4fa1fe493adf8db929c1e58b8c1fd12",
+      "package_lock_sha256": "2113e1fa297563ea531c2413943ee43e41590723a93b62eeeec932d0f1650d42"
     },
     {
       "name": "squad-command-router",
@@ -119,8 +119,8 @@
         },
         {
           "name": "squad-bootstrap",
-          "lock_sha256": "c6e6987f079d5fbfcee27020280210310630c03d599a9bbd566497e1e3b5292c",
-          "package_lock_sha256": "1eab03ef2d65d94118f3c9f171e8118299bee422bca9f2a70358e1c56da85894"
+          "lock_sha256": "50886640b68360eee84cdb7871dfb789e2ac6b71c86d3c7b4a5cea6774c3dc49",
+          "package_lock_sha256": "e14857df6cac03ac0ba997cc39d6caf2dac2b2f75c58f74c18a3473abc84f4c4"
         },
         {
           "name": "squad-command-router",
@@ -169,7 +169,7 @@
       "package_destination": ".github/workflows/shared/squad-install-verifier.mjs",
       "destination": ".github/workflows/shared/squad-install-verifier.mjs",
       "ownership": "manifest",
-      "sha256": "c3416f68efee474790165d36e5dd9903430753cf1d710868dad0ee0834e5146b"
+      "sha256": "2ac6645565c662650ffd9e06a2021ffb123f4f96172a00abb6ed57ece5267fa0"
     },
     {
       "path": "shared/squad-command-contract.mjs",
@@ -305,7 +305,7 @@
       "name": "gh-aw-enlistment",
       "source": "workflows/skills/gh-aw-enlistment/SKILL.md",
       "destination": ".github/skills/gh-aw-enlistment/SKILL.md",
-      "sha256": "e42652883653289ea5cecb69d51fbb7b6bbd372514666a09cff5920a492c01a8"
+      "sha256": "7efe18f78bd8c2bd9ea060fd049ca6de2389f961cac5d3295f8ad83dc77596bd"
     }
   ],
   "bootstrap": {

@@ -613,7 +613,7 @@ test "${squad_package}" = "github/squad/workflows" || {
     echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
   else
     echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
-    echo "Install a revision that declares bradygaster/squad/workflows under that identity, or ask the Squad maintainers for a newer revision." >&2
+    echo "Use a revision whose manifest declares github/squad/workflows, or ask the Squad maintainers for one. Older revisions download the Squad CLI from the bradygaster/squad fork, which has no releases." >&2
   fi
   exit 1
 }
@@ -631,8 +631,10 @@ git push
 `github/squad/workflows` verifies only at Squad revisions whose
 `workflows/squad-workflows.manifest.json` declares
 `"package": "github/squad/workflows"`, so the identity check stops on any other
-revision. Install an older maintainer-approved revision as
-`bradygaster/squad/workflows`, or ask the Squad maintainers for a newer revision.
+revision. Do not install an older revision as `bradygaster/squad/workflows`
+instead: its activation downloads the Squad CLI from the separately controlled
+`bradygaster/squad` fork, which has no releases. Use a revision whose manifest
+declares `github/squad/workflows`, or ask the Squad maintainers for one.
 
 `gh aw add` compiles the workflows automatically. If it reports unapproved
 safe-update changes, review them and run `gh aw compile --approve`.

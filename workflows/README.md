@@ -11,11 +11,12 @@ gh aw add github/squad/workflows@<40-character-commit-sha>
 `workflows/squad-workflows.manifest.json` declares
 `"package": "github/squad/workflows"`. Earlier revisions, including ones
 committed after the repository moved to `github/squad`, declare and verify only
-the legacy identity `bradygaster/squad/workflows`: install an older approved
-revision under that identity, or ask the maintainers for a newer revision.
-Revisions that declare `github/squad/workflows` still verify legacy
-installations. When moving an existing installation to the new identity,
-reinstall with `--force` and delete the superseded
+the legacy identity `bradygaster/squad/workflows`, and their activation
+downloads the Squad CLI from the separately controlled `bradygaster/squad` fork,
+which has no releases. Do not install them: use a revision that declares
+`github/squad/workflows`, or ask the maintainers for one. The verifier of such a
+revision still accepts the legacy identity so that existing installations can
+move. To move one, reinstall with `--force` and delete the superseded
 `.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json` record that
 gh-aw leaves behind.
 
