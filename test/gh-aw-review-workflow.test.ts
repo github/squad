@@ -378,12 +378,12 @@ describe('gh-aw enforcing Squad reviewer', () => {
 
   it('declares the complete native package for the pinned compiler job', () => {
     const manifest = read('workflows/aw.yml');
-    expect(manifest).toContain('min-version: v0.91.5');
+    expect(manifest).toContain('min-version: v1.0.1');
     expect(manifest.match(/destination: \.github\/workflows\/squad(?:-[\w-]+)?\.md/g)).toHaveLength(8);
     expect(manifest.match(/source: package\/squad(?:-[\w-]+)?\.md/g)).toHaveLength(8);
     expect(manifest).toContain('  - skills/gh-aw-enlistment');
     expect(read('.github/workflows/squad-ci.yml')).toContain(
-      'gh extension install --force --pin v0.91.5 github/gh-aw',
+      'gh extension install --force --pin v1.0.1 github/gh-aw',
     );
   });
 
@@ -415,11 +415,11 @@ describe('gh-aw enforcing Squad reviewer', () => {
 
   it('keeps all consumer install surfaces on the isolated native package', () => {
     for (const surface of [GUIDE, README, AGENT_GUIDE, SHARED_BOOTSTRAP]) {
-      expect(surface).toContain('bradygaster/squad/workflows@${SQUAD_SHA}');
+      expect(surface).toContain('github/squad/workflows@${SQUAD_SHA}');
       expect(surface).not.toMatch(/gh aw add \\\n\s+bradygaster\/squad\/workflows\/squad\.md/);
     }
     expect(DEMO).toContain("gh-aw guide's install command");
-    expect(DEMO).not.toContain('gh aw add bradygaster/squad/workflows/squad.md@latest');
+    expect(DEMO).not.toContain('gh aw add github/squad/workflows/squad.md@latest');
   });
 
   it('documents enforcement, explicit override, and the independent human approval requirement', () => {

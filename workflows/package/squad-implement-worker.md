@@ -781,8 +781,9 @@ jobs:
           permission-contents: read
       - name: Install Squad CLI from standalone release
         id: squad-cli
-        uses: bradygaster/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
+        uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
         with:
+          repository: github/squad
           skip-init: "true"
       - name: Initialize Squad team
         env:

@@ -366,7 +366,7 @@ safe-outputs:
             persist-credentials: false
             path: .squad-activation-trusted-base
         - name: Setup pinned issue creation API
-          uses: github/gh-aw-actions/setup@v0.91.5
+          uses: github/gh-aw-actions/setup@v1.0.1
           with:
             destination: ${{ runner.temp }}/gh-aw/actions
         - name: Freeze and validate activation inputs
@@ -999,8 +999,9 @@ jobs:
           permission-contents: read
       - name: Install Squad CLI from standalone release
         id: squad-cli
-        uses: bradygaster/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
+        uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
         with:
+          repository: github/squad
           skip-init: "true"
       - name: Initialize Squad team
         env:
@@ -2673,7 +2674,7 @@ gate `create-pull-request`. It diagnoses a `cast_failure` and
 outputs run separately after the agent; this diagnosis cannot prevent a pull
 request that is materialized concurrently.
 
-Pinned gh-aw v0.91.5 makes `report_incomplete` fail the conclusion step.
+Pinned gh-aw v1.0.1 makes `report_incomplete` fail the conclusion step.
 Automatic failure, failed-job, detection, no-op tracking issues and generic
 activation/completion comments are disabled in the dispatcher and router:
 conclusion runs independently of safe-output authorization and completion

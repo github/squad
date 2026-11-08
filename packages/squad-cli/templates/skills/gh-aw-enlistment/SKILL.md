@@ -25,7 +25,7 @@ bootstrap pull request** — never an auto-merge.
 This skill **operationalizes** the supported bootstrap path. It does not summarize
 it: each step below is a gate with explicit success evidence and **STOP conditions**.
 The authoritative source is `docs/src/content/docs/guide/gh-aw.md` (mirrored at
-`https://bradygaster.github.io/squad/docs/guide/gh-aw/`). If that guide and this
+`https://github.github.com/squad/guide/gh-aw/`). If that guide and this
 skill ever disagree, the guide wins — re-read it before proceeding.
 
 GitHub Issues are a hard prerequisite: `/squad` commands arrive as issue
@@ -54,16 +54,15 @@ condition and wait for a human decision — do not work around it.
 # gh is authenticated
 gh auth status
 
-# Prove the exact package-capable compiler version before creating artifacts
+# Require stable gh-aw 1.x without pinning the CLI installation to a patch
 # gh-aw-exact-version-start
-required_gh_aw_version="v0.91.5"
 gh_aw_version_output="$(gh aw --version 2>&1)" || gh_aw_version_output=""
 gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 
-if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
-  echo "Installing exact supported gh-aw ${required_gh_aw_version}."
+if [ -z "${gh_aw_version}" ] || [[ "${gh_aw_version}" =~ ^v0\. ]]; then
+  echo "Installing the current stable gh-aw release."
   gh extension remove gh-aw >/dev/null 2>&1 || true
-  gh extension install --pin "${required_gh_aw_version}" github/gh-aw
+  gh extension install github/gh-aw
   gh_aw_version_output="$(gh aw --version 2>&1)" || {
     echo "STOP: gh-aw version could not be verified after clean installation." >&2
     exit 1
@@ -71,8 +70,8 @@ if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
   gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 fi
 
-test "${gh_aw_version}" = "${required_gh_aw_version}" || {
-  echo "STOP: required gh-aw v0.91.5, but found ${gh_aw_version:-unavailable} after clean installation." >&2
+[[ "${gh_aw_version}" =~ ^v1\.[0-9]+\.[0-9]+$ ]] || {
+  echo "STOP: stable gh-aw 1.x is required, but found ${gh_aw_version:-unavailable}." >&2
   exit 1
 }
 # gh-aw-exact-version-end
@@ -87,17 +86,20 @@ git status --short
 ```
 
 > **Portability — compiler check:** use the equivalent PowerShell commands to
-> capture both output streams from `gh aw --version`. On any mismatch, remove
-> `github/gh-aw`, cleanly install the exact `v0.91.5` pin, and verify both
-> streams again. Stop before branch creation or file generation unless that
-> second check proves exactly `v0.91.5`; never select a newer release.
+> capture both output streams from `gh aw --version`. If absent or 0.x, cleanly
+> install the current stable `github/gh-aw` release without `--pin` and verify
+> both streams again. Stop unless the result is a stable 1.x release; never
+> downgrade a newer major version automatically. The current package validates
+> v1.0.1 compiler bytes and immutable action pins. Other 1.x releases require
+> a maintainer-reviewed package update, not a consumer-side digest refresh.
 
 - **STOP** if `gh auth status` is not logged in, or is logged in as the wrong
   identity for this repo (see the `gh-auth-isolation` skill to operate as a
   specific account without switching the global default).
 - **STOP** if `owner_repo` or `default_branch` cannot be resolved.
-- **STOP** if exact gh-aw `v0.91.5` cannot be proven after the clean pinned
-  reinstall. Do not create a branch or generate repository files.
+- **STOP** if stable gh-aw 1.x cannot be proven after installation, or the
+  package's published compiler contract does not cover the installed release.
+  Do not create a branch or generate repository files.
 - **STOP** if the working tree has unrelated uncommitted changes you cannot
   account for — the bootstrap must land as an isolated, reviewable change.
 - Confirm Copilot is enabled for the repository where checkable; the activation
@@ -193,13 +195,13 @@ published release guidance, then set it once:
   echo "STOP: SQUAD_SHA must be the exact 40-character commit SHA, not a branch name or shortened hash." >&2
   exit 1
 }
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 ```
 
 The nested `workflows/aw.yml` is the only supported distribution registration.
 It isolates package auto-discovery from unrelated repository skills and agents,
-and installs exactly eight workflows, seventeen runtime resources, and one
+and installs exactly eight workflows, twenty-one runtime resources, and one
 `gh-aw-enlistment` skill at the same resolved revision:
 
 - `squad.md` + `squad.lock.yml`
@@ -217,7 +219,7 @@ governance-scoped retrospective proposal (see the gh-aw guide's retrospective
 auto-implementation section); installing it alongside the other seven keeps the
 full stack consistent and avoids a second bootstrap pass later.
 
-gh-aw v0.91.5 also materializes
+gh-aw v1.0.1 also materializes
 `.github/skills/agentic-workflows/SKILL.md`. That generic tool-owned router is
 not part of the Squad package and directs agents to mutable prompts from the
 current `github/gh-aw` repository rather than the pinned Squad revision. Remove
@@ -247,7 +249,7 @@ On a clean repo, `gh aw add` reports these expected safe updates and **nothing e
 
 <!-- allowlist-start -->
 - Restricted secrets: **`SQUAD_GITHUB_APP_PRIVATE_KEY`** and **`SQUAD_GITHUB_TOKEN`**
-- Action: **`bradygaster/squad/.github/actions/squad-init`**
+- Action: **`github/squad/.github/actions/squad-init`**
 <!-- allowlist-end -->
 
 > **These are referenced names, not prerequisites.** `gh aw add` lists the secrets
@@ -285,7 +287,7 @@ This must run after any first-install approval and before committing. Success
 criteria:
 
 - All eight workflows compile successfully.
-- With gh-aw v0.91.5, require exactly two warnings, one occurrence of each
+- With gh-aw v1.0.1, require exactly two warnings, one occurrence of each
   exact diagnostic header below (including its workflow path):
 
 <!-- compile-warning-allowlist-start -->
@@ -498,7 +500,7 @@ git switch -c chore/squad-gh-aw-bootstrap
   echo "STOP: SQUAD_SHA must be an explicit, maintainer-approved 40-character lowercase hex commit SHA." >&2
   exit 1
 }
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 
 # Safe-update report shows ONLY the two documented secrets + squad-init → approve once
@@ -566,7 +568,7 @@ gh pr merge --squash                # auto-merge before human review. NEVER.
   `.github/skills/agentic-workflows/SKILL.md`; keep the exact Squad-owned
   `.github/skills/gh-aw-enlistment/SKILL.md`.
 - ❌ **Approving unknown safe updates.** Approve ONLY `SQUAD_GITHUB_APP_PRIVATE_KEY`,
-  `SQUAD_GITHUB_TOKEN`, and `bradygaster/squad/.github/actions/squad-init`. Anything
+  `SQUAD_GITHUB_TOKEN`, and `github/squad/.github/actions/squad-init`. Anything
   else is a STOP.
 - ❌ **Treating `--approve` as the final compile.** Always finish with a plain
   `gh aw compile --strict` (no `--approve`).

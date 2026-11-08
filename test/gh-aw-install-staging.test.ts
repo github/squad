@@ -227,7 +227,7 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     );
     expect(rejected.stderr).toContain([
       'Safe recovery:',
-      `  gh aw add bradygaster/squad/workflows@${revision} --force`,
+      `  gh aw add github/squad/workflows@${revision} --force`,
       `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
       '  gh aw compile --strict',
       '  node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',

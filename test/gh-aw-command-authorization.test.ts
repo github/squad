@@ -57,7 +57,7 @@ beforeAll(async () => {
   // in memory, with no GitHub clients or writes and no approximate sanitizer stubs.
   const runtimeSha = DIAGNOSTIC_RUNTIME_SHA;
   expect(fixture.consumerFiles.get('.github/workflows/squad.lock.yml')!.toString())
-    .toContain(`github/gh-aw-actions/setup@${runtimeSha} # v0.91.5`);
+    .toContain(`github/gh-aw-actions/setup@${runtimeSha} # v1.0.1`);
   const sources = new Map(await Promise.all([
     'sanitize_content.cjs', 'sanitize_content_core.cjs', 'markdown_code_region_balancer.cjs',
     'repo_helpers.cjs', 'slash_command_matcher.cjs', 'glob_pattern_helpers.cjs', 'error_codes.cjs',
@@ -271,6 +271,26 @@ async function writeComments(items: Item[]) {
 }
 
 describe('compiled Squad command authorization boundary (#2185)', () => {
+  it('permits pure IP parsing but forbids sockets in the pinned runtime harness', () => {
+    const sources = new Map([['js/net_probe.cjs', `
+      const net = require('net');
+      module.exports = {
+        isIP: net.isIP,
+        connect: () => require('node:net').connect(),
+        socket: () => new net.Socket(),
+      };
+    `]]);
+    const runtime = diagnosticRuntime(sources, scratch, [], {});
+    const probe = runtime.load('js/net_probe.cjs');
+    expect(probe.isIP('127.0.0.1')).toBe(4);
+    expect(probe.isIP('::1')).toBe(6);
+    expect(() => probe.connect()).toThrow('Forbidden external IO: node:net.connect');
+    expect(() => probe.socket()).toThrow('Forbidden external IO: net.Socket');
+    expect(runtime.ioErrors).toEqual([
+      'Forbidden external IO: node:net.connect', 'Forbidden external IO: net.Socket',
+    ]);
+  });
+
   it('kills a live-source mutation that checks only HTML-comment-stripped authority', async () => {
     const source = readFileSync(join(trusted, 'squad-command-contract.mjs'), 'utf8');
     const mutated = source.replace('const bodies = [rawBody, rawBody.replace(', 'const bodies = [rawBody.replace(');

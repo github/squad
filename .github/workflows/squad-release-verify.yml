@@ -203,8 +203,8 @@ jobs:
       - name: Check extracted release scripts and workflow policy
         run: node scripts/release/check-release-scripts.mjs
 
-      - name: Install gh-aw v0.91.5 (pinned; required by fail-closed test gates)
-        run: gh extension install --force --pin v0.91.5 github/gh-aw
+      - name: Install gh-aw v1.0.1 (pinned; required by fail-closed test gates)
+        run: gh extension install --force --pin v1.0.1 github/gh-aw
         env:
           GH_TOKEN: ${{ github.token }}
 

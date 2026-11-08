@@ -81,7 +81,7 @@ gh() {
     return 0
   fi
   if [ "$1" = "extension" ] && [ "$2" = "install" ]; then
-    printf 'CALL install %s %s\\n' "$3" "$4" >&3
+    printf 'CALL install %s %s\\n' "$3" "\${4:-}" >&3
     installed=1
     return 0
   fi
@@ -236,7 +236,7 @@ describe('gh-aw-enlistment skill', () => {
         [
           'SQUAD_GITHUB_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_TOKEN',
-          'bradygaster/squad/.github/actions/squad-init',
+          'github/squad/.github/actions/squad-init',
         ].sort()
       );
 
@@ -249,8 +249,8 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain(': "${SQUAD_SHA:?STOP: set SQUAD_SHA to an explicit, maintainer-approved 40-character Squad commit SHA before installing.}"');
       expect(content).not.toContain('commits/dev');
       expect(content).toContain('^' + '[0-9a-f]{40}' + '$');
-      expect(content).toContain('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"');
-      expect(content).toContain('exactly eight workflows, seventeen runtime resources, and one');
+      expect(content).toContain('gh aw add "github/squad/workflows@${SQUAD_SHA}"');
+      expect(content).toContain('exactly eight workflows, twenty-one runtime resources, and one');
       for (const workflow of [
         'squad.md',
         'squad-implement-worker.md',
@@ -318,7 +318,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('STOP before branch creation or `gh aw add`');
       expect(content.indexOf("issues_enabled=")).toBeLessThan(content.indexOf('git switch -c'));
       expect(content.indexOf("issues_enabled=")).toBeLessThan(
-        content.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        content.indexOf('gh aw add "github/squad/workflows@${SQUAD_SHA}"'),
       );
     });
 
@@ -346,12 +346,13 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('[Agentic Research] owner/repo — initial proposals');
     });
 
-    it('pins and verifies the package-capable gh-aw compiler', () => {
+    it('installs stable 1.x without a CLI patch pin and retains the separate compiler contract', () => {
       expect(content).toContain('gh_aw_version_output="$(gh aw --version 2>&1)"');
       expect(content).toContain('gh extension remove gh-aw');
-      expect(content).toContain('required_gh_aw_version="v0.91.5"');
-      expect(content).toContain('gh extension install --pin "${required_gh_aw_version}" github/gh-aw');
-      expect(content).toContain('never select a newer release');
+      expect(content).toContain('gh extension install github/gh-aw');
+      expect(content).not.toContain('gh extension install --pin');
+      expect(content).toContain('never\n> downgrade a newer major version automatically');
+      expect(content).toContain('v1.0.1 compiler bytes and immutable action pins');
       expect(content).toContain('PowerShell');
     });
 
@@ -394,47 +395,62 @@ describe('gh-aw-enlistment skill', () => {
     const agentGuide = readLF(AGENT_GUIDE);
     const versionGate = extractVersionGate(guide);
 
-    it('accepts an existing exact v0.91.5 installation without reinstalling', () => {
-      const result = runVersionGate(versionGate, 'v0.91.5', 'v0.91.5');
+    it('accepts an existing exact v1.0.1 installation without reinstalling', () => {
+      const result = runVersionGate(versionGate, 'v1.0.1', 'v1.0.1');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(1);
       expect(result.stderr).not.toContain('CALL remove');
       expect(result.stderr).not.toContain('CALL install');
     });
 
-    it('captures exact v0.91.5 version output emitted on stderr', () => {
-      const result = runVersionGate(versionGate, 'v0.91.5', 'v0.91.5', 'stderr');
+    it('captures exact v1.0.1 version output emitted on stderr', () => {
+      const result = runVersionGate(versionGate, 'v1.0.1', 'v1.0.1', 'stderr');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(1);
       expect(result.stderr).not.toContain('CALL remove');
       expect(result.stderr).not.toContain('CALL install');
     });
 
-    it('removes pre-existing v0.89.21 and verifies a clean v0.91.5 install', () => {
-      const result = runVersionGate(versionGate, 'v0.89.21', 'v0.91.5');
+    it('removes pre-existing v0.89.21 and verifies a clean v1.0.1 install', () => {
+      const result = runVersionGate(versionGate, 'v0.89.21', 'v1.0.1');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(2);
       expect(result.stderr.match(/^CALL remove$/gm)).toHaveLength(1);
-      expect(result.stderr.match(/^CALL install --pin v0\.91\.5$/gm)).toHaveLength(1);
+      expect(result.stderr.match(/^CALL install github\/gh-aw *$/gm)).toHaveLength(1);
     });
 
     it('fails closed when a clean reinstall persistently reports v0.89.21', () => {
       const result = runVersionGate(versionGate, 'v0.89.21', 'v0.89.21');
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('required gh-aw v0.91.5, but found v0.89.21');
+      expect(result.stderr).toContain('stable gh-aw 1.x is required, but found v0.89.21');
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(2);
       expect(result.stderr.match(/^CALL remove$/gm)).toHaveLength(1);
-      expect(result.stderr.match(/^CALL install --pin v0\.91\.5$/gm)).toHaveLength(1);
+      expect(result.stderr.match(/^CALL install github\/gh-aw *$/gm)).toHaveLength(1);
       expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(
         guide.indexOf('git switch -c chore/squad-gh-aw-bootstrap'),
       );
       expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(
-        guide.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        guide.indexOf('gh aw add "github/squad/workflows@${SQUAD_SHA}"'),
       );
     });
 
     it('keeps the canonical skill version gate synchronized with the guide', () => {
       expect(extractVersionGate(readLF(CANONICAL))).toBe(versionGate);
+    });
+
+    it.each(['v1.0.2', 'v1.12.3'])('does not pin or downgrade stable 1.x %s in the family preflight', (version) => {
+      const result = runVersionGate(versionGate, version, 'v1.0.1');
+      expect(result.status, `stable 1.x preflight rejected ${version}`).toBe(0);
+      expect(result.stderr).not.toContain('CALL install');
+      expect(result.stderr).not.toContain('CALL remove');
+    });
+
+    it.each(['v1.0.1-preview', 'v2.0.0', 'unknown'])('rejects %s without automatically replacing a non-0.x installation', (version) => {
+      const result = runVersionGate(versionGate, version, 'v1.0.1');
+      expect(result.status, `unsupported compiler family ${version} passed preflight`).toBe(1);
+      expect(result.stderr).toContain(`stable gh-aw 1.x is required, but found ${version}`);
+      expect(result.stderr).not.toContain('CALL install');
+      expect(result.stderr).not.toContain('CALL remove');
     });
 
     it('checks the staged installation before every bootstrap commit', () => {
@@ -478,7 +494,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(guide).toContain('do not continue to `gh aw add`');
       expect(issuesCheck).toBeLessThan(guide.indexOf('git switch -c chore/squad-gh-aw-bootstrap'));
       expect(issuesCheck).toBeLessThan(
-        guide.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        guide.indexOf('gh aw add "github/squad/workflows@${SQUAD_SHA}"'),
       );
       expect(agentGuide).toContain('verifies that GitHub Issues are enabled');
       expect(agentGuide).toContain('bootstrap creates a research/proposals issue');
@@ -489,7 +505,7 @@ describe('gh-aw-enlistment skill', () => {
       const readmeInstall = readme.slice(readme.indexOf('### Install'));
       expect(readmeInstall.indexOf("issues_enabled=")).toBeGreaterThan(-1);
       expect(readmeInstall.indexOf("issues_enabled=")).toBeLessThan(
-        readmeInstall.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        readmeInstall.indexOf('gh aw add "github/squad/workflows@${SQUAD_SHA}"'),
       );
       expect(readmeInstall).toContain(
         'test "$(gh api "repos/${owner_repo}" --jq \'.has_issues\')" = "true" || {',
@@ -527,14 +543,14 @@ describe('gh-aw-enlistment skill', () => {
     });
 
     it('makes public-guide package verification fail fast and coherent', () => {
-      expect(guide).toContain('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"');
+      expect(guide).toContain('gh aw add "github/squad/workflows@${SQUAD_SHA}"');
       expect(guide).toContain('squad-install-verifier.mjs --materialize-runtime');
       expect(guide).toContain('--verify-install');
       expect(guide).toContain('--source-revision "${SQUAD_SHA}"');
       expect(guide).toContain('--strict-compile');
       expect(guide).toContain('package ownership metadata');
       const upgrade = guide.slice(guide.indexOf('## Upgrading'));
-      const add = upgrade.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}" --force');
+      const add = upgrade.indexOf('gh aw add "github/squad/workflows@${SQUAD_SHA}" --force');
       const cleanup = upgrade.indexOf('rm -f .github/skills/agentic-workflows/SKILL.md');
       const compile = upgrade.indexOf('gh aw compile --strict');
       const verify = upgrade.indexOf('squad-install-verifier.mjs \\\n  --verify-install');

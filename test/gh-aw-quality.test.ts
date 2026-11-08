@@ -33,6 +33,7 @@ import {
 import {
   CONTRACT_DESTINATION,
   CONTRACT_SOURCE,
+  COMPILER_ACTION_PINS,
   MIN_GH_AW_VERSION,
   OWNERSHIP_ENTRY_COUNT,
   PACKAGE_NAME,
@@ -1729,7 +1730,7 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
       ref: '${{ github.workflow_sha }}', 'persist-credentials': false, path: '.squad-activation-trusted-base',
     });
     expect(step('Setup pinned issue creation API').uses)
-      .toBe('github/gh-aw-actions/setup@16b430146d5d5646eccef5a1ceb72152333b18b9');
+      .toBe('github/gh-aw-actions/setup@221ba4f4319de6b8e809d1a15528b3ae6a818aa5');
     const prepare = step('Freeze and validate activation inputs');
     const capture = step('Persist frozen activation capture');
     const create = step('Reserve activation and record actual create results');
@@ -1783,16 +1784,15 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
     const mutantPath = join(workspace, '.github', 'workflows', 'squad.md');
     writeFileSync(mutantPath, readText(mutantPath).replace(safeExpression, `activation-comments: ${unsafeExpression}`));
 
-    execFileSync('gh', ['aw', 'compile', mutantPath, '--strict', '--approve'], {
+    const compile = spawnSync('gh', ['aw', 'compile', mutantPath, '--strict', '--approve'], {
       cwd: workspace,
       encoding: 'utf8',
       stdio: 'pipe',
     });
 
-    const mutantLock = readText(join(workspace, '.github', 'workflows', 'squad.lock.yml'));
-    expect(mutantLock).toMatch(
-      /\$\{\{[^}\n]*\\\\u0026\\\\u0026[^}\n]*\}\}/,
-    );
+    expect(compile.status, `${mutantPath}: unsafe activation-comments expression must fail strict compilation`).not.toBe(0);
+    expect(`${compile.stdout}\n${compile.stderr}`, `${mutantPath}: compiler must identify the offending expression`)
+      .toContain('invalid Actions expression');
   }, 20000);
 
   it('compiles the lifecycle upsert as a post-safe-output job (#1916)', () => {
@@ -1936,11 +1936,13 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
       /- name: Install Squad CLI from standalone release[\s\S]*?(?=\n\s+- name:)/,
     )?.[0];
     expect(install, 'compiled squad.lock.yml must retain the standalone installer').toContain(
-      'uses: bradygaster/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f',
+      'uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f',
     );
     expect(install, 'compiled squad.lock.yml must omit version to use the pinned action latest default')
       .not.toMatch(/^\s+version:/m);
     expect(install).toContain('skip-init: "true"');
+    expect(install, 'the immutable action must not use its legacy fork release default')
+      .toContain('repository: github/squad');
     expect(compiled, 'compiled squad.lock.yml must not contain the obsolete release resolver')
       .not.toContain('squad-release');
     expect(compiled).not.toContain('vars.SQUAD_CLI_VERSION');
@@ -3610,7 +3612,7 @@ describe('gh-aw: shared bootstrap health-before-dispatch contract (#1605)', () =
     const healthLine = lines[healthLineIdx];
     expect(healthLine, 'health must invoke the installed squad binary').toMatch(/\bsquad health --json/);
     expect(sharedContent).toContain(
-      'uses: bradygaster/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f',
+      'uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f',
     );
     expect(sharedContent).not.toContain('squad-release');
     expect(sharedContent).toContain('SQUAD_CLI_VERSION: ${{ steps.squad-cli.outputs.version }}');
@@ -4058,14 +4060,14 @@ describe('gh-aw: canonical package integrity contract', () => {
       destination: entry.destination,
       sha256: createHash('sha256').update(readFileSync(join(root, entry.destination))).digest('hex'),
     })).sort((left, right) => left.destination.localeCompare(right.destination));
-    const ownership = join(root, '.github/aw/packages/bradygaster-squad-workflows-test.json');
+    const ownership = join(root, '.github/aw/packages/github-squad-workflows-test.json');
     mkdirSync(dirname(ownership), { recursive: true });
     writeFileSync(ownership, `${JSON.stringify({
       schemaVersion: 1,
       package: PACKAGE_NAME,
       source: `${PACKAGE_NAME}@${revision}`,
       resolvedCommit: revision,
-      installer: 'gh-aw v0.91.5 test',
+      installer: 'gh-aw v1.0.1 test',
       files: owned,
     }, null, 2)}\n`);
     return root;
@@ -4124,7 +4126,7 @@ describe('gh-aw: canonical package integrity contract', () => {
     }));
     expect(contract.skills).toHaveLength(SKILL_TUPLES.length);
     expect(contract.skills).toHaveLength(1);
-    expect(contract.package).toBe('bradygaster/squad/workflows');
+    expect(contract.package).toBe('github/squad/workflows');
     expect(contract.manifest).toBe('workflows/aw.yml');
     expect(contract.bootstrap.trigger_probe).toBe(TRIGGER_PROBE);
     expect(contract.shared_runtime.some((entry: { path: string }) => entry.path === TRIGGER_PROBE)).toBe(false);
@@ -4192,7 +4194,7 @@ describe('gh-aw: canonical package integrity contract', () => {
     const root = makeConsumer();
     expect(verifyInstall(root, { expectedRevision: revisionA }).failures).toEqual([]);
     const record = JSON.parse(readFileSync(
-      join(root, '.github/aw/packages/bradygaster-squad-workflows-test.json'),
+      join(root, '.github/aw/packages/github-squad-workflows-test.json'),
       'utf8',
     ));
     expect(record.files).toHaveLength(OWNERSHIP_ENTRY_COUNT);
@@ -4213,6 +4215,7 @@ describe('gh-aw: canonical package integrity contract', () => {
       if (name === 'squad-bootstrap') {
         expect(lock.jobs.conclusion.permissions).toEqual({
           actions: 'read',
+          checks: 'read',
           issues: 'write',
           'pull-requests': 'read',
         });
@@ -4312,14 +4315,14 @@ describe('gh-aw: canonical package integrity contract', () => {
     }
   });
 
-  it.each(['v0.89.22', 'v0.91.4', 'v0.91.50', 'v0.91.5-preview'])(
+  it.each(['v0.89.22', 'v0.91.4', 'v1.0.10', 'v1.0.1-preview'])(
     'rejects ownership from unsupported installer %s', version => {
       const root = makeConsumer();
-      const path = join(root, '.github/aw/packages/bradygaster-squad-workflows-test.json');
+      const path = join(root, '.github/aw/packages/github-squad-workflows-test.json');
       const record = JSON.parse(readText(path));
       record.installer = `gh-aw ${version}`;
       writeFileSync(path, JSON.stringify(record));
-      expect(verifyInstall(root).failures.join('\n')).toContain('Package ownership installer must be gh-aw v0.91.5');
+      expect(verifyInstall(root).failures.join('\n')).toContain('Package ownership installer must be gh-aw v1.0.1');
     },
   );
 
@@ -4397,8 +4400,12 @@ describe('gh-aw: canonical package integrity contract', () => {
         .toContain('Installed digest mismatch for .github/workflows/squad.lock.yml');
       writeFileSync(lockPath, original);
 
-      for (const key of Object.keys(pins.entries)) {
-        for (const value of [undefined, MIN_GH_AW_VERSION, '0'.repeat(40)]) {
+      for (const { repo, version } of COMPILER_ACTION_PINS) {
+        const key = `${repo}@${version}`;
+        const values = repo.startsWith('github/gh-aw-actions/')
+          ? [undefined, MIN_GH_AW_VERSION, '0'.repeat(40)]
+          : [MIN_GH_AW_VERSION, '0'.repeat(40)];
+        for (const value of values) {
           const altered = structuredClone(pins);
           if (value === undefined) delete altered.entries[key];
           else altered.entries[key].sha = value;
@@ -4440,23 +4447,22 @@ describe('gh-aw: canonical package integrity contract', () => {
     execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/example/squad-consumer.git'], { cwd: root });
     // A deliberately invalid test credential prevents fallback to local keychain authentication.
     const env = { ...process.env, GH_TOKEN: 'invalid-test-token', GITHUB_TOKEN: '' };
-    const compile = () => execFileSync('gh', ['aw', 'compile', '--strict', '--no-check-update'], {
-      cwd: root, env, stdio: 'pipe', timeout: 120_000,
+    const compile = () => spawnSync('gh', ['aw', 'compile', '--strict', '--no-check-update'], {
+      cwd: root, env, encoding: 'utf8', timeout: 120_000,
     });
     const lockPath = join(root, '.github/workflows/squad.lock.yml');
-    compile();
-    const unpinned = readText(lockPath);
-    expect(createHash('sha256').update(normalizeCompiledLock(unpinned, revisionA)).digest('hex'))
-      .not.toBe(JSON.parse(readText(join(root, CONTRACT_DESTINATION))).workflows
-        .find((entry: { name: string }) => entry.name === 'squad').package_lock_sha256);
-    expect(verifyInstall(root).failures.join('\n')).toContain('Installed digest mismatch');
+    const unseeded = compile();
+    expect(unseeded.status, `${root}: unseeded compilation with invalid credentials must fail closed`).not.toBe(0);
+    expect(`${unseeded.stdout}\n${unseeded.stderr}`, `${root}: report immutable action-resolution failure`)
+      .toMatch(/401|unauthorized|resolve/i);
 
     const seedPins = () => spawnSync(process.execPath, [helperPath], {
       cwd: root, env, encoding: 'utf8', timeout: 120_000,
     });
     const seeded = seedPins();
     expect(seeded.status, seeded.stderr).toBe(0);
-    compile();
+    const compiled = compile();
+    expect(compiled.status, `${compiled.stdout}\n${compiled.stderr}`).toBe(0);
     expect(verifyInstall(root, { expectedRevision: revisionA, strictCompile: true }).failures).toEqual([]);
     const contract = JSON.parse(readText(join(root, CONTRACT_DESTINATION)));
     for (const entry of contract.workflows) {
@@ -4476,7 +4482,7 @@ describe('gh-aw: canonical package integrity contract', () => {
   }, 120_000);
 
   function updateOwnedDigest(root: string, destination: string): void {
-    const path = join(root, '.github/aw/packages/bradygaster-squad-workflows-test.json');
+    const path = join(root, '.github/aw/packages/github-squad-workflows-test.json');
     const record = JSON.parse(readFileSync(path, 'utf8'));
     const entry = record.files.find((file: { destination: string }) => file.destination === destination);
     entry.sha256 = createHash('sha256').update(readFileSync(join(root, destination))).digest('hex');
@@ -4488,8 +4494,8 @@ describe('gh-aw: canonical package integrity contract', () => {
     const sourcePath = '.github/workflows/squad-review.md';
     const lockPath = '.github/workflows/squad-review.lock.yml';
     const mutations: Array<[string, (text: string) => string]> = [
-      ['wrong owner', text => text.replaceAll('bradygaster/squad', 'attacker/squad')],
-      ['wrong repo', text => text.replaceAll('bradygaster/squad', 'bradygaster/other')],
+      ['wrong owner', text => text.replaceAll('github/squad', 'attacker/squad')],
+      ['wrong repo', text => text.replaceAll('github/squad', 'bradygaster/other')],
       ['wrong package', text => text.replaceAll('/workflows', '/other')],
       ['wrong workflow', text => text.replaceAll(source, `${PACKAGE_NAME}/package/squad.md@${revisionA}`)],
       ['wrong revision', text => text.replaceAll(revisionA, revisionB)],
@@ -4509,7 +4515,7 @@ describe('gh-aw: canonical package integrity contract', () => {
 
     const lockMutations: Array<[string, (text: string) => string]> = [
       ...mutations.slice(0, 6),
-      ['wrong URL', text => text.replace('/bradygaster/squad/blob/', '/attacker/squad/blob/')],
+      ['wrong URL', text => text.replace('/github/squad/blob/', '/attacker/squad/blob/')],
       ['mixed annotation', text => text.replace(`GH_AW_WORKFLOW_SOURCE: "${source}"`, 'GH_AW_WORKFLOW_SOURCE: "unknown"')],
       ['missing annotation', text => text.replace(`          GH_AW_INFO_FRONTMATTER_SOURCE: "${source}"\n`, '')],
       ['duplicate annotation', text => text.replace(`GH_AW_WORKFLOW_SOURCE: "${source}"`, `GH_AW_WORKFLOW_SOURCE: "${source}"\n          GH_AW_WORKFLOW_SOURCE: "${source}"`)],
@@ -4674,14 +4680,14 @@ describe('gh-aw: canonical package integrity contract', () => {
 
   it('rejects ownership mismatches and mixed revisions', () => {
     const root = makeConsumer();
-    const ownershipPath = join(root, '.github/aw/packages/bradygaster-squad-workflows-test.json');
+    const ownershipPath = join(root, '.github/aw/packages/github-squad-workflows-test.json');
     const ownership = JSON.parse(readFileSync(ownershipPath, 'utf8'));
     ownership.source = `${PACKAGE_NAME}@${revisionB}`;
     writeFileSync(ownershipPath, `${JSON.stringify(ownership, null, 2)}\n`);
     expect(verifyInstall(root).failures.join('\n')).toContain('Package ownership source');
 
     const extra = makeConsumer();
-    const extraPath = join(extra, '.github/aw/packages/bradygaster-squad-workflows-test.json');
+    const extraPath = join(extra, '.github/aw/packages/github-squad-workflows-test.json');
     const extraOwnership = JSON.parse(readFileSync(extraPath, 'utf8'));
     extraOwnership.files.push(extraOwnership.files[0]);
     writeFileSync(extraPath, `${JSON.stringify(extraOwnership, null, 2)}\n`);

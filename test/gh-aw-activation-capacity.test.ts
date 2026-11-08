@@ -255,7 +255,7 @@ describe('gh-aw: configured native caps cover both readings of max (#1961)', () 
 
 const GH_AW_INSTALL_HINT =
   '`gh aw` is required to compile the workflow this gate inspects. Install it with ' +
-  '`gh extension install --pin v0.91.5 github/gh-aw` (matches .github/workflows/squad-ci.yml). ' +
+  '`gh extension install --pin v1.0.1 github/gh-aw` (matches .github/workflows/squad-ci.yml). ' +
   'This gate fails closed rather than skipping: an unmeasured contract is ' +
   'indistinguishable from a violated one (#1834).';
 
@@ -267,7 +267,7 @@ describe('gh-aw: compiled runtime proves the capacity contract (#1961)', () => {
     const prefix = process.env.SQUAD_GH_AW_BIN ? [] : ['aw'];
     const versionProbe = spawnSync(compiler, [...prefix, '--version'], { encoding: 'utf8' });
     if (versionProbe.status !== 0) throw new Error(`gh aw --version failed. ${GH_AW_INSTALL_HINT}`);
-    expect(`${versionProbe.stdout}\n${versionProbe.stderr}`).toContain('v0.91.5');
+    expect(`${versionProbe.stdout}\n${versionProbe.stderr}`).toContain('v1.0.1');
     mkdirSync(TEST_WORKSPACES_DIR, { recursive: true });
     const workspace = mkdtempSync(join(TEST_WORKSPACES_DIR, 'capacity-'));
     execFileSync('git', ['init', '--quiet'], { cwd: workspace });

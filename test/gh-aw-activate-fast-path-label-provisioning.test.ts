@@ -254,7 +254,7 @@ describe('gh-aw: native compiled policy remains bounded outside activation', () 
     const prefix = process.env.SQUAD_GH_AW_BIN ? [] : ['aw'];
     const version = spawnSync(compiler, [...prefix, '--version'], { encoding: 'utf8' });
     expect(version.status, 'Supported gh-aw is required; this contract never skips').toBe(0);
-    expect(`${version.stdout}\n${version.stderr}`).toContain('v0.91.5');
+    expect(`${version.stdout}\n${version.stderr}`).toContain('v1.0.1');
     const root = workspace('compile-');
     execFileSync('git', ['init', '--quiet'], { cwd: root });
     cpSync(WORKFLOWS_DIR, join(root, '.github/workflows'), { recursive: true });

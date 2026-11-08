@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, posix } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-export const DIAGNOSTIC_RUNTIME_SHA = '16b430146d5d5646eccef5a1ceb72152333b18b9';
+export const DIAGNOSTIC_RUNTIME_SHA = '221ba4f4319de6b8e809d1a15528b3ae6a818aa5';
 const requireNode = createRequire(import.meta.url);
 const entrypoints = [
   'handle_agent_failure.cjs', 'handle_noop_message.cjs', 'handle_detection_runs.cjs',
@@ -153,15 +153,21 @@ export function diagnosticRuntime(
       if (request === 'fs' || request === 'node:fs') return filesystem;
       if (request === 'os' || request === 'node:os') return { ...requireNode(request), tmpdir: () => scratch };
       if (['path', 'node:path', 'crypto', 'node:crypto', 'util', 'node:util', 'vm', 'node:vm',
-        'buffer', 'events', 'string_decoder'].includes(request)) return requireNode(request);
-      if (['https', 'http', 'child_process'].includes(request)) return new Proxy({}, {
-        get: (_target, method: string) => (command: string) => {
-          if (request === 'child_process' && method === 'execSync' && command === 'git rev-parse --abbrev-ref HEAD') return 'dev\n';
-          ioErrors.push(`Forbidden external IO: ${request}.${method}`);
-          throw new Error(ioErrors.at(-1));
+        'buffer', 'events', 'string_decoder', 'node:string_decoder',
+        'async_hooks', 'node:async_hooks', 'perf_hooks', 'node:perf_hooks'].includes(request)) return requireNode(request);
+      if (['https', 'http', 'child_process', 'net'].includes(request.replace(/^node:/, ''))) return new Proxy({}, {
+        get: (_target, method: string) => {
+          if (['net', 'node:net'].includes(request)
+            && ['isIP', 'isIPv4', 'isIPv6'].includes(method)) return requireNode('node:net')[method];
+          return function (command: string) {
+            if (['child_process', 'node:child_process'].includes(request)
+              && method === 'execSync' && command === 'git rev-parse --abbrev-ref HEAD') return 'dev\n';
+            ioErrors.push(`Forbidden external IO: ${request}.${method}`);
+            throw new Error(ioErrors.at(-1));
+          };
         },
       });
-      throw new Error(`Forbidden runtime dependency: ${request}`);
+      throw new Error(`Forbidden runtime dependency: ${request} required by ${name}`);
     };
     compileFunction(source, ['module', 'exports', 'require', '__dirname', '__filename'],
       { parsingContext: sandbox })(module, module.exports, require, dirname(name), name);

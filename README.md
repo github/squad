@@ -600,7 +600,7 @@ test "$(gh api "repos/${owner_repo}" --jq '.has_issues')" = "true" || {
 }
 
 SQUAD_SHA="<40-character-commit-sha>"  # explicit, maintainer-approved; never `commits/dev`
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 git add -- \
   .github/aw/ \

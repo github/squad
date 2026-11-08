@@ -4,7 +4,7 @@ This nested `gh-aw` package installs the complete Squad workflow bundle from one
 immutable commit:
 
 ```bash
-gh aw add bradygaster/squad/workflows@<40-character-commit-sha>
+gh aw add github/squad/workflows@<40-character-commit-sha>
 ```
 
 The package contains exactly eight workflows, seventeen runtime resources, and

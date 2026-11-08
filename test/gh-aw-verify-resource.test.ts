@@ -18,7 +18,7 @@ const workflowMutations: ReadonlyArray<
   readonly [string, (text: string, source: string) => string]
 > = [
   ['owner', (text, source) =>
-    text.replace(source, source.replace('bradygaster/', 'attacker/'))],
+    text.replace(source, source.replace('github/', 'attacker/'))],
   ['repo', (text, source) =>
     text.replace(source, source.replace('/squad/', '/other/'))],
   ['workflow', (text, source) =>

@@ -25,10 +25,10 @@ import {
 } from '../workflows/shared/squad-install-verifier.mjs';
 
 const TRUSTED_SOURCE = Object.freeze({
-  repository: 'bradygaster/squad',
+  repository: 'github/squad',
   repositoryId: 1151205052,
-  owner: 'bradygaster',
-  ownerId: 41929050,
+  owner: 'github',
+  ownerId: 9919,
 });
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const INSTALL_PR_TITLE = 'ci: install Squad agentic workflows';
@@ -1226,9 +1226,9 @@ function hosted(args, repositoryRoot) {
 // Actions workflow or repository_dispatch job, and must never be run with a repository secret.
 // Run it from your own workstation, authenticated as yourself (`gh auth login`); `--evidence-in`
 // is a directory you populate yourself first, e.g. via
-// `gh run download <hosted-e2e-run-id> --repo bradygaster/squad \
+// `gh run download <hosted-e2e-run-id> --repo github/squad \
 //   --name squad-gh-aw-hosted-e2e-<hosted-e2e-run-id> --dir <evidence-in>`
-// against the bradygaster/squad repository you already have read access to. Whatever GH_TOKEN is
+// against the github/squad repository you already have read access to. Whatever GH_TOKEN is
 // present in your shell when you run this (your own personal token, never a repo secret) is what
 // it uses to observe the target repository.
 //

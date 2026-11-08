@@ -36,7 +36,7 @@ const packageArtifactCases = [
   ...CONTRACT.runtime.map(({ packageDestination }) => ['runtime package destination', packageDestination]),
   ...CONTRACT.runtime.map(({ destination }) => ['materialized runtime destination', destination]),
   ['installed manifest', '.github/aw/squad-workflows.manifest.json'],
-  ['package ownership metadata', '.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json'],
+  ['package ownership metadata', '.github/aw/packages/github-squad-workflows-23a7638f599e.json'],
   ...CONTRACT.skills.map(({ destination }) => ['installed skill', destination]),
   ['trigger sentinel', '.github/workflows/shared/squad-bootstrap-trigger-probe.json'],
   ['package namespace residue', '.github/aw/squad/unknown-stale-file.md'],
@@ -245,8 +245,10 @@ describe('Squad gh-aw hosted E2E controller', () => {
   });
 
   it('binds source and target identities without caller-selected privileged code', () => {
-    expect(SCRIPT).toContain("repository: 'bradygaster/squad'");
+    expect(SCRIPT).toContain("repository: 'github/squad'");
     expect(SCRIPT).toContain('repositoryId: 1151205052');
+    expect(SCRIPT).toContain("owner: 'github'");
+    expect(SCRIPT).toContain('ownerId: 9919');
     expect(SCRIPT).toContain('sourceRef !== `refs/heads/${info.default_branch}`');
     expect(SCRIPT).toContain('branch.protected !== true || branch.sha !== sourceSha');
     expect(SCRIPT).toContain('info.full_name !== target');
@@ -256,7 +258,7 @@ describe('Squad gh-aw hosted E2E controller', () => {
 
   it('loads only the exact canonical manifest and has no fallback contract', () => {
     const contract = loadBundleContract(ROOT);
-    expect(contract.package).toBe('bradygaster/squad/workflows');
+    expect(contract.package).toBe('github/squad/workflows');
     expect(contract.workflows).toHaveLength(8);
     expect(contract.runtime).toHaveLength(21);
     expect(contract.skills).toHaveLength(1);

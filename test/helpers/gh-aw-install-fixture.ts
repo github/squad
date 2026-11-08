@@ -85,7 +85,7 @@ function withSource(content: Buffer, source: string, revision: string): Buffer {
   const end = normalized.indexOf(marker, 4);
   if (!normalized.startsWith('---\n') || end < 0) throw new Error(`Invalid workflow source: ${source}`);
   return Buffer.from(
-    `${normalized.slice(0, end)}\nsource: bradygaster/squad/${source}@${revision}${normalized.slice(end)}`
+    `${normalized.slice(0, end)}\nsource: github/squad/${source}@${revision}${normalized.slice(end)}`
       .replace(/\n/g, eol),
   );
 }
@@ -170,7 +170,7 @@ export function createFirstInstallFixture(
         package: PACKAGE_NAME,
         source: `${PACKAGE_NAME}@${revision}`,
         resolvedCommit: revision,
-        installer: 'gh-aw v0.91.5 test',
+        installer: 'gh-aw v1.0.1 test',
         files,
       },
       consumerFiles,
