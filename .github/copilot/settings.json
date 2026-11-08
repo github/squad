@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "urikan-ai-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "urikanonov/ai-marketplace"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "commentable-html@urikan-ai-marketplace": true
+  }
+}
