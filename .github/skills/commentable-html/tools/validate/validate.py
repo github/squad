@@ -1,0 +1,618 @@
+#!/usr/bin/env python3
+"""Validate a commentable-html document against the skill's invariants.
+
+This is the single, unified checker. It always validates the commentable LAYER
+(region markers, required/forbidden ids, the two JSON blocks, theme variables,
+mermaid cm-skip, ...) and, when the document embeds Chart.js charts, it also
+checks the chart-embedding invariants that used to live in validate_charts.py.
+Not all chart checks are enforced equally: a missing/broken loader, wrong chart
+init ordering, and invalid chart-data JSON are hard ERRORS, while a non-pinned or
+un-SRI loader, missing canvas accessibility (role/aria-label), and a missing
+`typeof Chart` network-failure guard are advisory WARNINGS.
+
+Both halves share ONE tolerant HTML parse (see _DocParser), so script tags are
+read via the parser's own attribute handling rather than a fragile regex: a `>`
+inside a quoted attribute, a loader or `new Chart(` inside an HTML comment, and
+`data-src` / `data-type` masquerading as `src` / `type` are all handled
+correctly.
+
+Usage (run from the skill root):
+    python tools/validate.py path/to/file.html [more.html ...]
+    python tools/validate.py --charts-only file.html      # only the Chart.js checks
+    python tools/validate.py --layer-only  file.html      # only the layer checks
+
+Exit code 0 when every file passes (warnings allowed), 1 when any file has
+errors, 2 on a usage problem. Pure standard library, no third-party packages.
+
+Note: the layer checks expect human-readable (non-minified) HTML - the region
+markers must sit on their own lines, which is how the skill emits them.
+
+Structure: this module is the entry point and orchestrator (read, parse, run the
+checks, CLI). The checks themselves live in focused submodules under `checks/`
+(parsing, layer, resources, kind, charts, checklist, highlighting) and the
+content-syntax checks in the sibling `cmhval/` package; validate.py re-exports
+their public names so `validate.<name>` keeps resolving.
+"""
+
+import os
+import re
+import sys
+import traceback
+
+# The focused check modules live in the sibling cmhval/ and checks/ packages.
+# Guarantee this tools dir is importable so `from cmhval...` / `from checks...`
+# resolve under any invocation (mirrors the sys.path guard the other tools use).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+# Put the tools/ root and every topic subdirectory (authoring/, blocks/, ...) on sys.path via the
+# shared bootstrap, so the strict-clean stamp writer can `import doc_stamp` (which in turn imports
+# section_hash) when validate.py runs as a STANDALONE CLI subprocess - not only in-process under a
+# test's path setup. Without this, _stamp_validated_file's import silently ImportError'd and a
+# `python tools/validate/validate.py <file>` run never stamped, so a clean validate still left the
+# runtime "not validated" banner up (the exact defect in issue #584). The bootstrap below is a HARD
+# dependency (see the import), not best-effort.
+_TOOLS_ROOT = os.path.dirname(_HERE)
+if _TOOLS_ROOT not in sys.path:
+    sys.path.insert(0, _TOOLS_ROOT)
+# A HARD import (not best-effort): every tool depends on _toolpath, and the failure handlers below
+# reference it, so it must be bound. _HERE and _TOOLS_ROOT are on sys.path above, so this resolves
+# in any real install; a genuinely missing _toolpath crashes loudly here (like every other tool),
+# never silently - which is the whole point.
+import _toolpath  # noqa: E402
+_toolpath.ensure()
+import cold_tier  # noqa: E402
+
+try:
+    from cmhval.mermaid import check_mermaid_syntax, check_mermaid_source  # noqa: E402
+    from cmhval.jsonblocks import check_json_blocks  # noqa: E402
+    _CMHVAL_AVAILABLE = True
+except ImportError:
+    _toolpath.warn_missing_tool("cmhval", "content-syntax validation (mermaid diagrams / JSON blocks)")
+    # The content-syntax checks live in the sibling cmhval/ package, which ships in
+    # this same tools/ directory. If it cannot be imported (a broken/partial
+    # install), fail CLOSED for any content it WOULD have inspected: a validator
+    # that silently passes because its checks vanished is worse than one that
+    # reports it cannot check. A document with no such content still passes, and
+    # these stubs run only on the layer path, so --charts-only (which uses
+    # check_charts here, not cmhval) is unaffected.
+    _CMHVAL_AVAILABLE = False
+    _CMHVAL_MISSING = (
+        "the cmhval package could not be imported (broken/partial install of "
+        "tools/cmhval/); repair the install to validate this content"
+    )
+    _LAYER_JSON_IDS = {"handledCommentIds", "embeddedComments", "commentableHtmlLayer"}
+
+    def check_mermaid_syntax(parser):  # noqa: E402
+        if getattr(parser, "mermaid_blocks", None):
+            return ["mermaid syntax validation unavailable: " + _CMHVAL_MISSING], []
+        return [], []
+
+    def check_mermaid_source(src):  # noqa: E402
+        if (src or "").strip():
+            return ["mermaid syntax validation unavailable: " + _CMHVAL_MISSING]
+        return []
+
+    def check_json_blocks(parser, chart_checks_run=True):  # noqa: E402
+        # Mirror the real check's deferral: when a canvas is present and the chart
+        # checks run, the chart path (check_charts, unaffected by cmhval) owns JSON
+        # validity, so there is nothing this would have inspected.
+        if chart_checks_run and (getattr(parser, "canvases", []) or []):
+            return [], []
+        for s in getattr(parser, "scripts", []) or []:
+            attrs = s.get("attrs", {}) if isinstance(s, dict) else {}
+            stype = (attrs.get("type") or "").split(";")[0].strip().lower()
+            if stype == "application/json" and (attrs.get("id") or None) not in _LAYER_JSON_IDS:
+                return ["embedded-JSON validation unavailable: " + _CMHVAL_MISSING], []
+        return [], []
+
+# Re-export the focused check modules so every `validate.<name>` the tests and
+# sibling tools reference keeps resolving after the split (see checks/).
+from checks.parsing import (  # noqa: F401,E402
+    CONTENT_BEGIN,
+    CONTENT_END,
+    DEMO_COMMENT_KEY,
+    DEMO_KEYS,
+    DEMO_NONSHAREABLE_COMMENT_KEY,
+    DEMO_NONSHAREABLE_TITLE,
+    DEMO_TITLE,
+    DOC_EXAMPLE_COMMENT_KEY,
+    FORBIDDEN_IDS,
+    JS_END_MARKER_TEXT,
+    LAYER_DESCRIPTOR_ID,
+    LAYER_JSON_IDS,
+    MARKER_KINDS,
+    P_CLOSERS,
+    REGIONS,
+    REQUIRED_IDS,
+    SAFE_ID_RE,
+    VOID,
+    _COMMENT_ROOT_ATTR_RE,
+    _DATA_KEY_RE,
+    _DocParser,
+    _HEADING_TAGS,
+    _HTML_COMMENT_RE,
+    _JS_TYPES,
+    _LI_CLOSE_BOUNDARY,
+    _MarkerMatch,
+    _PRE_TAG_RE,
+    _P_CLOSE_BOUNDARY,
+    _SCRIPT_STYLE_RE,
+    _TITLE_RE,
+    _TRANSIENT_BODY_CLASSES,
+    _TagAttrParser,
+    _advance_comment_state,
+    _attrs_have_class,
+    _find_tag_attrs,
+    _is_executable_js,
+    _is_json_attrs,
+    _js_scan,
+    _line_starts,
+    _parse_document,
+    _parser_script,
+    _parser_script_body,
+    _region_marker_matches,
+    _tag_attr_index,
+    code_block_spans,
+    content_marker_scan,
+    layer_regions_text,
+    raw_text_spans,
+)
+from checks.resources import (  # noqa: F401,E402
+    CHARTJS_SRC_RE,
+    CSS_NETWORK_IMPORT_RE,
+    CSS_NETWORK_URL_RE,
+    FETCHING_LINK_RELS,
+    NONSHAREABLE_REGIONS,
+    OFFLINE_CSP_REQUIRED,
+    SPECULATIVE_LINK_RELS,
+    _ADX_RUN_HOST,
+    _UNRESOLVABLE_FILE_URL,
+    _check_nonshareable,
+    _csp_directives,
+    _file_url_to_path,
+    _is_adx_run_href,
+    _is_nonshareable,
+    _layer_tags,
+    _link_loads,
+    _link_speculates,
+    _nonshareable_css_refs,
+    _nonshareable_js_refs,
+    _nonshareable_meta_versions,
+    _offline_csp_errors,
+    _ref_path,
+)
+from checks.kind import (  # noqa: F401,E402
+    _DOC_KINDS,
+    _KINDS_REQUIRING_H1,
+    _KIND_META_NAME,
+    _SECTION_DIR_RE,
+    check_document_kind,
+    check_favicon,
+    check_mermaid_renders,
+    check_section_reference_links,
+)
+from checks.links import (  # noqa: F401,E402
+    check_links,
+)
+from checks.charts import (  # noqa: F401,E402
+    CANVAS_RENDER_RE,
+    GUARD_RE,
+    NEW_CHART_RE,
+    _reject_json_constant,
+    check_charts,
+)
+from checks.checklist import (  # noqa: F401,E402
+    _CHECK_STATES,
+    _CL_VOID,
+    _ChecklistParser,
+    check_checklists,
+)
+from checks.notes import (  # noqa: F401,E402
+    _NotesParser,
+    check_notes,
+)
+from checks.tables import check_tables  # noqa: F401,E402
+from checks.highlighting import (  # noqa: F401,E402
+    HIGHLIGHT_ADVISORY_PREFIX,
+    _code_block_language,
+    _highlight_language_table,
+    check_code_highlighting,
+)
+from checks.theme_contrast import (  # noqa: F401,E402
+    ADVISORY_PREFIX,
+    check_theme_contrast,
+    theme_contrast_findings,
+)
+from checks.density import (  # noqa: F401,E402
+    check_density,
+)
+from checks.layer import (  # noqa: F401,E402
+    SRCDOC_ADVISORY_PREFIX,
+    _check_layer_descriptor,
+    _layer_descriptor_data,
+    check_layer,
+)
+
+# The stable ADVISORY warning prefixes: a finding the author cannot clear - or must not be FORCED
+# to clear - so blocking on it would leave the document permanently unstampable with the runtime
+# "not validated" banner up. Today that is the hand-written code block (CMH-VAL-11) the authoring
+# tools pass through verbatim by design, and the offline-export notice on an `<iframe srcdoc>`
+# (CMH-VAL-24), which reports what a DIFFERENT mode's export would REMOVE - blocking on it
+# would make deleting the nested document the only route to a clean run, which is the very loss
+# the notice exists to announce. That says nothing about whether a nested document is SAFE, which
+# is a separate question answered by a separate, BLOCKING finding: CMH-VAL-25 reads the nested
+# document as a fragment and reports the loads inside it (issue #1125).
+# An advisory is
+# always REPORTED but never fails --strict, never blocks a
+# fail-closed caller, and never withholds the validated stamp. Keeping the split in ONE place is
+# what stops retrofit, content_replace, finalize and this CLI disagreeing about what is
+# actionable. NOTE the theme-contrast advisory (CMH-THEME-02) is deliberately NOT here: its
+# near-miss band ships a concrete `--suggest` fix, so it IS clearable and must keep failing
+# --strict; retrofit's own long-standing carve-out for it is composed in retrofit.py.
+ADVISORY_PREFIXES = (HIGHLIGHT_ADVISORY_PREFIX, SRCDOC_ADVISORY_PREFIX)
+
+# Pre-rename aliases for the symbols this module re-exports. `validate` is an IMPORT surface (the
+# authoring tools import it by bare name), so the same compatibility promise the CLI flags and the
+# to_portable.py shim make is kept here: an existing caller that reads a `*nonportable*` symbol
+# keeps working. Each alias is the SAME object as its current-name counterpart.
+NONPORTABLE_REGIONS = NONSHAREABLE_REGIONS
+DEMO_NONPORTABLE_COMMENT_KEY = DEMO_NONSHAREABLE_COMMENT_KEY
+DEMO_NONPORTABLE_TITLE = DEMO_NONSHAREABLE_TITLE
+_is_nonportable = _is_nonshareable
+_check_nonportable = _check_nonshareable
+_nonportable_css_refs = _nonshareable_css_refs
+_nonportable_js_refs = _nonshareable_js_refs
+_nonportable_meta_versions = _nonshareable_meta_versions
+
+
+def is_advisory(warning):
+    """True when `warning` is an advisory (see ADVISORY_PREFIXES)."""
+    return isinstance(warning, str) and warning.startswith(ADVISORY_PREFIXES)
+
+
+def partition_warnings(warnings):
+    """Split validator warnings into (fatal, advisory), preserving order."""
+    fatal, advisory = [], []
+    for w in warnings or []:
+        (advisory if is_advisory(w) else fatal).append(w)
+    return fatal, advisory
+
+
+def _read(path):
+    with open(path, "r", encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def _browser_newlines(html):
+    return (html or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _marker_newline_errors(raw_html, html, layer, charts):
+    targets = []
+    if layer:
+        targets.extend((kind, region) for region in REGIONS for kind in MARKER_KINDS)
+    elif charts:
+        targets.append(("END", "JS"))
+    errors = []
+    for kind, region in targets:
+        raw_count = len(_region_marker_matches(raw_html, kind, region))
+        normalized_count = len(_region_marker_matches(html, kind, region))
+        if raw_count != normalized_count:
+            errors.append(
+                "%s region %s marker count changes after browser newline normalization "
+                "(%d raw, %d normalized) - a lone carriage return cannot delimit a marker line"
+                % (region, kind, raw_count, normalized_count))
+    return errors
+
+
+def _parse(html):
+    """Feed `html` to a fresh _DocParser. Returns (parser, ok); ok is False if
+    HTMLParser raised on markup too malformed to tokenize. The document is handed over
+    WHOLE (`parse_document`), which is what lets an unterminated comment run to the end
+    of the document the way a browser runs it."""
+    parser = _DocParser(html)
+    try:
+        parser.parse_document(html)
+        return parser, True
+    except Exception:
+        return parser, False
+
+
+_PARSE_FAIL = ("the document could not be parsed as HTML (malformed markup) - "
+               "fix the markup and re-run")
+
+_BASE_DIR_UNSET = object()
+
+
+def validate(path, layer=True, charts=True, base_dir=_BASE_DIR_UNSET, html=None):
+    """Unified check. Returns (errors, warnings). Runs the layer checks and,
+    when the document has a <canvas>, the chart checks too.
+
+    Pass `html` to validate a document the caller ALREADY has in memory; `path` is then used
+    only to resolve companion references. This is what lets finalize validate without a second
+    read of a multi-megabyte file (CMH-BUILD-20).
+
+    base_dir controls how NonShareable companion references are resolved for the
+    existence/remote/absolute checks: by default it is the document's own directory.
+    Pass an explicit directory to resolve refs against the file's FINAL location (used
+    when validating before the file is written there), or None to skip the companion
+    path checks entirely (structure is still validated) - appropriate when the
+    companions are supplied separately or placement is deferred."""
+    if html is None:
+        try:
+            raw_html = _read(path)
+        except (OSError, UnicodeDecodeError) as exc:
+            return [f"cannot read file: {exc}"], []
+    else:
+        raw_html = html
+    # Scan the document as the READER's browser will have it. A compressed cold tier hides its
+    # tail rows behind a base64 payload, so a validator reading the raw file would see none of
+    # them - a `<link rel="preconnect">` or a duplicate reserved id in a compressed row would pass
+    # unreported. `expanded_view` returns a plain document unchanged, and RAISES on a tier that
+    # cannot be put back, which is an error in its own right (CMH-COLD-08).
+    try:
+        raw_html = cold_tier.expanded_view(raw_html)
+    except cold_tier.ColdTierError as exc:
+        return [f"the compressed cold-tier block cannot be expanded: {exc}"], []
+    html = _browser_newlines(raw_html)
+    parser, ok = _parse(html)
+    if not ok:
+        return [_PARSE_FAIL], []
+    errors = _marker_newline_errors(raw_html, html, True, charts) if layer else []
+    warnings = []
+    try:
+        if layer:
+            bd = os.path.dirname(os.path.abspath(path)) if base_dir is _BASE_DIR_UNSET else base_dir
+            e, w = check_layer(html, parser, base_dir=bd)
+            errors += e
+            warnings += w
+            # Content-syntax checks (mermaid diagrams, embedded JSON, and later
+            # diff/kql) are document-content invariants, so they run with the layer
+            # checks, not the chart-only path.
+            e, w = check_mermaid_syntax(parser)
+            errors += e
+            warnings += w
+            e, w = check_json_blocks(parser, chart_checks_run=charts)
+            errors += e
+            warnings += w
+        if charts:
+            e, w, n = check_charts(html, parser, marker_provenance=not layer)
+            errors += e
+            warnings += w
+            if not layer and n:
+                errors += _marker_newline_errors(raw_html, html, False, True)
+        if layer:
+            e, w = check_checklists(html)
+            errors += e
+            warnings += w
+            e, w = check_notes(html)
+            errors += e
+            warnings += w
+            e, w = check_tables(html)
+            errors += e
+            warnings += w
+            e, w = check_code_highlighting(html)
+            errors += e
+            warnings += w
+            e, w = check_theme_contrast(html)
+            errors += e
+            warnings += w
+            e, w = check_density(html)
+            errors += e
+            warnings += w
+    finally:
+        # Release the cached parses and views: they are only worth keeping for the duration of
+        # ONE document's checks, and holding a multi-megabyte document's spans alive afterwards
+        # would be a surprising residue in any process that hosts these modules. In a `finally`
+        # so a check that RAISES does not leave them pinned for the life of the process (an
+        # embedding caller that validates a whole directory tolerates a per-file error).
+        code_block_spans.cache_clear()
+        layer_regions_text.cache_clear()
+        content_marker_scan.cache_clear()
+        raw_text_spans.cache_clear()
+        _tag_attr_index.cache_clear()
+    return errors, warnings
+
+
+def validate_charts(path):
+    """Chart-only check. Returns (errors, warnings, n_canvas)."""
+    try:
+        raw_html = _read(path)
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"cannot read file: {exc}"], [], 0
+    html = _browser_newlines(raw_html)
+    parser, ok = _parse(html)
+    if not ok:
+        n = len(re.findall(r"<canvas(?![-\w])", html, re.IGNORECASE))
+        return ([_PARSE_FAIL] if n else []), [], n
+    errors, warnings, n = check_charts(html, parser)
+    if n:
+        errors = _marker_newline_errors(raw_html, html, False, True) + errors
+    return errors, warnings, n
+
+
+_USAGE = "usage: python tools/validate.py [--charts-only|--layer-only] [--strict] [--suggest] [--no-stamp] <file.html> [more.html ...]"
+
+
+def _print_theme_suggestions(path):
+    """Print a compliant nudged value for each authored --cp-* override that misses its contrast
+    target. Best-effort: a read/parse failure here never affects the validation exit code."""
+    try:
+        html = _browser_newlines(_read(path))
+    except (OSError, UnicodeDecodeError):
+        return
+    for f in theme_contrast_findings(html):
+        if f.severity == "unresolved":
+            print(f"  SUGGEST: {f.env} theme {f.fg_token} on {f.bg_token} not evaluated "
+                  f"({f.fg_value!r} or {f.bg_value!r} did not resolve to a concrete color)")
+        elif f.suggestion:
+            print(f"  SUGGEST: {f.env} theme {f.fg_token} -> {f.suggestion} to reach "
+                  f"{f.target:.1f}:1 on {f.bg_token} ({f.fg_value} is {f.ratio:.2f}:1)")
+        else:
+            print(f"  SUGGEST: {f.env} theme {f.fg_token} on {f.bg_token} at {f.ratio:.2f}:1 has "
+                  f"no reachable fix by nudging the foreground; adjust {f.bg_token} instead")
+
+
+def stamp_validated_text(html):
+    """Return `html` with the validated provenance stamp applied, or unchanged on failure.
+
+    The in-memory half of `_stamp_validated_file`, so a caller that already holds the document
+    (finalize) can stamp without a further read/write pair. Best-effort with a VISIBLE note on
+    failure, never silent - see `_stamp_validated_file` for why.
+    """
+    try:
+        import doc_stamp
+    except ImportError:
+        _toolpath.warn_missing_tool("doc_stamp", "the validated stamp")
+        return html
+    try:
+        return doc_stamp.stamp_validated_html(html)
+    except Exception as exc:
+        sys.stderr.write(
+            "  NOTE: could not write the validated stamp (%s); the document PASSED validation but "
+            "is not stamped, so the runtime may still show the 'not validated' banner - re-run to "
+            "stamp.\n" % exc)
+        return html
+
+
+def _stamp_validated_file(path):
+    """Write the commentable-html-validated provenance stamp (timestamp + content hash) into a
+    strict-clean file. Best-effort so a stamp failure never BLOCKS validation, but NOT silent: the
+    import path is fixed (see the _toolpath bootstrap above) so this should always succeed, and if
+    it ever fails we print a visible NOTE rather than silently reporting a clean validation that
+    wrote no stamp - the confusing UX that #584 fixed. Stamping now runs an HTML parse
+    (doc_stamp -> section_hash), a wider failure surface than the old timestamp-only write, so catch
+    broadly. The subprocess-stamp tests guard against a silent regression of the import path.
+
+    The write is ATOMIC (shared `_atomic_io.atomic_write`: a same-directory staged temp file
+    swapped in with `os.replace`). Reopening the target with mode "w" truncated the document
+    BEFORE the stamped bytes existed, so an interrupted write destroyed a document that had just
+    PASSED validation - and, because stamping is best-effort, reported it as only a NOTE."""
+    try:
+        import doc_stamp
+    except ImportError:
+        _toolpath.warn_missing_tool("doc_stamp", "the validated stamp")
+        return
+    try:
+        import _atomic_io
+    except ImportError:
+        # Refuse to stamp rather than fall back to a truncating write: an unstamped document is a
+        # banner the user can clear by re-running, a truncated one is data loss.
+        _toolpath.warn_missing_tool("_atomic_io", "the validated stamp")
+        return
+    try:
+        with open(path, "r", encoding="utf-8", newline="") as fh:
+            html = fh.read()
+        # The stamp is written into the document AS STORED, tier and all: `section_hash` expands a
+        # compressed tier before hashing (`section_hash._hashable`), so the content hash already
+        # matches what the runtime computes after hydration. Expanding and re-compressing HERE
+        # instead would rewrite the tier with this build's default thresholds - losing a document
+        # tiered with custom ones - and, when stamping is a no-op, would write the expanded form
+        # over the compressed file outright.
+        stamped = doc_stamp.stamp_validated_html(html)
+        if stamped != html:
+            _atomic_io.atomic_write(path, stamped)
+    except Exception as exc:
+        sys.stderr.write(
+            "  NOTE: could not write the validated stamp (%s); the document PASSED validation but "
+            "is not stamped, so the runtime may still show the 'not validated' banner - re-run to "
+            "stamp.\n" % exc)
+
+
+def _wants_help(tokens):
+    # Honor -h/--help only before an end-of-options "--"; a -h AFTER "--" is a filename.
+    for t in tokens:
+        if t == "--":
+            return False
+        if t in ("-h", "--help"):
+            return True
+    return False
+
+
+def main(argv):
+    raw = argv[1:]
+    if _wants_help(raw):
+        print(_USAGE)
+        print("\nValidate one or more commentable-html documents.")
+        print("  --charts-only  run only the Chart.js checks")
+        print("  --layer-only   run only the commentable-html layer checks")
+        print("  --strict       exit non-zero if any BLOCKING warning remains (an advisory, which")
+        print("                 the author cannot clear, is reported but never fails strict)")
+        print("  --suggest      print a compliant nudged value for each low-contrast --cp-* override")
+        print("  --no-stamp     do not write the commentable-html-validated stamp on a clean pass")
+        print("                 (a --charts-only/--layer-only partial run never stamps either)")
+        return 0
+    # A bare "--" ends options: everything after it is a positional path, even if it
+    # begins with a dash. Flags are only recognized before the separator.
+    if "--" in raw:
+        sep = raw.index("--")
+        before, after = raw[:sep], raw[sep + 1:]
+    else:
+        before, after = raw, []
+    args = [a for a in before if not a.startswith("--")] + after
+    flags = {a for a in before if a.startswith("--")}
+    known_flags = {"--charts-only", "--layer-only", "--strict", "--suggest", "--no-stamp"}
+    unknown = sorted(flags - known_flags)
+    if unknown:
+        sys.stderr.write("unknown flag(s): %s\n" % ", ".join(unknown))
+        sys.stderr.write(_USAGE + "\n")
+        return 2
+    layer = "--charts-only" not in flags
+    charts = "--layer-only" not in flags
+    strict = "--strict" in flags
+    suggest = "--suggest" in flags
+    # Only a FULL validation (both the layer and chart halves) may stamp: a partial run
+    # (--charts-only / --layer-only) has not confirmed the whole document, so stamping it would let
+    # a doc with broken layer regions (or chart errors) suppress the runtime banner. --no-stamp also
+    # keeps any run read-only.
+    stamp = ("--no-stamp" not in flags) and layer and charts
+    if not args or (not layer and not charts):
+        sys.stderr.write(_USAGE + "\n")
+        return 2
+    any_errors = False
+    any_warnings = False
+    for path in args:
+        try:
+            errors, warnings = validate(path, layer=layer, charts=charts)
+        except Exception:
+            # A bug in one file's checks must never abort the whole batch.
+            errors, warnings = [f"internal validator error:\n{traceback.format_exc().strip()}"], []
+        print(f"commentable-html validate: {path}")
+        for w in warnings:
+            print(f"  WARNING: {w}")
+        for e in errors:
+            print(f"  ERROR:   {e}")
+        if suggest:
+            _print_theme_suggestions(path)
+        # Advisories are reported above but never fail --strict and never withhold the stamp:
+        # they name something the author cannot clear, so treating them as blocking would leave
+        # such a document permanently unstampable (and the runtime banner permanently up).
+        fatal_warnings, _advisory = partition_warnings(warnings)
+        if fatal_warnings:
+            any_warnings = True
+        if errors:
+            any_errors = True
+            print(f"  FAILED ({len(errors)} error(s), {len(warnings)} warning(s))")
+        elif strict and fatal_warnings:
+            print(f"  FAILED (strict): {len(fatal_warnings)} blocking warning(s) - resolve every "
+                  "blocking warning before handoff (advisories need no action)")
+        else:
+            print(f"  OK ({len(warnings)} warning(s))")
+            # Stamp commentable-html-validated ONLY on a strict-clean pass (no errors AND no
+            # fatal warnings) of a FULL validation (see `stamp` above: never for a --charts-only /
+            # --layer-only partial run), so the runtime banner clears only for a document that
+            # genuinely passed the whole validator. --no-stamp keeps a pure --check/CI run read-only.
+            if stamp and not errors and not fatal_warnings:
+                _stamp_validated_file(path)
+    if any_errors:
+        return 1
+    if strict and any_warnings:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

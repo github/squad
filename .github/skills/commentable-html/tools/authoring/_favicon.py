@@ -1,0 +1,98 @@
+"""Shared favicon detection for the authoring tools (retrofit, upgrade).
+
+A favicon is a `<link>` in the head whose `rel` attribute, tokenized the way HTML tokenizes a
+`rel` list (on ASCII whitespace ONLY), contains the exact token `icon` (so `rel="icon"` and
+`rel="shortcut icon"` count, but `apple-touch-icon`, `mask-icon`, and `fluid-icon` do NOT) AND
+whose `href` survives the URL parser's own end trim. This mirrors the validator's
+check (checks/kind.py `check_favicon` over the parser's `icon_links`), so the tools inject a
+favicon exactly when the validator would warn. Keeping this in one place stops the tools'
+detection from drifting away from the validator's - and BOTH readings, the `rel` SPLIT and the
+`href` emptiness test, are read from the shared ones rather than restated, because Python's own
+idea of whitespace matches neither HTML's nor the URL parser's: `str.split()` also splits on the
+vertical tab, NBSP and U+001C-U+001F and would name a relation a browser never matches (#1120),
+and `str.strip()` reaches past ASCII into NBSP, U+2028, U+3000 and U+0085, which the URL parser
+keeps, so it would call an `href="&#xa0;"` a browser resolves and fetches EMPTY (#1140).
+
+Detection uses `html.parser.HTMLParser` (the same tokenizer the validator uses) rather than a raw
+regex so that: attributes are parsed exactly (a `data-rel` / `data-href` is never mistaken for
+`rel` / `href`); a `<link>` that appears only as text inside a `<script>`, `<style>`, or an HTML
+comment does NOT count; and adversarial input (unterminated comments/tags) cannot trigger the
+quadratic backtracking a two-stage regex scan is prone to. Detection is head-scoped: only links
+before the document's body (the `<body>` tag, a `</head>`, or the first flow-content element that
+implicitly ends the head) are considered. Names and values come from the SHARED browser view
+(CMH-VAL-21), so `<lin\u212a>` is the unknown element a browser sees, not a `<link>`.
+"""
+from html.parser import HTMLParser
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # tools/ root
+import _browser_attrs  # noqa: E402
+
+# Elements allowed in <head>; the first START tag outside this set (and every `<body>` /
+# closing `</head>`) ends the head, matching how a browser stops head parsing.
+_HEAD_TAGS = frozenset({
+    "html", "head", "base", "link", "meta", "title", "noscript", "style", "script", "template",
+})
+
+
+def rel_is_favicon(rel_value):
+    """True when the rel attribute's HTML-tokenized relations include the exact token `icon`."""
+    return "icon" in _browser_attrs.link_rel_tokens(rel_value)
+
+
+class _FaviconFinder(_browser_attrs.BrowserTagNames):
+    """Collect the raw text of each favicon `<link>` start tag found in the head, in order."""
+
+    # The SHARED bounded TEXT decode (CMH-VAL-21): an oversized numeric character reference
+    # in prose resolves to U+FFFD instead of raising, so this tool reads the same document
+    # every validator parse reads (issue #946).
+    goahead = _browser_attrs.text_goahead(HTMLParser.goahead)
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tags = []
+        self._head_ended = False
+
+    def _consider(self, tag, attrs):
+        if self._head_ended:
+            return
+        if tag == "body" or tag not in _HEAD_TAGS:
+            self._head_ended = True
+            return
+        if tag != "link":
+            return
+        ad = _browser_attrs.attrs_dict(self, tag, attrs)
+        if rel_is_favicon(ad.get("rel")) and _browser_attrs.link_href_is_set(ad.get("href")):
+            self.tags.append(self.get_starttag_text())
+
+    def handle_starttag(self, tag, attrs):
+        self._consider(self._browser_tag(tag), attrs)
+
+    def handle_startendtag(self, tag, attrs):
+        self._consider(self._browser_tag(tag), attrs)
+
+    def handle_endtag(self, tag):
+        if self._browser_tag(tag) == "head":
+            self._head_ended = True
+
+
+def _find(html):
+    finder = _FaviconFinder()
+    try:
+        finder.feed(html or "")
+        finder.close()
+    except Exception:
+        pass
+    return finder.tags
+
+
+def head_has_favicon(html):
+    """True when `html`'s head declares at least one usable favicon link."""
+    return bool(_find(html))
+
+
+def template_favicon_tag(template_html):
+    """Return the verbatim favicon `<link>` tag from a template's head, or None when it has none."""
+    tags = _find(template_html)
+    return tags[0] if tags else None

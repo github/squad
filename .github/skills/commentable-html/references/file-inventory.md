@@ -1,0 +1,85 @@
+# File inventory
+
+This inventory lists the files that ship with the skill. Development sources, the spec, and the test suites live in the project's source repository and are not part of the installed plugin.
+
+## Shipped skill root
+
+| Path | Purpose |
+| --- | --- |
+| `SKILL.md` | Public skill instructions, generation steps, validation, and review loop. |
+| `dist/README.md` | Terse pointer for generated dist artifacts. |
+| `dist/SHAREABLE.html` | Standalone inline template and demo. |
+| `dist/NONSHAREABLE.html` | NonShareable starting shell. |
+| `dist/commentable-html.css` | Layer stylesheet companion. |
+| `dist/commentable-html.js` | Runtime companion. |
+| `dist/commentable-html.assets.js` | Asset registry used by Export as Shareable. |
+| `dist/manifest.json` | Version and SHA-256 metadata for companions. |
+| `tools/` | Runtime Python helpers that ship with the skill, grouped into per-topic buckets (`tools/deck`, `tools/kusto`, `tools/checklist`, `tools/notes`, `tools/tables`, `tools/blocks`, `tools/authoring`, `tools/validate`). |
+| `references/` | Detailed generated-report references. |
+| `docs/TUTORIAL.md` | Tutorial using `examples/report-community-garden.html`. |
+| `docs/assets/` | Tutorial screenshots and the review-loop diagram (the diagram is embedded in the plugin README). |
+| `examples/prompt-community-garden.md` | Prompt for the community garden example. |
+| `examples/prompt-taxi.md` | Prompt for the NYC taxi example. |
+| `examples/prompt-triage.md` | Prompt for the incident triage board example. |
+| `examples/prompt-metrics.md` | Prompt for the commentable visuals matrix example. |
+| `examples/report-community-garden.html` | Shareable community garden example report. |
+| `examples/report-taxi.html` | Shareable NYC taxi example report. |
+| `examples/report-triage.html` | Shareable incident triage board example report. |
+| `examples/report-metrics.html` | Shareable commentable visuals matrix example report. |
+
+## Runtime tools
+
+Run any tool with `python tools/<topic>/<name>.py --help` from the skill root (the
+`skills/commentable-html/` directory this reference ships in); the tools are grouped into topic
+subdirectories under `tools/` (for example `tools/validate/validate.py`, `tools/authoring/new_document.py`).
+
+- `validate.py` - structural invariant checker for generated files. Use `--strict` before handoff.
+- `tables_scaffold.py` / `tables_apply.py` - emit editable native tables and atomically cement
+  table transactions; see [tables-contract.md](tables-contract.md).
+- `mark_handled.py` - appends handled comment ids from explicit ids or a copied bundle.
+- `review_threads.py` - imports versioned discussion bundles, lists pending questions and commands,
+  and persists AI answers and edit acknowledgements in the HTML's embedded review state.
+- `new_document.py` - builds a fresh commentable document from a content fragment (always Shareable, one self-contained file; `--template <dist>/NONSHAREABLE.html` builds a legacy one deliberately). Fails
+  closed (writes nothing) when it cannot self-validate; `--allow-unvalidated-output` opts out.
+- `recommend_kind.py` - recommends `report`, `plan`, or `slides` from filename and content signals before choosing `--kind`.
+- `retrofit.py` - injects the layer into an existing unlayered HTML file, validates before writing, and leaves the target unchanged on failure.
+- `upgrade.py` - upgrades the CSS, COMMENT UI, and JS regions and re-emits the shell-baked mermaid loader bootstrap from the current `dist/SHAREABLE.html`.
+- `finalize.py` - runs safe assembly steps (including AI-typography normalization by default; `--no-normalize` to skip), then validates.
+- `dom_slim.py` - stops a finished document storing a checklist item's identity twice: drops the `data-cmh-item` / `data-cmh-parent` copy of an authored id and names its source on the container instead. Run automatically by `finalize.py` (`--no-slim` to skip); inspect one document with `--check`.
+- `normalize_typography.py` - rewrites AI smart-typography (em/en dashes, ellipsis, curly quotes, nbsp/zero-width spaces) to plain ASCII in a document's prose, leaving code/script/style/comments verbatim (`--check`/`--out`/in-place). Run automatically by `finalize.py` and `deck_scaffold.py`.
+- `diff_block.py` - emits escaped `pre.cmh-diff` review blocks.
+- `chart_block.py` - emits a validator-clean Chart.js figure, loader, data block, and init. Fails
+ closed (writes nothing) when it cannot self-validate; `--allow-unvalidated-output` opts out.
+- `kql_highlight.py` and `kusto_link.py` - build KQL figures and Run in Azure Data Explorer deep links.
+- `highlight_code.py` - emits highlighted code blocks.
+- `generate_toc.py` - creates a `nav.cm-toc` from headings, strips redundant author section numbers from an ordered-list TOC, and bakes the entry's own number into it as a `cm-skip` `span.cm-toc-num` (suppressing the list marker) so the Contents list and the runtime side menu show one number for the same heading.
+- `doc_stats.py` - bakes the report/plan document-overview strip (section count, word count, reading time).
+- `fix_skip.py` - adds `cm-skip` to bare Mermaid blocks.
+- `inline_images.py` - inlines local images as data URIs.
+- `deck_fix_fonts.py` - strips copied remote deck font loaders and maps web-font stacks to approved system stacks.
+
+## References
+
+- `references/charts.md` - Thin Chart.js reference index that routes to the focused files.
+- `references/charts-embedding.md` - Chart.js dependencies, coexistence rules, minimal markup, tooltips, verification, and embedding pitfalls.
+- `references/charts-recipes.md` - Chart.js per-type recipes, data hygiene, and dark-theme guidance.
+- `references/code-blocks.md` - Code comment behavior and copy buttons.
+- `references/code-review-diffs.md` - Unified diff rendering and anchors.
+- `references/commentable-widgets.md` - Widget/SVG-node comments, state-change tracking, document-wide comments.
+- `references/comment-data-shape.md` - Comment JSON and pinpoint fields.
+- `references/content-conventions.md` - ADO links, cross-references, and authoring guidance (shape, taste, measure, tokens).
+- `references/copy-payload.md` - `Copy all` Markdown and handled-id contract.
+- `references/design-decisions.md` - Intentional behaviors reviewers should not flag.
+- `references/document-layout.md` - Themes, TOC, sections, cards, and tables.
+- `references/discussions.md` - Anchored AI discussions, explicit edit commands,
+  owner replies, snapshot handoff, and optional scheduled answers.
+- `references/exports.md` - Shareable, Plain HTML, Markdown, and NonShareable export semantics.
+- `references/file-inventory.md` - This file.
+- `references/forward-compatible-layout.md` - Region layout and descriptor contract for current and future tools.
+- `references/images-commentable.md` - Image and chart canvas comments.
+- `references/interaction-model.md` - Add-comment gestures and sidebar lifecycle.
+- `references/kusto-query-blocks.md` - KQL blocks and deep links.
+- `references/limitations.md` - Known limitations to disclose.
+- `references/mermaid-diagrams.md` - Mermaid loading, anchors, and comments.
+- `references/retrofitting.md` - Adding or upgrading the layer in existing HTML.
+- `references/validation.md` - Validator behavior and manual verification.

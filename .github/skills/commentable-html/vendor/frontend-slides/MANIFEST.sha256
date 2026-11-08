@@ -1,0 +1,9 @@
+# SHA-256 manifest of the pristine vendored frontend-slides subset.
+# Regenerate only after a reviewed resync: python dev/tools/check_vendor.py --update
+
+62928eb197fe4662d1efc3af0735b3ba5df3c0308badd9a2baf2b619009f5366  LICENSE
+b0093ae6f9c295e561c7d4a9ddf69d0edfd2810b1721ba1c2022a1ad9681c82c  STYLE_PRESETS.md
+1b7b7409893b68c09effb04f20a4603a5168e4956d76c3999c2ba8f86c4bbc8f  animation-patterns.md
+893ab49200ed5c3186d3b031333f5b61916b179dad2dafd5572ff8f66cd0b91a  html-template.md
+4f5e7603c99b8b53e20c5b2a65abdf5edf9422b4c490dca9f2b872a752c17d2a  scripts/extract-pptx.py
+7424eb3fca809d85eedb3019a7b5bff571dc553c7b73b02120d068e12b2a6a03  viewport-base.css

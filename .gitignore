@@ -62,3 +62,9 @@ evidence/
 .evidence-tmp/
 release-packs/
 npm-reconciliation/
+
+# Python bytecode (for example, from running .github/skills/commentable-html/tools)
+__pycache__/
+
+# The vendored commentable-html skill ships its runtime in dist/ (see its VENDORED.md)
+!/.github/skills/commentable-html/dist/

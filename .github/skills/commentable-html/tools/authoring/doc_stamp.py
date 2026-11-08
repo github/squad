@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Read and write the commentable-html provenance <meta> stamps.
+
+Two stamps let the runtime tell whether a document was actually validated:
+- `commentable-html-created`  - written when a tool first produces the document.
+- `commentable-html-validated` - written by `validate.py` (and `finalize.py`) only on a
+  STRICT-CLEAN pass (no errors AND no warnings).
+
+The runtime shows a small fallback banner when a document carries a created stamp but no
+current validated stamp - a document that was produced but never strict-validated. This is a
+last-resort signal; the skill MUST always finalize and strict-validate before handoff.
+"""
+import datetime
+import ntpath
+import os
+import re
+import sys
+
+# section_hash is a sibling tool in this same authoring/ directory. Make sure it is importable even
+# when doc_stamp is loaded without the tools/_toolpath bootstrap having run first.
+_HERE_DIR = os.path.dirname(os.path.abspath(__file__))
+if _HERE_DIR not in sys.path:
+    sys.path.insert(0, _HERE_DIR)
+sys.path.insert(0, os.path.dirname(_HERE_DIR))  # tools/ root
+import _browser_attrs  # noqa: E402
+import section_hash  # noqa: E402
+
+CREATED_META = "commentable-html-created"
+VALIDATED_META = "commentable-html-validated"
+# The content hash bound to the validated stamp: the whole content-root text hashed with the shared
+# section-hash contract (section_hash.document_content_hash, reproduced by the runtime
+# cmhDocContentHash). It lets the runtime tell a genuinely validated document from one that was
+# validated and THEN manually edited (the hash no longer matches the current content).
+VALIDATED_HASH_META = "commentable-html-validated-hash"
+# Provenance of the AI session that produced the document. `session-id` is the raw id string
+# the runtime footer copies to the clipboard; `agent` is the producing tool's slug (e.g.
+# "copilot", "claude") the footer maps to a friendly name in the copy tooltip.
+SESSION_META = "commentable-html-session-id"
+AGENT_META = "commentable-html-agent"
+
+# Environment variables each supported agent exports for its own session id, in priority order.
+# Copilot CLI exports COPILOT_AGENT_SESSION_ID; Claude Code exports CLAUDE_CODE_SESSION_ID (both
+# confirmed live), with CLAUDE_SESSION_ID kept as a fallback name. The list is easy to extend.
+_SESSION_ENV_VARS = (
+    ("COPILOT_AGENT_SESSION_ID", "copilot"),
+    ("CLAUDE_CODE_SESSION_ID", "claude"),
+    ("CLAUDE_SESSION_ID", "claude"),
+)
+
+# "I am the running CLI" marker env vars each agent sets. When more than one agent's session id is
+# visible (e.g. one CLI launched from another, so a parent's id is inherited by the child), these
+# disambiguate which agent is the IMMEDIATE runtime actually executing the tool. Claude is checked
+# first so a Claude-run tool under a Copilot parent is attributed to Claude.
+_RUNTIME_MARKERS = (
+    ("claude", ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")),
+    ("copilot", ("COPILOT_CLI",)),
+)
+
+
+def source_basename(source):
+    """Return only the filename portion of a source identifier on either path style."""
+    value = str(source or "")
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", value):
+        value = re.split(r"[?#]", value, maxsplit=1)[0]
+    if value.endswith(("/", "\\")):
+        return "document"
+    return ntpath.basename(os.path.basename(value)) or "document"
+
+
+def now_iso():
+    """A second-precision UTC ISO-8601 timestamp, e.g. 2026-07-15T10:21:31Z."""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    return now.isoformat().replace("+00:00", "Z")
+
+
+def _meta_re(name):
+    return re.compile(r'(<meta\s+name="%s"\s+content=")[^"]*(")' % re.escape(name), re.IGNORECASE)
+
+
+def get_meta(html, name):
+    """Return the content of `<meta name=NAME>`, or None when it is absent."""
+    m = re.search(r'<meta\s+name="%s"\s+content="([^"]*)"' % re.escape(name), html, re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+def _dominant_newline(html):
+    crlf = html.count("\r\n")
+    lf = html.count("\n") - crlf
+    return "\r\n" if crlf > lf else "\n"
+
+
+def set_meta(html, name, content):
+    """Set (or insert into <head>) `<meta name=NAME content=CONTENT>`; returns the new html.
+
+    The content goes through the SHARED attribute escape rather than a private copy: this used
+    to hand-roll `&`, `"`, `<` and `>`, which stops a stray quote breaking the tag but leaves a
+    CR literal - and input-stream preprocessing folds a literal CR to LF before a browser
+    tokenizes, so a `--session-id` carrying one was stamped as a value the rendered DOM never
+    had (#1224). It is also the third private copy of a rule that already exists once (#1195).
+    """
+    esc = _browser_attrs.escape_attr_value(content)
+    new_html, n = _meta_re(name).subn(lambda m: m.group(1) + esc + m.group(2), html, count=1)
+    if n:
+        return new_html
+    tag = '<meta name="%s" content="%s" />' % (name, esc)
+    m = re.search(r"<head[^>]*>", html, re.IGNORECASE)
+    if m:
+        return html[:m.end()] + _dominant_newline(html) + tag + html[m.end():]
+    return tag + html
+
+
+def remove_meta(html, name):
+    """Remove the first `<meta name=NAME ...>` tag (and a trailing newline if it sits on its own
+    line) if present; returns the new html unchanged when the tag is absent."""
+    m = re.search(r'<meta\s+name="%s"\s+content="[^"]*"\s*/?>' % re.escape(name), html, re.IGNORECASE)
+    if not m:
+        return html
+    start, end = m.start(), m.end()
+    if html.startswith("\r\n", end):
+        end += 2
+    elif end < len(html) and html[end] == "\n":
+        end += 1
+    return html[:start] + html[end:]
+
+
+def stamp_created(html, when=None):
+    """Stamp the creation time (idempotent: an existing created stamp is preserved)."""
+    if get_meta(html, CREATED_META) is not None:
+        return html
+    return set_meta(html, CREATED_META, when or now_iso())
+
+
+def stamp_validated_html(html, when=None):
+    """Return html with the validated stamp set to `when` (default: now), CONTENT-BOUND with a
+    whole-document content hash (commentable-html-validated-hash) so the runtime banner can tell a
+    genuinely validated document from one that was validated and then manually edited. A document
+    with no content root is stamped with the timestamp only (there is no reproducible runtime hash
+    to bind to)."""
+    html = set_meta(html, VALIDATED_META, when or now_iso())
+    content_hash = section_hash.document_content_hash(html)
+    if content_hash is not None:
+        html = set_meta(html, VALIDATED_HASH_META, content_hash)
+    else:
+        # No content root => no hash the runtime can reproduce. Drop any stale hash so the stamp is
+        # cleanly timestamp-only and never leaves a mismatching hash that would nag falsely.
+        html = remove_meta(html, VALIDATED_HASH_META)
+    return html
+
+
+def detect_session(environ=None):
+    """Return `(session_id, agent)` auto-detected from the environment, or `(None, None)`.
+
+    Collects every `_SESSION_ENV_VARS` entry present in the environment. With one match it is
+    returned; with several (a nested launch where a parent CLI's id was inherited) the agent that
+    is the IMMEDIATE runtime - identified by its `_RUNTIME_MARKERS` - wins, falling back to list
+    order when no marker resolves it. Pass `environ` to test without mutating `os.environ`."""
+    env = os.environ if environ is None else environ
+    present = [(var, agent) for var, agent in _SESSION_ENV_VARS if (env.get(var) or "").strip()]
+    if not present:
+        return None, None
+    if len(present) > 1:
+        runtime = _current_runtime(env)
+        for var, agent in present:
+            if agent == runtime:
+                return (env.get(var) or "").strip(), agent
+    var, agent = present[0]
+    return (env.get(var) or "").strip(), agent
+
+
+def _current_runtime(env):
+    """Return the slug of the agent CLI actually running this process, or None, from the
+    `_RUNTIME_MARKERS`. Used only to break ties when several agents' session ids are visible."""
+    for agent, markers in _RUNTIME_MARKERS:
+        if any((env.get(m) or "").strip() for m in markers):
+            return agent
+    return None
+
+
+def stamp_session(html, session_id, agent=None):
+    """Stamp the producing AI session id (and optional agent slug) as provenance meta.
+
+    Idempotent on the session id: an existing `commentable-html-session-id` stamp is preserved
+    (so a re-scaffold never rewrites the original producer), and a blank/None session id is a
+    no-op. When a session id is written and `agent` is given, the agent slug is written too."""
+    sid = (session_id or "").strip()
+    if not sid or get_meta(html, SESSION_META) is not None:
+        return html
+    html = set_meta(html, SESSION_META, sid)
+    ag = (agent or "").strip()
+    if ag:
+        html = set_meta(html, AGENT_META, ag)
+    return html
