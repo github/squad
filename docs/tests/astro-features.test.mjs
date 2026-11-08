@@ -7,6 +7,15 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  RETIRED_SITE_LINK,
+  SCANNED_PATHS,
+  SITE_SETTINGS,
+  findLinks,
+  readScannedFiles,
+  readSetting,
+  scanOldRepoLinks,
+} from '../../scripts/docs-site-location.mjs';
 
 const DOCS_ROOT = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(DOCS_ROOT, 'src');
@@ -138,80 +147,34 @@ describe('View Transitions', () => {
   });
 });
 
-// 11. site location — the repo moved to github/squad, and GitHub Pages does not
-// redirect bradygaster.github.io/squad/ to the new github.github.com/squad/ site.
+// 11. site location: the repo moved to github/squad, and GitHub Pages does not redirect the
+// retired bradygaster.github.io site to github.github.com/squad/. The contract lives in
+// scripts/docs-site-location.mjs, shared with test/docs-site-location.test.ts (CI), which also
+// pins its patterns and allowlist with examples.
 describe('docs site location', () => {
-  const REPO_ROOT = path.resolve(DOCS_ROOT, '..');
-  // The implementation-provenance schema ID is a versioned identifier, not a link.
-  const RETIRED_SITE_URL = /https?:\/\/bradygaster\.github\.io\/squad(?!\/schemas\/implementation-provenance\/)[^\s)"'`<>]*/g;
-  const OLD_REPO_URL = /(?<![\w.-])github\.com\/bradygaster\/squad(?![\w-])[^\s)"'`<>]*/g;
-  const SCAN_EXTENSIONS = new Set(['.md', '.mdx', '.astro', '.mjs', '.js', '.ts', '.txt', '.json', '.yml', '.yaml', '.xml']);
-  const SKIP_DIRS = new Set(['node_modules', 'dist', '.astro', 'tests']);
+  let scanned;
+  const scannedFiles = () => (scanned ??= readScannedFiles());
 
-  function* walk(target) {
-    const stat = fs.statSync(target);
-    if (stat.isFile()) {
-      if (SCAN_EXTENSIONS.has(path.extname(target))) yield target;
-      return;
-    }
-    for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
-      if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
-      yield* walk(path.join(target, entry.name));
-    }
+  for (const setting of SITE_SETTINGS) {
+    it(`${setting.name} in ${setting.file} is ${setting.expected}`, () => {
+      const { value, at } = readSetting(setting);
+      assert.equal(value, setting.expected, `${at}: ${setting.name} is ${value}`);
+    });
   }
 
-  function findMatches(files, pattern) {
-    const offenders = [];
-    for (const file of files) {
-      fs.readFileSync(file, 'utf-8').split('\n').forEach((line, index) => {
-        for (const match of line.matchAll(pattern)) {
-          offenders.push(`${path.relative(REPO_ROOT, file)}:${index + 1}: ${match[0]}`);
-        }
-      });
-    }
-    return offenders;
-  }
-
-  it('astro.config.mjs builds for github.github.com under /squad/', () => {
-    const config = fs.readFileSync(path.join(DOCS_ROOT, 'astro.config.mjs'), 'utf-8');
-    const site = config.match(/^\s*site:\s*'([^']*)'/m)?.[1];
-    const base = config.match(/^\s*base:\s*'([^']*)'/m)?.[1];
-    assert.equal(site, 'https://github.github.com', `docs/astro.config.mjs site is ${site}`);
-    assert.equal(base, '/squad/', `docs/astro.config.mjs base is ${base}`);
+  it('scans the tracked docs, samples, READMEs and contributor guides', () => {
+    const paths = scannedFiles().map((file) => file.path);
+    const emptyRoots = SCANNED_PATHS.filter((root) => !paths.some((file) => file === root || file.startsWith(`${root}/`)));
+    assert.deepEqual(emptyRoots, [], `scanned paths with no tracked text files: ${emptyRoots.join(', ')}`);
   });
 
-  it('rss.xml.js falls back to the github.github.com site', () => {
-    const rssFile = fs.readFileSync(path.join(SRC, 'pages', 'rss.xml.js'), 'utf-8');
-    const fallback = rssFile.match(/context\.site\s*\?\?\s*'([^']*)'/)?.[1];
-    assert.equal(fallback, 'https://github.github.com/squad/', `docs/src/pages/rss.xml.js site fallback is ${fallback}`);
-  });
-
-  it('robots.txt points at the deployed sitemap', () => {
-    const robots = fs.readFileSync(path.join(DOCS_ROOT, 'public', 'robots.txt'), 'utf-8');
-    const sitemap = robots.match(/^Sitemap:\s*(\S+)/m)?.[1];
-    assert.equal(sitemap, 'https://github.github.com/squad/sitemap-index.xml', `docs/public/robots.txt Sitemap is ${sitemap}`);
-  });
-
-  it('docs and READMEs do not link to the retired bradygaster.github.io site', () => {
-    const files = [
-      ...walk(DOCS_ROOT),
-      path.join(REPO_ROOT, 'README.md'),
-      path.join(REPO_ROOT, 'README.zh.md'),
-      path.join(REPO_ROOT, 'packages', 'squad-cli', 'README.md'),
-    ];
-    const offenders = findMatches(files, RETIRED_SITE_URL);
+  it('nothing scanned links to the retired bradygaster.github.io site', () => {
+    const offenders = findLinks(scannedFiles(), RETIRED_SITE_LINK);
     assert.deepEqual(offenders, [], `Links to the retired docs site (use https://github.github.com/squad/...):\n${offenders.join('\n')}`);
   });
 
-  it('site chrome links to the github/squad repository', () => {
-    const chrome = [
-      path.join(SRC, 'components', 'Header.astro'),
-      path.join(SRC, 'components', 'Footer.astro'),
-      path.join(SRC, 'pages', 'index.astro'),
-      path.join(SRC, 'layouts', 'DocsLayout.astro'),
-      path.join(SRC, 'plugins', 'remark-rewrite-links.mjs'),
-    ];
-    const offenders = findMatches(chrome, OLD_REPO_URL);
-    assert.deepEqual(offenders, [], `Site chrome still links to bradygaster/squad (use github.com/github/squad):\n${offenders.join('\n')}`);
+  it('everything scanned links to github/squad, apart from the historical records in HISTORICAL_REPO_LINKS', () => {
+    const { offenders } = scanOldRepoLinks(scannedFiles());
+    assert.deepEqual(offenders, [], `Links to the old bradygaster/squad repository (use https://github.com/github/squad):\n${offenders.join('\n')}`);
   });
 });
