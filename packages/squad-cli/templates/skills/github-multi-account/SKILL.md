@@ -72,15 +72,13 @@ ghw api user --jq '.login'   # should show work username
 ```
 
 ### Step 5: Tell the user
-"All set! From now on use `ghp` for personal repos and `ghw` for work repos. I'll use them too."
+"All set! `ghp` uses your personal account and `ghw` your work account. For each repo, I'll use whichever one can push to it."
 
 ## After Setup — Usage Rules
 
 1. **NEVER** use bare `gh` for repo operations — always `ghp` or `ghw`
 2. **NEVER** manually `gh auth switch` — the aliases handle it
-3. Determine alias by repo owner:
-   - Personal account repos → `ghp` / `gh-personal`
-   - Work/EMU account repos → `ghw` / `gh-work`
+3. Pick the alias by which account can write to the repo, not by who owns it; see **Repo-Specific Account Binding** below.
 
 ## Repo-Specific Account Binding
 
