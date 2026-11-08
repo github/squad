@@ -19,8 +19,14 @@ import { fileURLToPath } from 'node:url';
 
 export const COMMENT_MARKER = '<!-- squad-pr-readiness -->';
 
-/** Check-run names belonging to this workflow (filtered from CI checks). */
-export const SELF_CHECK_NAMES = ['readiness', 'PR Readiness Check'];
+/**
+ * Check-run names belonging to this workflow (filtered from CI checks).
+ * `readiness` is the job of squad-pr-readiness-request.yml (reported on the PR
+ * head) and the posting job of squad-pr-readiness.yml; `readiness-bind` is that
+ * workflow's bind job. workflow_run check runs land on the default-branch tip,
+ * which is the head commit of any PR from dev (dev to main).
+ */
+export const SELF_CHECK_NAMES = ['readiness', 'readiness-bind', 'PR Readiness Check'];
 
 /** Regex for source files that require a changeset. */
 export const SOURCE_PATTERN = /^packages\/squad-(sdk|cli)\/src\//;
