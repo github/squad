@@ -61,11 +61,14 @@ export const SITE_SETTINGS = [
  * A link to the retired project site: `//bradygaster.github.io/squad`, with or without a scheme,
  * in any case. `/squad` must end at a path boundary, so `/squadcaster/` is another site. The
  * implementation-provenance schema ID (`/squad/schemas/implementation-provenance/v1`) is an
- * identifier, not a link, so it is exempt. Only the exact versioned ID is exempt, not the paths
- * below it.
+ * identifier, not a link, so it is exempt, but only where the version ends the URL. That means
+ * the version is followed by the end of the line, whitespace, one of ) " ' ` < > ], or a `#`
+ * fragment, which points into the same schema. A `.` counts only as a sentence end, followed by
+ * whitespace or the end of the line. Paths below the ID, dotted suffixes such as `v1.json` and
+ * queries such as `v1?format=json` are links.
  */
 export const RETIRED_SITE_LINK =
-  /(?:https?:)?\/\/bradygaster\.github\.io\/squad(?![\w-])(?!\/schemas\/implementation-provenance\/v\d+(?![\w/-]))[^\s)"'`<>\]]*/gi;
+  /(?:https?:)?\/\/bradygaster\.github\.io\/squad(?![\w-])(?!\/schemas\/implementation-provenance\/v\d+(?:[\s)"'`<>\]#]|\.(?:\s|$)|$))[^\s)"'`<>\]]*/gi;
 
 /**
  * A reference to the old repository location, in any case. This covers web and raw file URLs

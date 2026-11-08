@@ -155,6 +155,10 @@ describe('retired-site pattern', () => {
     ['an unversioned schema path', 'https://bradygaster.github.io/squad/schemas/implementation-provenance/latest', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/latest']],
     ['a path below the versioned schema ID', 'https://bradygaster.github.io/squad/schemas/implementation-provenance/v1/../../docs/', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1/../../docs/']],
     ['a suffixed schema version', 'https://bradygaster.github.io/squad/schemas/implementation-provenance/v1-draft', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1-draft']],
+    ['a .json suffix on the schema version', '[schema](https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.json)', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.json']],
+    ['a .html suffix on the schema version', 'https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.html', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.html']],
+    ['a dot after the schema version that does not end a sentence', '[schema](https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.)', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.']],
+    ['a query on the schema ID', 'https://bradygaster.github.io/squad/schemas/implementation-provenance/v1?format=json', ['https://bradygaster.github.io/squad/schemas/implementation-provenance/v1?format=json']],
   ])('matches %s', (_case, text, expected) => {
     expectMatches(RETIRED_SITE_LINK, text, expected);
   });
@@ -164,6 +168,10 @@ describe('retired-site pattern', () => {
     ['a hyphenated sibling path', 'https://bradygaster.github.io/squad-legacy/'],
     ['the versioned schema ID in prose', 'Schema: `https://bradygaster.github.io/squad/schemas/implementation-provenance/v1`.'],
     ['the versioned schema ID in JSON', '"$id": "https://bradygaster.github.io/squad/schemas/implementation-provenance/v12",'],
+    ['the versioned schema ID at the end of a line', 'schema: https://bradygaster.github.io/squad/schemas/implementation-provenance/v1'],
+    ['the versioned schema ID ending a sentence', 'The schema ID is https://bradygaster.github.io/squad/schemas/implementation-provenance/v1. It is not a page.'],
+    ['the versioned schema ID in an autolink', '<https://bradygaster.github.io/squad/schemas/implementation-provenance/v1>'],
+    ['a fragment of the versioned schema ID', '"$ref": "https://bradygaster.github.io/squad/schemas/implementation-provenance/v1#/$defs/goal"'],
     ['old-host link text with a new-host target', 'Visit the docs at [bradygaster.github.io/squad](https://github.github.com/squad/).'],
     ['the new site', 'https://github.github.com/squad/docs/'],
   ])('does not match %s', (_case, text) => {
@@ -176,11 +184,14 @@ describe('retired-site pattern', () => {
       'See [Model Selection](https://bradygaster.github.io/squad/docs/features/model-selection/).',
       'Another project: https://bradygaster.github.io/squadcaster/',
       '<a href="//bradygaster.github.io/squad/">Docs</a>',
+      'Schema: `https://bradygaster.github.io/squad/schemas/implementation-provenance/v1`.',
+      'Download the [schema](https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.json).',
     ].join('\r\n');
 
     expectLines(findLinks([{ path: 'docs/example.md', text }], RETIRED_SITE_LINK), [
       'docs/example.md:2: https://bradygaster.github.io/squad/docs/features/model-selection/',
       'docs/example.md:4: //bradygaster.github.io/squad/',
+      'docs/example.md:6: https://bradygaster.github.io/squad/schemas/implementation-provenance/v1.json',
     ]);
   });
 });
