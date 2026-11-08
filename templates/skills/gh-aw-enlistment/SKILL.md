@@ -25,7 +25,7 @@ bootstrap pull request** — never an auto-merge.
 This skill **operationalizes** the supported bootstrap path. It does not summarize
 it: each step below is a gate with explicit success evidence and **STOP conditions**.
 The authoritative source is `docs/src/content/docs/guide/gh-aw.md` (mirrored at
-`https://bradygaster.github.io/squad/docs/guide/gh-aw/`). If that guide and this
+`https://github.github.com/squad/docs/guide/gh-aw/`). If that guide and this
 skill ever disagree, the guide wins — re-read it before proceeding.
 
 GitHub Issues are a hard prerequisite: `/squad` commands arrive as issue
@@ -193,9 +193,33 @@ published release guidance, then set it once:
   echo "STOP: SQUAD_SHA must be the exact 40-character commit SHA, not a branch name or shortened hash." >&2
   exit 1
 }
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+# squad-package-identity-start
+squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
+  "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
+  --jq '.package')" || squad_package=""
+test "${squad_package}" = "github/squad/workflows" || {
+  if [ -z "${squad_package}" ]; then
+    echo "STOP: cannot read workflows/squad-workflows.manifest.json from github/squad at ${SQUAD_SHA}." >&2
+    echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
+  else
+    echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
+    echo "Install a revision that declares bradygaster/squad/workflows under that identity, or ask the Squad maintainers for a newer revision." >&2
+  fi
+  exit 1
+}
+# squad-package-identity-end
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 ```
+
+`github/squad/workflows` verifies only at Squad revisions whose
+`workflows/squad-workflows.manifest.json` declares
+`"package": "github/squad/workflows"`. The identity check above reads that
+manifest at `SQUAD_SHA` and stops on any other revision. An older
+maintainer-approved revision declares `bradygaster/squad/workflows`: install it
+under that identity, because its verifier accepts no other, or ask the Squad
+maintainers for a newer revision. Such a revision's safe-update report names
+the same squad-init action as `bradygaster/squad/.github/actions/squad-init`.
 
 The nested `workflows/aw.yml` is the only supported distribution registration.
 It isolates package auto-discovery from unrelated repository skills and agents,
@@ -226,6 +250,61 @@ that exact file after every `gh aw add`. Keep
 the verifier requires its exact package bytes. Do not adopt or vendor the rest
 of gh-aw's generic scaffold.
 
+Revisions whose `workflows/squad-workflows.manifest.json` declares
+`"package": "github/squad/workflows"` verify that identity and the legacy
+`bradygaster/squad/workflows` identity. Earlier revisions, including ones
+committed after the repository moved to `github/squad`, declare and verify only
+`bradygaster/squad/workflows`, and installations made from them carry it in
+their ownership record, workflow `source:` lines, and locks. Upgrade such an
+installation to a revision that declares `github/squad/workflows` with the block
+below. gh-aw keeps the superseded
+`.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json` after the
+forced reinstall, so the block deletes exactly that file before verifying; the
+verifier fails closed while both ownership records exist. That first upgrade
+also makes `gh aw add` report one safe-update change: action
+`github/squad/.github/actions/squad-init` added and
+`bradygaster/squad/.github/actions/squad-init` removed. It is the same
+squad-init action under the repository's new owner; list it in the PR's
+security review note. **STOP** on any other new secret or action. Until an
+installation moves, `--verify-install` still passes and prints a notice naming
+the legacy identity. To stay on a revision that declares
+`bradygaster/squad/workflows`, replace the identity check and the `gh aw add`
+line below with `gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}" --force`,
+and skip the second `rm -f`: that ownership record is the only one such an
+installation has.
+
+```bash
+: "${SQUAD_SHA:?STOP: set SQUAD_SHA to an explicit, maintainer-approved 40-character Squad commit SHA before upgrading.}"
+[[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "STOP: SQUAD_SHA must be the exact 40-character commit SHA, not a branch name or shortened hash." >&2
+  exit 1
+}
+squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
+  "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
+  --jq '.package')" || squad_package=""
+test "${squad_package}" = "github/squad/workflows" || {
+  if [ -z "${squad_package}" ]; then
+    echo "STOP: cannot read workflows/squad-workflows.manifest.json from github/squad at ${SQUAD_SHA}." >&2
+    echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
+  else
+    echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
+    echo "Install a revision that declares bradygaster/squad/workflows under that identity, or ask the Squad maintainers for a newer revision." >&2
+  fi
+  exit 1
+}
+gh aw add "github/squad/workflows@${SQUAD_SHA}" --force
+rm -f .github/skills/agentic-workflows/SKILL.md
+rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json
+node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime
+gh aw compile --strict
+node .github/workflows/shared/squad-install-verifier.mjs \
+  --verify-install \
+  --source-revision "${SQUAD_SHA}" \
+  --strict-compile
+```
+
+Apply step 5's two-warning check to the compile output above, then stage and verify as in step 7.
+
 Report/proposal-only is the default. Ordinary fixes require the explicit
 `"squadRetroAutoImplement": "allow"` setting in `.squad/config.json`;
 five action issues and three dispatches per wake-up remain separate caps.
@@ -247,8 +326,12 @@ On a clean repo, `gh aw add` reports these expected safe updates and **nothing e
 
 <!-- allowlist-start -->
 - Restricted secrets: **`SQUAD_GITHUB_APP_PRIVATE_KEY`** and **`SQUAD_GITHUB_TOKEN`**
-- Action: **`bradygaster/squad/.github/actions/squad-init`**
+- Action: **`github/squad/.github/actions/squad-init`**
 <!-- allowlist-end -->
+
+At a revision whose manifest declares `bradygaster/squad/workflows`, the same
+action is reported as `bradygaster/squad/.github/actions/squad-init`. Accept
+that name only for such a revision.
 
 > **These are referenced names, not prerequisites.** `gh aw add` lists the secrets
 > the workflows *reference* so you can approve that surface — it is not asking you
@@ -349,7 +432,8 @@ node .github/workflows/shared/squad-install-verifier.mjs \
 git diff --cached --stat
 unexpected_deletions="$(
   git diff --cached --diff-filter=D --name-only |
-    grep -vxF '.github/skills/agentic-workflows/SKILL.md' || true
+    grep -vxF -e '.github/skills/agentic-workflows/SKILL.md' \
+      -e '.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json' || true
 )"
 test -z "${unexpected_deletions}" || {
   printf 'STOP: unexpected staged deletions:\n%s\n' "${unexpected_deletions}" >&2
@@ -357,9 +441,11 @@ test -z "${unexpected_deletions}" || {
 }
 ```
 
-- The only permitted staged deletion is
+- The only permitted staged deletions are
   `.github/skills/agentic-workflows/SKILL.md`, when upgrading a repository that
-  previously committed gh-aw's mutable router.
+  previously committed gh-aw's mutable router, and
+  `.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json`, when moving
+  an existing installation off the legacy `bradygaster/squad/workflows` identity.
 - **STOP** if the staged diff shows any other **unexpected deletions**, **unexpected secrets**,
   edits to **unrelated files**, or committed **log/diagnostic output**. Re-scope with
   explicit `git add -- <path>` — never `git add .`, `git add -A`, or `git commit -a`.
@@ -498,7 +584,20 @@ git switch -c chore/squad-gh-aw-bootstrap
   echo "STOP: SQUAD_SHA must be an explicit, maintainer-approved 40-character lowercase hex commit SHA." >&2
   exit 1
 }
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
+  "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
+  --jq '.package')" || squad_package=""
+test "${squad_package}" = "github/squad/workflows" || {
+  if [ -z "${squad_package}" ]; then
+    echo "STOP: cannot read workflows/squad-workflows.manifest.json from github/squad at ${SQUAD_SHA}." >&2
+    echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
+  else
+    echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
+    echo "Install a revision that declares bradygaster/squad/workflows under that identity, or ask the Squad maintainers for a newer revision." >&2
+  fi
+  exit 1
+}
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 
 # Safe-update report shows ONLY the two documented secrets + squad-init → approve once
@@ -566,7 +665,9 @@ gh pr merge --squash                # auto-merge before human review. NEVER.
   `.github/skills/agentic-workflows/SKILL.md`; keep the exact Squad-owned
   `.github/skills/gh-aw-enlistment/SKILL.md`.
 - ❌ **Approving unknown safe updates.** Approve ONLY `SQUAD_GITHUB_APP_PRIVATE_KEY`,
-  `SQUAD_GITHUB_TOKEN`, and `bradygaster/squad/.github/actions/squad-init`. Anything
+  `SQUAD_GITHUB_TOKEN`, and `github/squad/.github/actions/squad-init` (reported
+  as `bradygaster/squad/.github/actions/squad-init` only at a revision whose
+  manifest declares `bradygaster/squad/workflows`). Anything
   else is a STOP.
 - ❌ **Treating `--approve` as the final compile.** Always finish with a plain
   `gh aw compile --strict` (no `--approve`).

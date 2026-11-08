@@ -4,8 +4,20 @@ This nested `gh-aw` package installs the complete Squad workflow bundle from one
 immutable commit:
 
 ```bash
-gh aw add bradygaster/squad/workflows@<40-character-commit-sha>
+gh aw add github/squad/workflows@<40-character-commit-sha>
 ```
+
+`github/squad/workflows` verifies only at Squad revisions whose
+`workflows/squad-workflows.manifest.json` declares
+`"package": "github/squad/workflows"`. Earlier revisions, including ones
+committed after the repository moved to `github/squad`, declare and verify only
+the legacy identity `bradygaster/squad/workflows`: install an older approved
+revision under that identity, or ask the maintainers for a newer revision.
+Revisions that declare `github/squad/workflows` still verify legacy
+installations. When moving an existing installation to the new identity,
+reinstall with `--force` and delete the superseded
+`.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json` record that
+gh-aw leaves behind.
 
 The package contains exactly eight workflows, seventeen runtime resources, and
 the `gh-aw-enlistment` skill. After installation, follow the enlistment skill to

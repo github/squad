@@ -117,7 +117,7 @@ describe('Squad standalone activation latest-release default', () => {
 
     expect(install, 'workflows/shared/squad.md must retain the standalone install step').toBeDefined();
     expect(install).toContain(
-      `uses: bradygaster/squad/.github/actions/squad-init@${revision}`,
+      `uses: github/squad/.github/actions/squad-init@${revision}`,
     );
     expect(install).toContain("skip-init: 'true'");
     expect(install, 'workflows/shared/squad.md must use the action default, not a version input')
@@ -131,7 +131,7 @@ describe('Squad standalone activation latest-release default', () => {
   });
 
   it('binds the exact independently retrieved action and installer to the activation pin', () => {
-    expect(approved.repository).toBe('bradygaster/squad');
+    expect(approved.repository).toBe('github/squad');
     expect(approved.revision).toBe(revision);
     const digests = {
       [actionPath]: 'c759c5425c710db59a1a33f4a59f53117a2f2e25c1f0df4e41f27507afd82aa8',

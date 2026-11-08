@@ -7,11 +7,15 @@ import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 import {
   CONTRACT_DESTINATION,
+  LEGACY_OWNERSHIP_DESTINATIONS,
+  LEGACY_PACKAGE_NAMES,
   OWNERSHIP_DESTINATION,
+  PACKAGE_NAME,
   UNOWNED_MUTABLE_ROUTER_SKILL,
   WORKFLOW_NAMES,
   materializeRuntime,
   compileWithPinnedActions,
+  packageOwnershipDestination,
   verifyInstall,
   verifyStagedInstall,
 } from '../workflows/shared/squad-install-verifier.mjs';
@@ -23,6 +27,8 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 const revision = 'a'.repeat(40);
+const [LEGACY_PACKAGE_NAME] = LEGACY_PACKAGE_NAMES;
+const [LEGACY_OWNERSHIP] = LEGACY_OWNERSHIP_DESTINATIONS;
 const roots: string[] = [];
 const verifier = resolve('workflows/shared/squad-install-verifier.mjs');
 
@@ -35,14 +41,14 @@ function write(root: string, path: string, content: string | Buffer): void {
   writeFileSync(join(root, path), content);
 }
 
-function consumer(): string {
+function consumer(packageName: string = PACKAGE_NAME): string {
   const root = mkdtempSync(join(tmpdir(), 'squad-install-staging-'));
   roots.push(root);
   git(root, 'init', '--quiet');
   git(root, 'config', 'core.autocrlf', 'false');
-  const fixture = createFirstInstallFixture(revision, 'package');
+  const fixture = createFirstInstallFixture(revision, 'package', packageName);
   for (const [path, content] of fixture.consumerFiles) write(root, path, content);
-  write(root, OWNERSHIP_DESTINATION, `${JSON.stringify(fixture.provenance, null, 2)}\n`);
+  write(root, packageOwnershipDestination(packageName), `${JSON.stringify(fixture.provenance, null, 2)}\n`);
   write(root, '.gitattributes', '* -text\n');
   write(root, '.gitignore', 'packages/\nlogs/\n*.local\n');
   write(root, '.github/aw/packages/unrelated.json', '{"private":true}\n');
@@ -141,10 +147,11 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(verifyStagedInstall(root, { expectedRevision: revision, stageOwnership: true }).failures).toEqual([]);
     const queries = spawn.mock.calls.filter(([command, args]) => command === 'git' && args?.[0] === 'ls-tree');
     expect(queries).toHaveLength(1);
-    expect(queries[0][1]).toEqual([
-      'ls-tree', '-z', expect.any(String), '--', ...new Set(required),
-      '.github/workflows/aw.json', UNOWNED_MUTABLE_ROUTER_SKILL,
-    ]);
+    expect(queries[0][1], `ls-tree must stay bounded to exact paths, including superseded ${LEGACY_OWNERSHIP}`)
+      .toEqual([
+        'ls-tree', '-z', expect.any(String), '--', ...new Set(required),
+        '.github/workflows/aw.json', UNOWNED_MUTABLE_ROUTER_SKILL, ...LEGACY_OWNERSHIP_DESTINATIONS,
+      ]);
     const unrelatedObject = git(root, 'rev-parse', `HEAD:${unrelated}/ordinary-file-00000.txt`).trim();
     const blobReads = spawn.mock.calls.filter(([command, args]) => command === 'git' && args?.[0] === 'cat-file');
     expect(blobReads).toHaveLength(new Set(required).size);
@@ -225,9 +232,9 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(rejected.stderr).toContain(
       `Unowned mutable gh-aw router skill must be removed: ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
     );
-    expect(rejected.stderr).toContain([
-      'Safe recovery:',
-      `  gh aw add bradygaster/squad/workflows@${revision} --force`,
+    expect(rejected.stderr, `recovery must also delete ${LEGACY_OWNERSHIP}`).toContain([
+      `  gh aw add github/squad/workflows@${revision} --force`,
+      '  rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json',
       `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
       '  gh aw compile --strict',
       '  node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
@@ -269,6 +276,81 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
       'Installed digest mismatch for .github/skills/gh-aw-enlistment/SKILL.md',
     );
   });
+
+  it('force-stages a legacy-identity install at its own native ownership path', () => {
+    const root = consumer(LEGACY_PACKAGE_NAME);
+    expect(stagedPaths(root)).not.toContain(LEGACY_OWNERSHIP);
+    const result = verifyStagedInstall(root, { expectedRevision: revision, stageOwnership: true });
+    expect(result.failures, `legacy record ${LEGACY_OWNERSHIP} must stage and verify`).toEqual([]);
+    expect(result.packageName).toBe(LEGACY_PACKAGE_NAME);
+    expect(stagedPaths(root)).toContain(LEGACY_OWNERSHIP);
+    expect(stagedPaths(root)).not.toContain(OWNERSHIP_DESTINATION);
+  }, 120_000);
+
+  it('rejects a superseded legacy ownership record left in the staged tree after migrating', () => {
+    const root = consumer();
+    // The legacy install committed its record; reinstalling as github/squad/workflows leaves it.
+    write(root, LEGACY_OWNERSHIP, readFileSync(join(root, OWNERSHIP_DESTINATION), 'utf8')
+      .replaceAll(PACKAGE_NAME, LEGACY_PACKAGE_NAME));
+    git(root, 'add', '--force', '--', LEGACY_OWNERSHIP, OWNERSHIP_DESTINATION);
+    git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'legacy and migrated records');
+    expect(
+      verifyInstall(root).failures.join('\n'),
+      `${OWNERSHIP_DESTINATION} and ${LEGACY_OWNERSHIP} both present`,
+    ).toContain('Expected exactly one Squad package ownership record; found 2');
+
+    rmSync(join(root, LEGACY_OWNERSHIP));
+    expect(verifyInstall(root).failures).toEqual([]);
+    expect(
+      verifyStagedInstall(root, { stageOwnership: true }).failures.join('\n'),
+      `index still holds deleted ${LEGACY_OWNERSHIP}`,
+    ).toContain(
+      `Superseded Squad package ownership record remains in staged tree: ${LEGACY_OWNERSHIP}`,
+    );
+
+    git(root, 'add', '--', '.github/aw/');
+    expect(verifyStagedInstall(root, { stageOwnership: true }).failures).toEqual([]);
+    expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(LEGACY_OWNERSHIP);
+  }, 120_000);
+
+  it('moves a legacy-owned install with a staged canonical record forward instead of deleting it', () => {
+    const root = consumer(LEGACY_PACKAGE_NAME);
+    // The canonical record was committed earlier, then removed from the working tree.
+    write(root, OWNERSHIP_DESTINATION, readFileSync(join(root, LEGACY_OWNERSHIP), 'utf8')
+      .replaceAll(LEGACY_PACKAGE_NAME, PACKAGE_NAME));
+    git(root, 'add', '--force', '--', LEGACY_OWNERSHIP, OWNERSHIP_DESTINATION);
+    git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'canonical and legacy records');
+    rmSync(join(root, OWNERSHIP_DESTINATION));
+    expect(verifyInstall(root).failures).toEqual([]);
+    const failure = verifyStagedInstall(root, { stageOwnership: true }).failures.join('\n');
+    const state = `${OWNERSHIP_DESTINATION} still staged in a ${LEGACY_PACKAGE_NAME} install`;
+    expect(failure, state).toContain(
+      `Squad package ownership record ${OWNERSHIP_DESTINATION} (${PACKAGE_NAME}) remains in the staged tree `
+      + `of this ${LEGACY_PACKAGE_NAME} installation; do not delete it.`,
+    );
+    expect(failure, state).toContain(
+      `Reinstall with gh aw add ${PACKAGE_NAME}@${revision} --force, delete ${LEGACY_OWNERSHIP}, and stage both changes`,
+    );
+    expect(failure, state).not.toContain('delete it and stage the deletion');
+  }, 120_000);
+
+  it('prints a non-fatal legacy-identity notice only after a legacy install verifies', () => {
+    const args = [verifier, '--verify-install', '--source-revision', revision];
+    const legacy = spawnSync(process.execPath, args, { cwd: consumer(LEGACY_PACKAGE_NAME), encoding: 'utf8' });
+    expect(legacy.status, legacy.stderr).toBe(0);
+    expect(legacy.stdout).toContain(`Squad gh-aw installation verified at ${revision}.`);
+    expect(legacy.stderr, `a ${LEGACY_PACKAGE_NAME} install must print the move notice`).toContain([
+      `Notice: verified under the legacy ${LEGACY_PACKAGE_NAME} package identity, which remains supported.`,
+      `To move to ${PACKAGE_NAME}, follow the gh-aw guide's Upgrading steps, starting with:`,
+      `  gh aw add ${PACKAGE_NAME}@${revision} --force`,
+      `  rm -f ${LEGACY_OWNERSHIP}`,
+    ].join('\n'));
+    const canonical = spawnSync(process.execPath, args, { cwd: consumer(), encoding: 'utf8' });
+    expect(canonical.status, canonical.stderr).toBe(0);
+    expect(canonical.stderr, `a ${PACKAGE_NAME} install must not print the legacy notice`).not.toContain('Notice:');
+  }, 120_000);
 
   it('fails clearly when Git cannot force-stage the required ignored metadata', () => {
     const root = consumer();

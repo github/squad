@@ -19,6 +19,13 @@ import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSkillFile } from '@bradygaster/squad-sdk/skills';
+import {
+  LEGACY_OWNERSHIP_DESTINATIONS,
+  LEGACY_PACKAGE_NAMES,
+  OWNERSHIP_DESTINATION,
+  PACKAGE_NAME,
+  UNOWNED_MUTABLE_ROUTER_SKILL,
+} from '../workflows/shared/squad-install-verifier.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -34,6 +41,84 @@ const MIRRORS = [
   `packages/squad-cli/templates/skills/${SKILL_ID}/SKILL.md`,
   `packages/squad-sdk/templates/skills/${SKILL_ID}/SKILL.md`,
 ] as const;
+
+// Public install commands are bound to the verifier's canonical package identity.
+const INSTALL_COMMAND = `gh aw add "${PACKAGE_NAME}@\${SQUAD_SHA}"`;
+const [LEGACY_PACKAGE_NAME] = LEGACY_PACKAGE_NAMES;
+const [LEGACY_OWNERSHIP] = LEGACY_OWNERSHIP_DESTINATIONS;
+const SQUAD_INIT_ACTION = `${PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
+const DELETION_FILTER = [
+  `    grep -vxF -e '${UNOWNED_MUTABLE_ROUTER_SKILL}' \\`,
+  `      -e '${LEGACY_OWNERSHIP}' || true`,
+].join('\n');
+
+function extractDeletionGate(content: string): string {
+  const start = content.indexOf('unexpected_deletions="$(');
+  const end = content.indexOf('\n}', content.indexOf('test -z "${unexpected_deletions}"', start));
+  expect(start, 'staged-deletion gate must exist').toBeGreaterThan(-1);
+  expect(end, 'staged-deletion gate must end with its STOP block').toBeGreaterThan(start);
+  return content.slice(start, end + 2);
+}
+
+function runDeletionGate(gate: string, deletions: readonly string[]) {
+  const script = `
+set -euo pipefail
+git() { printf '%s' "$STAGED_DELETIONS"; }
+${gate}
+`;
+  return spawnSync('bash', ['-c', script], {
+    encoding: 'utf8',
+    env: { ...process.env, STAGED_DELETIONS: deletions.map(path => `${path}\n`).join('') },
+  });
+}
+
+const IDENTITY_GATE_START = '# squad-package-identity-start';
+const IDENTITY_GATE_END = '# squad-package-identity-end';
+const IDENTITY_SHA = 'c'.repeat(40);
+const LEGACY_INSTALL_PREFIX = `gh aw add "${LEGACY_PACKAGE_NAME}@`;
+const MANIFEST_RULE = `\`${PACKAGE_NAME}\` verifies only at Squad revisions whose `
+  + `\`workflows/squad-workflows.manifest.json\` declares \`"package": "${PACKAGE_NAME}"\``;
+const IDENTITY_LEGACY_HINT = `Install a revision that declares ${LEGACY_PACKAGE_NAME} under that identity, `
+  + 'or ask the Squad maintainers for a newer revision.';
+const IDENTITY_UNREADABLE_STOP = 'STOP: cannot read workflows/squad-workflows.manifest.json from github/squad '
+  + `at ${IDENTITY_SHA}.`;
+const IDENTITY_UNREADABLE_HINT = 'Check gh auth status --hostname github.com and network access, '
+  + 'and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry.';
+
+function extractIdentityGate(content: string): string {
+  const start = content.indexOf(IDENTITY_GATE_START);
+  const end = content.indexOf(IDENTITY_GATE_END);
+  expect(start, `${IDENTITY_GATE_START} must exist`).toBeGreaterThan(-1);
+  expect(content.indexOf(IDENTITY_GATE_START, start + 1), 'one marked identity gate per document').toBe(-1);
+  expect(end, `${IDENTITY_GATE_END} must follow its start marker`).toBeGreaterThan(start);
+  return content.slice(start + IDENTITY_GATE_START.length + 1, end);
+}
+
+function runIdentityGate(gate: string, response: { manifestPackage?: string; fail?: boolean }) {
+  const script = `
+set -euo pipefail
+exec 3>&2
+gh() {
+  printf 'CALL %s\\n' "$*" >&3
+  if [ "$GH_FAIL" = "1" ]; then
+    printf '{"message":"No commit found for the ref"}\\n'
+    return 1
+  fi
+  printf '%s\\n' "$GH_PACKAGE"
+}
+SQUAD_SHA="${IDENTITY_SHA}"
+${gate}
+echo "IDENTITY GATE PASSED"
+`;
+  return spawnSync('bash', ['-c', script], {
+    encoding: 'utf8',
+    env: { ...process.env, GH_PACKAGE: response.manifestPackage ?? '', GH_FAIL: response.fail ? '1' : '0' },
+  });
+}
+
+function fencedBlocks(text: string): string[] {
+  return [...text.matchAll(/^```[^\n]*\n([\s\S]*?)^```$/gm)].map(match => match[1]);
+}
 
 function readRaw(rel: string): string {
   return readFileSync(resolve(ROOT, rel), 'utf-8');
@@ -236,7 +321,7 @@ describe('gh-aw-enlistment skill', () => {
         [
           'SQUAD_GITHUB_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_TOKEN',
-          'bradygaster/squad/.github/actions/squad-init',
+          SQUAD_INIT_ACTION,
         ].sort()
       );
 
@@ -249,7 +334,11 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain(': "${SQUAD_SHA:?STOP: set SQUAD_SHA to an explicit, maintainer-approved 40-character Squad commit SHA before installing.}"');
       expect(content).not.toContain('commits/dev');
       expect(content).toContain('^' + '[0-9a-f]{40}' + '$');
-      expect(content).toContain('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"');
+      expect(content, `skill must install ${PACKAGE_NAME}`).toContain(INSTALL_COMMAND);
+      for (const block of fencedBlocks(content)) {
+        expect(block, `no executable block may install the legacy ${LEGACY_PACKAGE_NAME} identity`)
+          .not.toContain(LEGACY_INSTALL_PREFIX);
+      }
       expect(content).toContain('exactly eight workflows, seventeen runtime resources, and one');
       for (const workflow of [
         'squad.md',
@@ -273,14 +362,149 @@ describe('gh-aw-enlistment skill', () => {
     });
 
     it('removes only gh-aw\'s mutable router and preserves the exact Squad skill', () => {
-      expect(content.match(/rm -f \.github\/skills\/agentic-workflows\/SKILL\.md/g))
-        .toHaveLength(2);
+      expect(content.match(/rm -f \.github\/skills\/agentic-workflows\/SKILL\.md/g),
+        'install, upgrade and correct-example blocks each remove the router').toHaveLength(3);
       expect(content).toContain('not part of the Squad package');
       expect(content).toContain('Do not adopt or vendor the rest');
       expect(content).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
-      expect(content).toContain(
-        "grep -vxF '.github/skills/agentic-workflows/SKILL.md' || true",
+      expect(content).toContain(DELETION_FILTER);
+    });
+
+    it.each([
+      ['no deletions', [], 0],
+      ['the mutable router', [UNOWNED_MUTABLE_ROUTER_SKILL], 0],
+      ['the superseded legacy ownership record', [LEGACY_OWNERSHIP], 0],
+      ['the router and the legacy record together', [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP], 0],
+      ['the canonical ownership record', [OWNERSHIP_DESTINATION], 1],
+      ['an installed workflow', ['.github/workflows/squad.md'], 1],
+      ['a legacy-record prefix match', [`${LEGACY_OWNERSHIP}.bak`], 1],
+    ] as const)('the staged-deletion gate handles %s', (label, deletions, status) => {
+      const result = runDeletionGate(extractDeletionGate(content), deletions);
+      expect(result.status, `${label} (${deletions.join(', ')}): ${result.stderr}`).toBe(status);
+      if (status === 1) {
+        expect(result.stderr).toContain(`STOP: unexpected staged deletions:\n${deletions.join('\n')}`);
+      }
+    });
+
+    it('documents the legacy-identity migration that the verifier enforces', () => {
+      const flat = content.replace(/\s+/g, ' ');
+      const why = `skill must document migrating off ${LEGACY_PACKAGE_NAME} and deleting ${LEGACY_OWNERSHIP}`;
+      expect(flat, why).toContain(
+        'Earlier revisions, including ones committed after the repository moved to `github/squad`, '
+        + `declare and verify only \`${LEGACY_PACKAGE_NAME}\``,
       );
+      expect(flat, why).toContain(
+        `\`${LEGACY_OWNERSHIP}\` after the forced reinstall, so the block deletes exactly that file before verifying`,
+      );
+      expect(flat, why).toContain('the verifier fails closed while both ownership records exist');
+      expect(flat, 'skill must name the one-time squad-init safe-update change').toContain(
+        `action \`${SQUAD_INIT_ACTION}\` added and \`bradygaster/squad/.github/actions/squad-init\` removed.`,
+      );
+      expect(flat, why).toContain('**STOP** on any other new secret or action.');
+      expect(flat, 'skill must say how to stay on a legacy-only revision').toContain(
+        `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
+        + 'that ownership record is the only one such an installation has.',
+      );
+      const upgrade = fencedBlocks(content).find(block => block.includes(`${INSTALL_COMMAND} --force`));
+      expect(upgrade, 'skill must include an executable upgrade block').toBeDefined();
+      const steps = [
+        extractIdentityGate(content),
+        `${INSTALL_COMMAND} --force`,
+        `rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
+        `rm -f ${LEGACY_OWNERSHIP}`,
+        'squad-install-verifier.mjs --materialize-runtime',
+        'gh aw compile --strict',
+        '--verify-install',
+      ];
+      const order = steps.map(step => upgrade!.indexOf(step));
+      expect(order.every(index => index > -1), `upgrade block step positions: ${order.join(', ')}`).toBe(true);
+      expect(order, 'upgrade block steps must run in order').toEqual([...order].sort((a, b) => a - b));
+      const stepNumber = (title: string) => {
+        const heading = content.split('\n').find(line => line.startsWith('### ') && line.endsWith(title));
+        expect(heading, `skill must keep the step "${title}"`).toBeDefined();
+        return /^### (\d+)\. /.exec(heading!)![1];
+      };
+      const compileStep = stepNumber('Always run the final strict compile WITHOUT `--approve`');
+      const stageStep = stepNumber('Inspect generated files, then stage only the documented surfaces');
+      const compileSection = content.slice(
+        content.indexOf(`### ${compileStep}. `),
+        content.indexOf(`### ${Number(compileStep) + 1}. `),
+      );
+      expect(compileSection.replace(/\s+/g, ' '), `step ${compileStep} must hold the two-warning check`)
+        .toContain('require exactly two warnings');
+      expect(flat, 'the upgrade block must hand off to the warning check and staging steps by their current numbers')
+        .toContain(`Apply step ${compileStep}'s two-warning check to the compile output above, `
+          + `then stage and verify as in step ${stageStep}.`);
+    });
+
+    it('gates installation on the revision declaring the canonical package identity', () => {
+      const gate = extractIdentityGate(content);
+      expect(content.indexOf(IDENTITY_GATE_END), 'the identity gate must precede the install command')
+        .toBeLessThan(content.indexOf(INSTALL_COMMAND));
+      expect(content.split(gate).length - 1, 'install, upgrade and correct-example blocks must run the same gate')
+        .toBe(3);
+      const flat = content.replace(/\s+/g, ' ');
+      expect(flat, 'skill must state the manifest cutoff').toContain(MANIFEST_RULE);
+      expect(flat, 'skill must route older revisions').toContain(
+        `An older maintainer-approved revision declares \`${LEGACY_PACKAGE_NAME}\`: install it under that identity, `
+        + 'because its verifier accepts no other, or ask the Squad maintainers for a newer revision.',
+      );
+    });
+
+    it.each([
+      ['a revision declaring the canonical package', { manifestPackage: PACKAGE_NAME }, 'pass', ''],
+      ['a revision declaring the legacy package', { manifestPackage: LEGACY_PACKAGE_NAME }, 'mismatch',
+        LEGACY_PACKAGE_NAME],
+      ['a case-variant package', { manifestPackage: 'GitHub/Squad/workflows' }, 'mismatch', 'GitHub/Squad/workflows'],
+      ['an unreadable manifest', { fail: true }, 'unreadable', ''],
+    ] as const)('the identity gate handles %s', (label, response, outcome, found) => {
+      const result = runIdentityGate(extractIdentityGate(content), response);
+      expect(result.status, `${label}: ${result.stderr}`).toBe(outcome === 'pass' ? 0 : 1);
+      expect(result.stderr, `${label}: the gate must read the manifest at SQUAD_SHA on github.com`).toContain(
+        'CALL api --hostname github.com -H Accept: application/vnd.github.raw+json '
+        + `repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${IDENTITY_SHA} --jq .package`,
+      );
+      if (outcome === 'pass') {
+        expect(result.stdout, label).toContain('IDENTITY GATE PASSED');
+        return;
+      }
+      expect(result.stdout, `${label} must stop before installing`).not.toContain('IDENTITY GATE PASSED');
+      if (outcome === 'unreadable') {
+        expect(result.stderr, `${label}: the stop must say the manifest could not be read`)
+          .toContain(IDENTITY_UNREADABLE_STOP);
+        expect(result.stderr, `${label}: the stop must point at gh auth, network access and SQUAD_SHA`)
+          .toContain(IDENTITY_UNREADABLE_HINT);
+        expect(result.stderr, `${label}: an unreadable manifest must not suggest the legacy identity`)
+          .not.toContain(LEGACY_PACKAGE_NAME);
+        return;
+      }
+      expect(result.stderr, label).toContain(
+        `STOP: Squad ${IDENTITY_SHA} does not declare the ${PACKAGE_NAME} package (found '${found}').`,
+      );
+      expect(result.stderr, `${label}: a readable manifest routes to the legacy identity`)
+        .toContain(IDENTITY_LEGACY_HINT);
+      expect(result.stderr, `${label}: a readable manifest is not an access problem`)
+        .not.toContain(IDENTITY_UNREADABLE_HINT);
+    });
+
+    it('names the legacy squad-init action only for revisions that declare the legacy identity', () => {
+      const flat = content.replace(/\s+/g, ' ');
+      expect(flat).toContain(
+        `At a revision whose manifest declares \`${LEGACY_PACKAGE_NAME}\`, the same action is reported as `
+        + '`bradygaster/squad/.github/actions/squad-init`. Accept that name only for such a revision.',
+      );
+    });
+
+    it('dates the identity cutoff by the manifest, not by the repository move', () => {
+      for (const [path, text] of [
+        [CANONICAL, content],
+        [GUIDE, readLF(GUIDE)],
+        ['workflows/README.md', readLF('workflows/README.md')],
+        ['workflows/shared/squad-install-verifier.mjs', readLF('workflows/shared/squad-install-verifier.mjs')],
+      ] as const) {
+        expect(text.replace(/\s+/g, ' '), `${path} must not date the identity cutoff by the move`)
+          .not.toMatch(/before (?:the (?:repository )?move|Squad moved|the repository moved)|pre-move/i);
+      }
     });
 
     it('requires a final strict compile without --approve', () => {
@@ -318,7 +542,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('STOP before branch creation or `gh aw add`');
       expect(content.indexOf("issues_enabled=")).toBeLessThan(content.indexOf('git switch -c'));
       expect(content.indexOf("issues_enabled=")).toBeLessThan(
-        content.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        content.indexOf(INSTALL_COMMAND),
       );
     });
 
@@ -429,7 +653,7 @@ describe('gh-aw-enlistment skill', () => {
         guide.indexOf('git switch -c chore/squad-gh-aw-bootstrap'),
       );
       expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(
-        guide.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        guide.indexOf(INSTALL_COMMAND),
       );
     });
 
@@ -442,12 +666,72 @@ describe('gh-aw-enlistment skill', () => {
         .toHaveLength(2);
     });
 
-    it('removes the mutable gh-aw router before verification and permits only that staged deletion', () => {
+    it('removes the mutable gh-aw router before verification and permits only the documented staged deletions', () => {
       expect(guide.match(/rm -f \.github\/skills\/agentic-workflows\/SKILL\.md/g))
         .toHaveLength(3);
-      expect(guide).toContain('The exact router deletion above is the only permitted staged deletion');
+      const flatGuide = guide.replace(/\s+/g, ' ');
+      expect(flatGuide).toContain(
+        'The only permitted staged deletions are the exact router deletion above',
+      );
+      expect(flatGuide).toContain(`the superseded \`${LEGACY_OWNERSHIP}\` ownership record`);
+      expect(flatGuide).toContain('Any other deletion is a hard stop.');
+      expect(guide.split(DELETION_FILTER).length - 1, 'both guide staging gates must use the skill filter')
+        .toBe(2);
       expect(guide).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
       expect(agentGuide).toContain('rm -f .github/skills/agentic-workflows/SKILL.md');
+    });
+
+    it('advertises only the canonical package identity on every public install surface', () => {
+      for (const [path, text] of [
+        [GUIDE, guide],
+        [AGENT_GUIDE, agentGuide],
+        ['README.md', readLF('README.md')],
+      ] as const) {
+        expect(text, `${path} must install ${PACKAGE_NAME}`).toContain(INSTALL_COMMAND);
+        for (const block of fencedBlocks(text)) {
+          expect(block, `${path}: no executable block may install the legacy ${LEGACY_PACKAGE_NAME} identity`)
+            .not.toContain(LEGACY_INSTALL_PREFIX);
+        }
+      }
+      expect(guide).toContain(`# (${SQUAD_INIT_ACTION}) and nothing else. STOP and`);
+      expect(guide).toContain(`- Action: \`${SQUAD_INIT_ACTION}\``);
+      expect(guide.replace(/\s+/g, ' ')).toContain(
+        `At a revision whose manifest declares \`${LEGACY_PACKAGE_NAME}\`, the same action is reported as `
+        + '`bradygaster/squad/.github/actions/squad-init`.',
+      );
+      expect(guide).toContain(`\`${PACKAGE_NAME}@SHA\` for direct package includes`);
+      expect(guide).toContain(`\`${PACKAGE_NAME}/package/<workflow>.md@SHA\` when installing dispatched`);
+    });
+
+    it('runs the skill\'s identity gate before every guide and README install command', () => {
+      const gate = extractIdentityGate(readLF(CANONICAL));
+      expect(extractIdentityGate(guide), 'the guide quick-start gate must match the skill').toBe(gate);
+      const readme = readLF('README.md');
+      for (const [path, text, copies] of [[GUIDE, guide, 3], ['README.md', readme, 1]] as const) {
+        expect(text.split(gate).length - 1, `${path} identity gate copies`).toBe(copies);
+        const installs = fencedBlocks(text).filter(block => block.includes(INSTALL_COMMAND));
+        expect(installs, `${path} install blocks`).toHaveLength(copies);
+        for (const block of installs) {
+          expect(block.indexOf(gate), `${path}: every install block must run the identity gate`).toBeGreaterThan(-1);
+          expect(block.indexOf(gate), `${path}: the identity gate must precede gh aw add`)
+            .toBeLessThan(block.indexOf(INSTALL_COMMAND));
+        }
+      }
+    });
+
+    it('states which revisions verify the canonical identity on every install surface', () => {
+      for (const [path, text] of [
+        [GUIDE, guide],
+        [AGENT_GUIDE, agentGuide],
+        ['README.md', readLF('README.md')],
+        ['workflows/README.md', readLF('workflows/README.md')],
+      ] as const) {
+        const flat = text.replace(/\s+/g, ' ');
+        expect(flat, `${path} must state the manifest cutoff`).toContain(MANIFEST_RULE);
+        expect(flat, `${path} must route older revisions to the legacy identity`)
+          .toMatch(/older (?:maintainer-)?approved revision (?:as|under that identity|declares)/);
+        expect(flat, `${path} must offer a newer revision`).toMatch(/ask the (?:Squad )?maintainers for a newer revision/);
+      }
     });
 
     it('requires agents to execute the complete quick start through PR creation', () => {
@@ -478,7 +762,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(guide).toContain('do not continue to `gh aw add`');
       expect(issuesCheck).toBeLessThan(guide.indexOf('git switch -c chore/squad-gh-aw-bootstrap'));
       expect(issuesCheck).toBeLessThan(
-        guide.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        guide.indexOf(INSTALL_COMMAND),
       );
       expect(agentGuide).toContain('verifies that GitHub Issues are enabled');
       expect(agentGuide).toContain('bootstrap creates a research/proposals issue');
@@ -489,7 +773,7 @@ describe('gh-aw-enlistment skill', () => {
       const readmeInstall = readme.slice(readme.indexOf('### Install'));
       expect(readmeInstall.indexOf("issues_enabled=")).toBeGreaterThan(-1);
       expect(readmeInstall.indexOf("issues_enabled=")).toBeLessThan(
-        readmeInstall.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"'),
+        readmeInstall.indexOf(INSTALL_COMMAND),
       );
       expect(readmeInstall).toContain(
         'test "$(gh api "repos/${owner_repo}" --jq \'.has_issues\')" = "true" || {',
@@ -527,21 +811,36 @@ describe('gh-aw-enlistment skill', () => {
     });
 
     it('makes public-guide package verification fail fast and coherent', () => {
-      expect(guide).toContain('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"');
+      expect(guide).toContain(INSTALL_COMMAND);
       expect(guide).toContain('squad-install-verifier.mjs --materialize-runtime');
       expect(guide).toContain('--verify-install');
       expect(guide).toContain('--source-revision "${SQUAD_SHA}"');
       expect(guide).toContain('--strict-compile');
       expect(guide).toContain('package ownership metadata');
       const upgrade = guide.slice(guide.indexOf('## Upgrading'));
-      const add = upgrade.indexOf('gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}" --force');
+      const add = upgrade.indexOf(`${INSTALL_COMMAND} --force`);
       const cleanup = upgrade.indexOf('rm -f .github/skills/agentic-workflows/SKILL.md');
+      const legacyCleanup = upgrade.indexOf(`rm -f ${LEGACY_OWNERSHIP}\n`);
       const compile = upgrade.indexOf('gh aw compile --strict');
       const verify = upgrade.indexOf('squad-install-verifier.mjs \\\n  --verify-install');
       expect(add).toBeGreaterThan(-1);
       expect(cleanup).toBeGreaterThan(add);
+      expect(legacyCleanup, `Upgrading must delete the superseded ${LEGACY_OWNERSHIP}`).toBeGreaterThan(add);
       expect(compile).toBeGreaterThan(cleanup);
+      expect(compile).toBeGreaterThan(legacyCleanup);
       expect(verify).toBeGreaterThan(compile);
+      const flatUpgrade = upgrade.replace(/\s+/g, ' ');
+      expect(flatUpgrade).toContain('the verifier fails closed while both records exist');
+      expect(flatUpgrade).toContain(
+        `action \`${SQUAD_INIT_ACTION}\` added and \`bradygaster/squad/.github/actions/squad-init\` removed.`,
+      );
+      const gate = extractIdentityGate(readLF(CANONICAL));
+      expect(upgrade.indexOf(gate), 'Upgrading must run the identity gate').toBeGreaterThan(-1);
+      expect(upgrade.indexOf(gate), 'Upgrading must check the identity before reinstalling').toBeLessThan(add);
+      expect(flatUpgrade, 'Upgrading must say how to stay on a legacy-only revision').toContain(
+        `with \`${LEGACY_INSTALL_PREFIX}\${SQUAD_SHA}" --force\`, and skip the second \`rm -f\`: `
+        + 'that ownership record is the only one such an installation has.',
+      );
     });
   });
 
