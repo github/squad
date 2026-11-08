@@ -35,6 +35,7 @@
 *.js text eol=lf
 *.cjs text eol=lf
 *.ps1 text eol=lf
+*.py text eol=lf
 
 # Deliberately NOT "*.ts text eol=lf": only 3 tracked .ts files carry a shebang,
 # but a blanket rule would renormalize 95 CRLF-storing .ts blobs in one commit.
