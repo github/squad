@@ -84,12 +84,16 @@ ghw api user --jq '.login'   # should show work username
 
 ## Repo-Specific Account Binding
 
-This repo (`bradygaster/squad`) is bound to the **bradygaster** (personal) account.
-All `gh` operations in this repo MUST use `ghp` / `gh-personal`.
+Pick the alias by which account can write to the repo, not by the repo's name. Squad itself lives at `github/squad`, which the `github` organization owns, so don't assume your personal account. Check once before the first write and use the alias that prints `true` (gh fills in `{owner}` and `{repo}` from the current checkout):
+```powershell
+ghp api 'repos/{owner}/{repo}' --jq '.permissions.push'
+ghw api 'repos/{owner}/{repo}' --jq '.permissions.push'
+```
+If neither prints `true`, neither account can push there; work from a fork.
 
 ## For Squad Agents
-At the TOP of any script touching GitHub, define:
+At the TOP of any script touching GitHub, define the aliases with the usernames the user confirmed in Step 2:
 ```powershell
-function gh-personal { gh auth switch --user bradygaster 2>$null | Out-Null; gh @args }
-function gh-work { gh auth switch --user bradyg_microsoft 2>$null | Out-Null; gh @args }
+function gh-personal { gh auth switch --user THEIR_PERSONAL_USERNAME 2>$null | Out-Null; gh @args }
+function gh-work { gh auth switch --user THEIR_WORK_USERNAME 2>$null | Out-Null; gh @args }
 ```
