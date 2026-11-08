@@ -420,8 +420,8 @@ describe('Squad PR Readiness keeps its Squad CI refresh and old inputs', () => {
 // #2420: a workflow-level group is joined by every workflow_run delivery before any
 // job's `if:` is evaluated. Keyed by head branch, it let skipped runs (fork and push
 // runs of Squad CI) cancel real refreshes, and let PRs from one branch to different
-// bases cancel each other. Only bound runs may join a group, one per PR.
-describe('Squad PR Readiness deduplicates only bound refreshes, per PR', () => {
+// bases cancel each other. Only bound runs may join a group, one per PR head.
+describe('Squad PR Readiness deduplicates only bound refreshes, per PR head', () => {
   const FILE = 'squad-pr-readiness.yml';
   const readiness = load(FILE);
   const CI = '.github/workflows/squad-ci.yml';
@@ -443,11 +443,11 @@ describe('Squad PR Readiness deduplicates only bound refreshes, per PR', () => {
     pull_requests: [],
     ...overrides,
   });
-  const bound = (pr: number, base: string) => ({
-    bound: 'true', pr_number: String(pr), head_sha: HEAD_SHA, base_ref: base, draft: 'false', labels: '[]',
+  const bound = (pr: number, base: string, head = HEAD_SHA) => ({
+    bound: 'true', pr_number: String(pr), head_sha: head, base_ref: base, draft: 'false', labels: '[]',
   });
 
-  it('sets no workflow-level group; only the bound posting job joins one, keyed by the PR number', () => {
+  it('sets no workflow-level group; only the bound posting job joins one, keyed by the PR number and head SHA', () => {
     const workflowGroup = readiness.concurrency && groupOf(readiness.concurrency);
     expect(readiness.concurrency, `${FILE} sets workflow-level group "${workflowGroup}"; every delivery joins it`)
       .toBeUndefined();
@@ -455,7 +455,10 @@ describe('Squad PR Readiness deduplicates only bound refreshes, per PR', () => {
       .filter(([, job]) => job.concurrency !== undefined)
       .map(([id, job]) => [id, job.concurrency]));
     expect(grouped, `${FILE} job-level concurrency groups: ${JSON.stringify(grouped)}`).toEqual({
-      readiness: { group: 'squad-pr-readiness-${{ needs.bind.outputs.pr_number }}', 'cancel-in-progress': true },
+      readiness: {
+        group: 'squad-pr-readiness-${{ needs.bind.outputs.pr_number }}-${{ needs.bind.outputs.head_sha }}',
+        'cancel-in-progress': true,
+      },
     });
     expect(readiness.jobs.readiness?.needs, `${FILE} job readiness must wait for job bind`).toBe('bind');
     expect(readiness.jobs.readiness?.if, `${FILE} job readiness must run only for a bound PR`)
@@ -491,7 +494,7 @@ describe('Squad PR Readiness deduplicates only bound refreshes, per PR', () => {
     expect(groups, `${FILE}: ${label} joined ${groups.map((group) => `"${group}"`).join(', ')}`).toEqual([]);
   });
 
-  it('runs for different PRs never share a group, and runs for one PR still do', () => {
+  it('runs for different PRs never share a group, and runs for one PR head still do', () => {
     // #7 and #8 share a head branch but target different bases; #9 is a fork PR; #10 is dev → main.
     const listed = { pull_requests: [{ number: 7 }, { number: 8 }] };
     const ciOf7 = delivery(CI, 'github/squad', 'feature', { ...listed, conclusion: 'failure' });
@@ -520,8 +523,34 @@ describe('Squad PR Readiness deduplicates only bound refreshes, per PR', () => {
       .filter(({ prs }) => prs.size > 1)
       .map(({ group, prs }) => `"${group}" is shared by ${[...prs].map((pr) => `#${pr}`).join(' and ')}`);
     expect(shared, `${FILE}: concurrency groups shared by different PRs: ${shared.join('; ')}`).toEqual([]);
-    expect(prsByGroup.size, `${FILE}: runs of one PR must share its group, so a newer refresh cancels an older one`)
+    expect(prsByGroup.size, `${FILE}: runs of one PR head must share its group, so a newer refresh cancels an older one`)
       .toBe(new Set(runs.map(([pr]) => pr)).size);
+  });
+
+  // GitHub cancels (cancel-in-progress) or replaces (while pending) only jobs in the same
+  // group. bind checks the head outside any group, so a delivery can bind head A and
+  // reach the posting job after head B's refresh started. In B's group it would cancel
+  // or replace that refresh, then skip as stale: B's checklist would never be posted.
+  it('a late run bound to an older head cannot cancel or replace the current head\'s refresh', () => {
+    const OLD = 'a'.repeat(40);
+    const NEW = 'b'.repeat(40);
+    const listed = { pull_requests: [{ number: 7 }] };
+    const groupFor = (label: string, path: string, head: string) => {
+      const workflowRun = delivery(path, 'github/squad', 'feature', { ...listed, head_sha: head });
+      const groups = joinedGroups(readiness, workflowRun, bound(7, 'dev', head));
+      expect(groups, `${FILE}: the ${label} must join exactly one group`).toHaveLength(1);
+      return groups[0];
+    };
+    const late = groupFor(`Squad CI run of #7 bound to ${OLD}`, CI, OLD);
+    const current = groupFor(`request run of #7 bound to ${NEW}`, REQUEST, NEW);
+    const currentCi = groupFor(`Squad CI run of #7 bound to ${NEW}`, CI, NEW);
+    // GitHub compares group names case-insensitively.
+    expect(
+      late.toLowerCase(),
+      `${FILE}: the late run bound to ${OLD} joins "${late}", the group of the refresh for current head ${NEW}`,
+    ).not.toBe(current.toLowerCase());
+    expect(currentCi.toLowerCase(), `${FILE}: refreshes of head ${NEW} must share one group, so the newer one wins`)
+      .toBe(current.toLowerCase());
   });
 });
 

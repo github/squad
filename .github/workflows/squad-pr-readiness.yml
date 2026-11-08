@@ -16,12 +16,16 @@ name: Squad PR Readiness
 # - Squad CI runs carry no claim, so only GitHub's own
 #   workflow_run.pull_requests (same-repository PRs) are bound, as before.
 #
-# Concurrency: only bound runs deduplicate, one group per PR. A workflow-level
-# group is joined by every delivery before any job's `if:` is evaluated, so a
-# skipped run (a fork or push run of Squad CI, a failed request) could cancel a
-# real refresh, and PRs from one head branch to different bases would share a
-# key. So `bind` joins no group, and `readiness` joins one keyed by the bound PR
-# number. It is skipped when nothing was bound.
+# Concurrency: only bound runs deduplicate, one group per PR head. A
+# workflow-level group is joined by every delivery before any job's `if:` is
+# evaluated, so a skipped run (a fork or push run of Squad CI, a failed request)
+# could cancel a real refresh, and PRs from one head branch to different bases
+# would share a key. So `bind` joins no group, and `readiness` joins one keyed
+# by the bound PR number and head SHA. It is skipped when nothing was bound.
+# `bind` checks the head outside any group, so a delivery can bind head A and
+# start `readiness` after head B's refresh started. Keyed by head, it cannot
+# cancel or replace B's refresh, and scripts/pr-readiness.mjs writes nothing
+# once the PR head is no longer A.
 on:
   workflow_run:
     workflows: ["Squad CI", "Squad PR Readiness Request"]
@@ -98,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
-      group: squad-pr-readiness-${{ needs.bind.outputs.pr_number }}
+      group: squad-pr-readiness-${{ needs.bind.outputs.pr_number }}-${{ needs.bind.outputs.head_sha }}
       cancel-in-progress: true
     steps:
       - name: Checkout readiness script (default branch only)

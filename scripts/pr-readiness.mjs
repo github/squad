@@ -434,15 +434,34 @@ export async function paginate(fetchFn, url, headers) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The bind job checks the head outside the posting job's concurrency group, so
+ * a delivery can bind head A and reach the posting job after head B was pushed
+ * and refreshed. Returns the line to log for such a stale snapshot, or null
+ * while the bound head is still the PR's head.
+ * @param {string} prNumber
+ * @param {string|undefined} boundSha — PR_HEAD_SHA, as the bind job bound it
+ * @param {string|undefined} liveSha — the PR's head SHA as the API returns it now
+ * @returns {string|null}
+ */
+function staleHeadMessage(prNumber, boundSha, liveSha) {
+  if (typeof liveSha === 'string' && liveSha !== '' && liveSha === boundSha) return null;
+  return `Skipping stale readiness snapshot for PR #${prNumber}: bound head ${boundSha} is not the live head ${liveSha}; nothing was written.`;
+}
+
+/**
  * Full PR readiness orchestrator.  Reads context from env vars, calls
  * GitHub API, runs all checks, and upserts the readiness comment.
+ *
+ * It writes only while the PR's head is still PR_HEAD_SHA: the head is compared
+ * when the PR is first read and again just before writing. A stale snapshot is
+ * logged and skipped (action `skipped`, no checks), and the script exits 0.
  *
  * Dependencies (`env` and `fetchFn`) are injectable for testing.
  *
  * @param {object} [opts]
  * @param {Record<string,string>} [opts.env] — defaults to process.env
  * @param {typeof globalThis.fetch} [opts.fetchFn] — defaults to global fetch
- * @returns {Promise<{ checks: Array<{name:string,pass:boolean,detail:string}>, action: string }>}
+ * @returns {Promise<{ checks: Array<{name:string,pass:boolean,detail:string}>, action: 'created'|'updated'|'skipped' }>}
  */
 export async function run({ env = process.env, fetchFn = globalThis.fetch } = {}) {
   const token    = env.GITHUB_TOKEN;
@@ -496,6 +515,16 @@ export async function run({ env = process.env, fetchFn = globalThis.fetch } = {}
     }
     break;
   }
+
+  // PR_HEAD_SHA is the bind job's snapshot, and a newer head may have been
+  // pushed and refreshed since. Stop before querying CI for a head the PR no
+  // longer has. (If this read failed, the check before writing decides.)
+  const isStale = (liveSha) => {
+    const message = staleHeadMessage(prNumber, prHeadSha, liveSha);
+    if (message) console.log(message);
+    return message !== null;
+  };
+  if (prData && isStale(prData.head?.sha)) return { checks: [], action: 'skipped' };
 
   // 2. Draft status — prefer API truth over env var (workflow_run can't provide it)
   const isDraft = prData?.draft ?? prDraft;
@@ -615,6 +644,14 @@ export async function run({ env = process.env, fetchFn = globalThis.fetch } = {}
   const existing = existingComments.find(
     (c) => c.body && c.body.includes(COMMENT_MARKER),
   );
+
+  // Read the head again just before writing: it may have moved while the checks ran.
+  const liveUrl = `${apiBase}/pulls/${prNumber}`;
+  const liveRes = await fetchFn(liveUrl, { headers: apiHeaders });
+  if (!liveRes.ok) {
+    throw new Error(`GitHub API ${liveRes.status}: ${liveUrl} (cannot confirm head ${prHeadSha}; nothing was written)`);
+  }
+  if (isStale((await liveRes.json())?.head?.sha)) return { checks: [], action: 'skipped' };
 
   let action;
   if (existing) {
