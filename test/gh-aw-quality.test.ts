@@ -1946,6 +1946,8 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
     expect(install, 'compiled squad.lock.yml must omit version to use the pinned action latest default')
       .not.toMatch(/^\s+version:/m);
     expect(install).toContain('skip-init: "true"');
+    expect(install, 'compiled squad.lock.yml must download releases from github/squad, not the pinned action default')
+      .toMatch(/^\s+repository: "?github\/squad"?$/m);
     expect(compiled, 'compiled squad.lock.yml must not contain the obsolete release resolver')
       .not.toContain('squad-release');
     expect(compiled).not.toContain('vars.SQUAD_CLI_VERSION');
@@ -4855,6 +4857,30 @@ describe('gh-aw: canonical package integrity contract', () => {
     }));
     expect(verifyInstall(root).failures.join('\n'), 'an unrelated identity gets no case hint')
       .not.toContain('exactly as typed');
+  });
+
+  it('rejects a case-variant ownership record left beside the exact record', () => {
+    // gh-aw names each record by a digest of the identity as typed, so reinstalling a
+    // GitHub/Squad/workflows install as github/squad/workflows leaves both records.
+    const variant = 'GitHub/Squad/workflows';
+    const variantPath = '.github/aw/packages/github-squad-workflows-'
+      + `${createHash('sha256').update(variant).digest('hex').slice(0, 12)}.json`;
+    const root = makeConsumer();
+    const record = JSON.parse(readText(join(root, OWNERSHIP_FIXTURE)));
+    writeFileSync(join(root, variantPath), `${JSON.stringify({
+      ...record, package: variant, source: `${variant}@${revisionA}`,
+    }, null, 2)}\n`);
+    const state = `${OWNERSHIP_FIXTURE} (${PACKAGE_NAME}) beside ${variantPath} (${variant})`;
+    const failure = verifyInstall(root, { expectedRevision: revisionA }).failures.join('\n');
+    expect(failure, `${state} must fail verification`).toContain(
+      `Expected exactly one Squad package ownership record; found ${OWNERSHIP_FIXTURE} (${PACKAGE_NAME}) `
+      + `and case-variant record ${variantPath} (${variant}), so more than one record claims the installed files.`,
+    );
+    expect(failure, `${state} must name the record to delete`)
+      .toContain(`After reinstalling as ${PACKAGE_NAME}, delete ${variantPath}.`);
+    unlinkSync(join(root, variantPath));
+    expect(verifyInstall(root, { expectedRevision: revisionA }).failures, `${state} after deleting ${variantPath}`)
+      .toEqual([]);
   });
 
   it('rejects unsafe standalone contract shapes without filesystem access', () => {

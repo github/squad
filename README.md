@@ -600,6 +600,10 @@ test "$(gh api "repos/${owner_repo}" --jq '.has_issues')" = "true" || {
 }
 
 SQUAD_SHA="<40-character-commit-sha>"  # explicit, maintainer-approved; never `commits/dev`
+[[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
+  exit 1
+}
 squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
   "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
   --jq '.package')" || squad_package=""

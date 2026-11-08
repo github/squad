@@ -500,6 +500,93 @@ describe.each([CANONICAL, ...MIRRORS, GUIDE])('%s upgrade block', path => {
   });
 });
 
+const MANIFEST_API = 'repos/github/squad/contents/workflows/squad-workflows.manifest.json';
+const BRANCH_REF = 'dev';
+const BRANCH_REF_CLEANUP = [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP];
+const MANIFEST_BLOCK_SURFACES = [CANONICAL, ...MIRRORS, GUIDE, 'README.md'] as const;
+
+/** Every fenced block that reads the package manifest through the contents API, named by its fence line. */
+function manifestBlocks(path: string): { name: string; block: string }[] {
+  const content = readLF(path);
+  return [...content.matchAll(/^```[^\n]*\n([\s\S]*?)^```$/gm)]
+    .filter(match => match[1].includes(MANIFEST_API))
+    .map(match => ({ name: `${path}:${content.slice(0, match.index).split('\n').length}`, block: match[1] }));
+}
+
+function runWithBranchRef(block: string) {
+  const root = mkdtempSync(resolve(ROOT, '.squad-sha-guard-'));
+  try {
+    for (const path of BRANCH_REF_CLEANUP) {
+      mkdirSync(dirname(resolve(root, path)), { recursive: true });
+      writeFileSync(resolve(root, path), `${path}\n`);
+    }
+    // The contents API accepts a branch as `ref`, so only the block's SHA guard can stop it.
+    const script = `
+exec 3>&2
+gh() {
+  printf 'CALL gh %s\\n' "$*" >&3
+  case "$*" in
+    "aw --version") printf 'gh aw version v0.91.5\\n' ;;
+    "repo view --json nameWithOwner --jq .nameWithOwner") printf 'octo/example\\n' ;;
+    "repo view --json defaultBranchRef --jq .defaultBranchRef.name") printf 'main\\n' ;;
+    *"--jq .has_issues") printf 'true\\n' ;;
+    *"${MANIFEST_API}"*) printf '%s\\n' "${PACKAGE_NAME}" ;;
+  esac
+  return 0
+}
+git() { printf 'CALL git %s\\n' "$*" >&3; }
+node() { printf 'CALL node %s\\n' "$*" >&3; }
+SQUAD_SHA="${BRANCH_REF}"
+${block.replace(/^SQUAD_SHA="<40-character-commit-sha>"/m, `SQUAD_SHA="${BRANCH_REF}"`)}
+echo "MANIFEST BLOCK COMPLETED"
+`;
+    const result = spawnSync('bash', ['-c', script], {
+      cwd: root,
+      encoding: 'utf8',
+      // Any git call that escapes the stub fails instead of touching this repository.
+      env: { ...process.env, GIT_DIR: resolve(root, 'no-git-dir') },
+    });
+    return {
+      ...result,
+      calls: result.stderr.split('\n').filter(line => line.startsWith('CALL ')),
+      remaining: BRANCH_REF_CLEANUP.filter(path => existsSync(resolve(root, path))),
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('SQUAD_SHA guard before every manifest identity check', () => {
+  it('finds every runnable block that reads the manifest through the contents API', () => {
+    expect(Object.fromEntries(MANIFEST_BLOCK_SURFACES.map(path => [path, manifestBlocks(path).length]))).toEqual({
+      ...Object.fromEntries([CANONICAL, ...MIRRORS].map(path => [path, 3])),
+      [GUIDE]: 3,
+      'README.md': 1,
+    });
+  });
+
+  it.each(MANIFEST_BLOCK_SURFACES.flatMap(manifestBlocks).map(({ name, block }) => [name, block]))(
+    '%s stops on a branch name before the contents API, install, or cleanup',
+    (name, block) => {
+      const result = runWithBranchRef(block);
+      const input = `${name} with SQUAD_SHA=${BRANCH_REF}`;
+      expect({
+        contentsApiCalls: result.calls.filter(call => call.includes(MANIFEST_API)),
+        installCalls: result.calls.filter(call => call.startsWith('CALL gh aw add')),
+        remaining: result.remaining,
+        status: result.status,
+      }, `${input} must stop before the contents API, install, or cleanup:\n${result.stderr}`).toEqual({
+        contentsApiCalls: [],
+        installCalls: [],
+        remaining: BRANCH_REF_CLEANUP,
+        status: 1,
+      });
+      expect(result.stderr, `${input} must say why it stopped`).toMatch(/^STOP: SQUAD_SHA must be /m);
+      expect(result.stdout, input).not.toContain('MANIFEST BLOCK COMPLETED');
+    },
+  );
+});
+
 describe('gh-aw legacy-identity migration with committed legacy locks', () => {
   let outputs: { approved: string; upgraded: string; committed: string };
   beforeAll(() => {

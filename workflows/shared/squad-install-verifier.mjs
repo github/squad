@@ -779,20 +779,32 @@ function findOwnershipRecord(root) {
       matches.push({ path: relativePath, record });
     } else if (typeof record?.package === 'string' && ACCEPTED_PACKAGE_NAMES
       .some(accepted => accepted.toLowerCase() === record.package.toLowerCase())) {
-      caseVariants.push(`${relativePath} (${record.package})`);
+      caseVariants.push({ path: relativePath, record });
     }
   }
+  const describeRecords = records => records.map(({ path, record }) => `${path} (${record.package})`).join(', ');
   if (matches.length > 1) {
     throw new Error(
       `Expected exactly one Squad package ownership record; found ${matches.length}: `
-      + `${matches.map(({ path, record }) => `${path} (${record.package})`).join(', ')}. `
+      + `${describeRecords(matches)}. `
       + 'Keep only the record whose identity matches the installed workflow source bindings; '
       + `after reinstalling as ${PACKAGE_NAME}, delete ${LEGACY_OWNERSHIP_DESTINATIONS.join(', ')}.`,
     );
   }
+  if (matches.length === 1 && caseVariants.length > 0) {
+    // gh-aw keys records by the identity exactly as typed, so a case-only reinstall keeps the old record.
+    const [{ record }] = matches;
+    throw new Error(
+      `Expected exactly one Squad package ownership record; found ${describeRecords(matches)} and case-variant `
+      + `${caseVariants.length === 1 ? 'record' : 'records'} ${describeRecords(caseVariants)}, `
+      + 'so more than one record claims the installed files. gh-aw records the package identity exactly as typed '
+      + `and Squad matches it case-sensitively. After reinstalling as ${record.package}, delete `
+      + `${caseVariants.map(({ path }) => path).join(', ')}.`,
+    );
+  }
   if (matches.length !== 1) {
     // Identity matching stays exact; this only explains a case-only mismatch.
-    const hint = caseVariants.length === 0 ? '' : ` Found ${caseVariants.join(', ')}: gh-aw records the `
+    const hint = caseVariants.length === 0 ? '' : ` Found ${describeRecords(caseVariants)}: gh-aw records the `
       + 'package identity exactly as typed and Squad matches it case-sensitively. '
       + `Reinstall as ${PACKAGE_NAME}, then delete that record.`;
     throw new Error(
@@ -1240,6 +1252,7 @@ function recoveryMessage(revision) {
       `gh aw add ${PACKAGE_NAME}@${ref} --force`,
       ...LEGACY_OWNERSHIP_DESTINATIONS.map(path => `rm -f ${path}`),
       `rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL}`,
+      'node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime',
       'gh aw compile --strict',
       'node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
     ]),

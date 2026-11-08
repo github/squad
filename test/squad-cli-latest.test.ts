@@ -17,6 +17,16 @@ const actionPath = '.github/actions/squad-init/action.yml';
 const installerPath = 'scripts/install.sh';
 const action = parse(approved.files[actionPath].content);
 
+/** A squad-init input as the runner resolves it for the activation step: its `with:` value, else the action default. */
+function activationInput(name: string): string {
+  const frontmatter = parse(source.slice('---\n'.length, source.indexOf('\n---\n', '---\n'.length)));
+  const steps = frontmatter.jobs.activation.steps.filter(
+    (step: { uses?: string }) => step.uses === `github/squad/.github/actions/squad-init@${revision}`,
+  );
+  expect(steps, `workflows/shared/squad.md activation steps using squad-init@${revision}`).toHaveLength(1);
+  return String(steps[0].with?.[name] ?? action.inputs[name].default);
+}
+
 function pinnedInstallShell(platform: NodeJS.Platform = process.platform): string {
   const install = action.runs.steps.find((step: { id?: string }) => step.id === 'install');
   expect(install).toBeDefined();
@@ -43,11 +53,11 @@ set -eu
 url="$2"
 printf '%s\\n' "$url" >> "$PWD/fetches"
 case "$url" in
-  https://api.github.com/repos/bradygaster/squad/releases/latest)
+  https://api.github.com/repos/github/squad/releases/latest)
     printf '{"tag_name":"v1.0.0"}\\n';;
-  https://github.com/bradygaster/squad/releases/download/v1.0.0/squad-linux-x64.tar.gz)
+  https://github.com/github/squad/releases/download/v1.0.0/squad-linux-x64.tar.gz)
     printf 'release archive' > "$4";;
-  https://github.com/bradygaster/squad/releases/download/v1.0.0/SHA256SUMS.txt)
+  https://github.com/github/squad/releases/download/v1.0.0/SHA256SUMS.txt)
     case "$TEST_MODE" in
       download-failure) exit 22;;
       missing) printf '${digest}  squad-darwin-arm64.tar.gz\\n' > "$4";;
@@ -81,8 +91,8 @@ ${install.run}
       cwd: scratch,
       env: {
         ...process.env,
-        INPUT_VERSION: action.inputs.version.default,
-        INPUT_REPO: action.inputs.repository.default,
+        INPUT_VERSION: activationInput('version'),
+        INPUT_REPO: activationInput('repository'),
         TEST_MODE: mode,
       },
       encoding: 'utf8',
@@ -154,17 +164,29 @@ describe('Squad standalone activation latest-release default', () => {
       .toContain('installer="${repo_root}/scripts/install.sh"');
   });
 
+  it('passes repository explicitly because the pinned action still defaults to the superseded owner', () => {
+    expect(action.inputs.repository.default, `squad-init@${revision} repository default`).toBe('bradygaster/squad');
+    expect(
+      activationInput('repository'),
+      `workflows/shared/squad.md must pass repository to squad-init@${revision}, whose default is bradygaster/squad`,
+    ).toBe('github/squad');
+  });
+
   it('executes the pinned action latest default with a verified platform archive', () => {
     const result = runPinnedInstall('valid');
+    expect(
+      result.fetches.trim().split('\n'),
+      `squad-init@${revision} downloads with workflows/shared/squad.md inputs `
+        + `(repository=${activationInput('repository')}, version=${activationInput('version')})`,
+    ).toEqual([
+      'https://api.github.com/repos/github/squad/releases/latest',
+      'https://github.com/github/squad/releases/download/v1.0.0/squad-linux-x64.tar.gz',
+      'https://github.com/github/squad/releases/download/v1.0.0/SHA256SUMS.txt',
+    ]);
     expect(result.status, result.output).toBe(0);
     expect(result.output).toContain('Checksum verified');
     expect(result.extracted).toBe(true);
     expect(result.outputs).toContain('version=1.0.0');
-    expect(result.fetches.trim().split('\n')).toEqual([
-      'https://api.github.com/repos/bradygaster/squad/releases/latest',
-      'https://github.com/bradygaster/squad/releases/download/v1.0.0/squad-linux-x64.tar.gz',
-      'https://github.com/bradygaster/squad/releases/download/v1.0.0/SHA256SUMS.txt',
-    ]);
   }, 65_000);
 
   it('reports premature action failure before reading the download trace', () => {

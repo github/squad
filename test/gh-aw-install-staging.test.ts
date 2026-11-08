@@ -84,8 +84,9 @@ function printedCommands(stderr: string, heading: string): string {
   return lines.slice(start + 1, end < 0 ? undefined : end).map(line => line.slice(2)).join('\n');
 }
 
-function runPrintedCommands(root: string, commands: string, addStatus: number) {
+function runPrintedCommands(root: string, commands: string, addStatus: number, materialize = false) {
   // No `set -e`: pasted commands keep running after a failure unless they stop themselves.
+  // With `materialize`, the printed --materialize-runtime command runs the consumer's real verifier.
   const script = `
 exec 3>&2
 gh() {
@@ -93,11 +94,18 @@ gh() {
   if [ "$1 $2" = "aw add" ]; then return "$ADD_STATUS"; fi
   return 0
 }
-node() { printf 'CALL node %s\\n' "$*" >&3; }
+node() {
+  printf 'CALL node %s\\n' "$*" >&3
+  if [ "$MATERIALIZE" = "1" ] && [ "$*" = ".github/workflows/shared/squad-install-verifier.mjs --materialize-runtime" ]; then
+    command node "$@"
+  fi
+}
 ${commands}
 `;
   const result = spawnSync('bash', ['-c', script], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, ADD_STATUS: String(addStatus) },
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, ADD_STATUS: String(addStatus), MATERIALIZE: materialize ? '1' : '0' },
   });
   return result.stderr.split('\n').filter(line => line.startsWith('CALL '));
 }
@@ -263,6 +271,7 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
       `  gh aw add github/squad/workflows@${revision} --force &&`,
       '  rm -f .github/aw/packages/bradygaster-squad-workflows-3632054824e8.json &&',
       `  rm -f ${UNOWNED_MUTABLE_ROUTER_SKILL} &&`,
+      '  node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime &&',
       '  gh aw compile --strict &&',
       '  node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile',
     ].join('\n'));
@@ -382,7 +391,8 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
 
   it.each([
     [1, [LEGACY_OWNERSHIP, UNOWNED_MUTABLE_ROUTER_SKILL], []],
-    [0, [], ['CALL gh aw compile --strict',
+    [0, [], ['CALL node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime',
+      'CALL gh aw compile --strict',
       'CALL node .github/workflows/shared/squad-install-verifier.mjs --verify-install --strict-compile']],
   ] as const)('runs the printed recovery cleanup only after the reinstall succeeds (gh aw add exits %i)',
     (addStatus, remaining, afterReinstall) => {
@@ -401,6 +411,24 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
         `files left by the ${input}`).toEqual(remaining);
       expect(calls, input).toEqual([`CALL gh aw add ${PACKAGE_NAME}@${revision} --force`, ...afterReinstall]);
     });
+
+  it.each([
+    ['stale', (root: string, path: string) => write(root, path, 'stale materialized runtime\n')],
+    ['missing', (root: string, path: string) => rmSync(join(root, path))],
+  ] as const)('repairs a %s materialized runtime file with the printed recovery commands', (state, damage) => {
+    // gh aw add rewrites only the package-owned copy under .github/aw/squad/runtime/.
+    const path = '.github/workflows/shared/squad.md';
+    const root = consumer();
+    damage(root, path);
+    const failed = spawnSync(process.execPath, [verifier, '--verify-install', '--source-revision', revision], {
+      cwd: root, encoding: 'utf8',
+    });
+    expect(failed.status, `${state} ${path}: ${failed.stderr}`).toBe(1);
+    const commands = printedCommands(failed.stderr, 'Safe recovery');
+    runPrintedCommands(root, commands, 0, true);
+    expect(verifyInstall(root, { expectedRevision: revision }).failures,
+      `${state} ${path} after running the printed recovery commands:\n${commands}`).toEqual([]);
+  }, 120_000);
 
   it.each([
     [1, [LEGACY_OWNERSHIP]],

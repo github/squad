@@ -25,6 +25,8 @@
 # The SHA-pinned squad-init action installs the latest stable GitHub Release
 # using its built-in default and mandatory checksum verification, without npm.
 # CLI release selection is independent of the immutable workflow/action pins.
+# `repository` is explicit because that pinned action still defaults to the
+# superseded bradygaster/squad path for its release downloads.
 #
 # Optional model: vars.SQUAD_MODEL; omit or use 'auto' for the engine default.
 # gh-aw resolves aliases with availability fallback.
@@ -540,6 +542,7 @@ jobs:
         uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
         with:
           skip-init: 'true'
+          repository: 'github/squad'
 
       - name: Initialize Squad team
         env:
