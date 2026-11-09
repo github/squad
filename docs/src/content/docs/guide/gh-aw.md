@@ -107,7 +107,7 @@ fi
 # guidance) for the current supported revision. The identity check stops unless
 # that revision's workflows/squad-workflows.manifest.json declares
 # "package": "github/squad/workflows".
-SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -580,7 +580,7 @@ existing bootstrap branch rather than failing.
 # SQUAD_SHA must be an explicit, maintainer-approved 40-character commit SHA.
 # Never resolve it from `dev`'s moving tip (`commits/dev`) — that would install
 # an unbounded, mutable revision instead of one reviewed, immutable commit.
-SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -2622,7 +2622,7 @@ Pin upgrades to one immutable 40-character Squad commit SHA, then update the
 same native package as one unit:
 
 ```bash
-SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
