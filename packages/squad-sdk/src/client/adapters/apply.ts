@@ -683,7 +683,8 @@ export function applyProjection(root: string, files: readonly ProjectionFile[]):
     else {
       add(f.path, (t, abs) => {
         assertMergeableJson(abs, t);
-        return stringifyJson(f.update(parseJsonObject(abs, t)), t);
+        const next = f.update(parseJsonObject(abs, t));
+        return Object.keys(next).length === 0 ? '' : stringifyJson(next, t);
       });
     }
   }
@@ -695,6 +696,15 @@ export function applyProjection(root: string, files: readonly ProjectionFile[]):
       const eol = detectEol(original);
       let text = original === undefined ? undefined : toLf(original);
       for (const fn of transforms.get(rel)!) text = fn(text, abs);
+      // Nothing left to write (e.g. a JSON config with only Squad's keys removed): never create an
+      // empty file, and remove one that would be left empty.
+      if ((text ?? '').trim() === '') {
+        if (original === undefined) continue;
+        fs.rmSync(abs);
+        pruneEmptyDirs(root, rel);
+        results.push({ path: rel, action: 'removed' });
+        continue;
+      }
       results.push({ path: rel, action: writeIfChanged(abs, withEol(toLf(text ?? ''), eol)) });
     } catch (err) {
       results.push({ path: rel, action: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -849,7 +859,7 @@ export function removeProjection(root: string, files: readonly ProjectionFile[])
         const raw = fs.readFileSync(abs, 'utf8');
         assertMergeableJson(abs, raw);
         const current = parseJsonObject(abs, raw);
-        const next = removeServerEntry(current);
+        const next = (f.remove ?? removeServerEntry)(current);
         if (JSON.stringify(next) === JSON.stringify(current)) {
           results.push({ path: f.path, action: 'unchanged' });
           continue;

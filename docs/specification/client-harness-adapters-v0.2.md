@@ -393,6 +393,32 @@ authorization (charter v0.1 §13.1). A preference the projection cannot apply
 long-context Claude model) is recorded in a comment in the generated file
 rather than dropped silently (execution preferences v0.1 §6).
 
+Governance hooks are opt-in. With `"claudeHooks": "advisory"` in
+`.squad/config.json`, the projection adds one Squad handler per event to
+`.claude/settings.json`. Each handler is an exec-form command (no shell) that
+runs the MCP launch spec with `hook claude <Event>` in place of `state-mcp`.
+The handlers are:
+
+| Event | Matcher | Effect |
+|---|---|---|
+| `SessionStart`, `SubagentStart` | `squad` (SubagentStart only) | For the coordinator only: adds context with the CLI version the `squad_state` bridge must match, the roster, routing, active reviewer lockouts and an open Ralph circuit breaker |
+| `PreToolUse` | `Edit\|MultiEdit\|Write\|NotebookEdit` | A member listed in an active lockout that edits a path the subject covers gets a warning, shown to the user and to the model |
+| `PostToolUse` | `Agent\|Task` | After the coordinator spawns a member: adds a `squad-coordination-handoff/v0.1` `result` envelope, a reminder to record decisions and run the reviewer gate, and the member's lockout state |
+| `Stop` | none | For the coordinator, once per stop (`stop_hook_active` is honoured): asks for Scribe when `decisions/inbox/` has entries, and reports an open Ralph circuit breaker |
+
+The hooks are advisory: no handler returns a `permissionDecision` or blocks a
+stop, so they never grant or deny a tool call (governance-review v0.1 §10).
+A handler that fails or finds hooks turned off prints nothing and exits 0.
+The decisions inbox is read from disk, so a team on a non-local state backend
+gets no Scribe reminder from `Stop`.
+
+Reviewer lockouts are recorded durably in
+`<squadDir>/governance/lockouts.json` by `squad lockout reject|assign|submit|approve|override|status`.
+That command implements the governance-review v0.1 §6 states (`author-locked`,
+`revision-assigned`, `revision-submitted`, `cleared`, `deadlocked`). An
+override needs an authority (the user, or a member listed in
+`governance.authorities` in `config.json`) and a reason.
+
 ### 7.2 `submit`
 
 `submit` maps to Claude Code's `Agent` subagent tool (named `Task` in earlier
@@ -550,6 +576,12 @@ Companion-file ownership is explicit:
   never overwritten or removed (the apply result is `skipped`). Upgrade
   removes the generated file of a member whose charter is gone (or of a skill
   that is no longer projected), and rollback removes every generated file;
+- `.claude/settings.json` is user-owned. Squad owns only its hook handlers,
+  identified by args ending in `hook claude <Event>`. Upgrade replaces those
+  handlers and keeps every other setting and hook. Turning `claudeHooks` off
+  removes them on the next upgrade. Rollback removes them and restores the
+  remaining JSON, and deletes the file only when nothing else was in it.
+  With hooks off and no settings file, nothing is written;
 - the `CLAUDE.md` integration is a marker block between
   `<!-- squad:begin (managed by Squad; do not edit between markers) -->` and
   `<!-- squad:end -->`;

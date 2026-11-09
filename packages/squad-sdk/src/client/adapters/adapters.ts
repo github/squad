@@ -11,6 +11,7 @@ import { upsertTomlTable } from './apply.js';
 import { buildCoordinatorInstructions, dispatchStrategy } from './coordinator.js';
 import { projectClaudeMembers } from './claude-members.js';
 import { projectClaudeSkills } from './claude-skills.js';
+import { projectClaudeHooks } from './claude-hooks.js';
 import type { HostProjection, ClientContext, ClientId, ProjectionFile } from './types.js';
 import { CLIENT_IDS } from './types.js';
 
@@ -120,6 +121,8 @@ const claude: HostProjection = {
     ...projectClaudeMembers(ctx, GENERATED_NOTE, GENERATED_NOTE_TEXT),
     // Template skills plus the coordinator's on-demand sections, as native Claude Code skills.
     ...projectClaudeSkills(ctx, GENERATED_NOTE, GENERATED_NOTE_TEXT),
+    // Opt-in advisory governance hooks (`claudeHooks` in config.json), merged beside user hooks.
+    ...projectClaudeHooks(ctx),
   ],
 };
 

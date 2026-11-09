@@ -198,6 +198,7 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 - `.mcp.json` — the `squad_state` MCP server, merged without touching your other servers
 - `CLAUDE.md` — a Squad-managed marker block
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
+- `.claude/settings.json` — Squad's governance hooks, only if you opt in (see below). Your other settings and hooks are kept.
 
 ### Starting a session
 
@@ -217,8 +218,31 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 | **Worktree isolation** | ✅ `isolation: "worktree"` | Claude Code creates worktrees under `.claude/worktrees/`, which Squad ignores in git. |
 | **Per-spawn model selection** | ✅ | A member's subagent uses the Claude model in its charter's `Preferred` field, and the reasoning effort from `.squad/config.json` or the charter. The coordinator passes a per-call `model` when your request, `agentModelOverrides`, `defaultModel` or the session's model takes precedence. Re-run `squad upgrade` after changing reasoning-effort config. A non-Claude model, a one-off effort request and `long_context` without a long-context Claude model are reported rather than applied. |
 | **MCP server access** | ✅ | `squad_state` tools appear as `mcp__squad_state__*`; subagents inherit them. |
-| **Hooks** | ❌ Not projected yet | Tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **Hooks** | ✅ Opt-in, advisory | Off by default. See [Governance hooks](#governance-hooks). |
 | **`squad watch --execute`** | ⚠️ Limited | Runs through the Copilot CLI unless you pass `--agent-cmd` with a `claude -p …` command. A built-in preset is tracked in [#2442](https://github.com/github/squad/issues/2442). |
+
+### Governance hooks
+
+To turn the hooks on, add `"claudeHooks": "advisory"` to `.squad/config.json` and run `squad upgrade --client claude`. Squad then adds these hooks to `.claude/settings.json`:
+
+- **Session start:** the coordinator starts with the roster, routing, active reviewer lockouts and the CLI version its `squad_state` bridge must match.
+- **Before an edit:** a member who is locked out of a review subject gets a warning when it edits a file that subject covers. You see the warning too.
+- **After a member finishes:** the coordinator gets a handoff summary and a reminder to record decisions and run the reviewer gate.
+- **When the coordinator stops:** it's reminded to run Scribe if `.squad/decisions/inbox/` has entries, and you're told if Ralph's circuit breaker is open.
+
+The hooks only warn. They never block a tool call or permission, and they print nothing when hooks are off. To turn them off, set `"claudeHooks": "off"` and run `squad upgrade --client claude` again. Squad removes its hooks and leaves the rest of `.claude/settings.json` as it was.
+
+Reviewer lockouts come from `squad lockout`. For example, after Ripley rejects Dallas's work on issue 42:
+
+```bash
+squad lockout reject issue-42 --author dallas --reviewer ripley --reason "no tests for the auth path" --paths "src/auth/**"
+```
+
+```bash
+squad lockout assign issue-42 --successor lambert
+```
+
+`squad lockout status` lists each subject with its state and who can take the next revision. `submit` and `approve` record the revision and its approval, which ends the lockout. `override` lets you, or a member listed in `governance.authorities` in `.squad/config.json`, let a locked-out author back in, with a reason. If no eligible member is left, the subject is marked deadlocked until someone records an override.
 
 ---
 

@@ -61,13 +61,13 @@ export function parseClaudeHostSettings(charter: string): ClaudeHostSettings {
   return out;
 }
 
-interface RoutingRow {
+export interface RoutingRow {
   workType: string;
   routeTo: string;
 }
 
 /** Rows of the `routing.md` table: `| Work Type | Route To | Examples |`. */
-function readRouting(squadAbs: string): RoutingRow[] {
+export function readRouting(squadAbs: string): RoutingRow[] {
   let text: string;
   try {
     text = fs.readFileSync(path.join(squadAbs, 'routing.md'), 'utf8');

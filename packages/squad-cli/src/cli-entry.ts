@@ -250,6 +250,9 @@ async function main(): Promise<void> {
     console.log(`             Usage: memory write --content "..." --class LOCAL`);
     console.log(`             Diagnostics: --log-level info|debug or --verbose`);
     console.log(`  ${BOLD}state-mcp${RESET}  MCP bridge exposing Squad runtime state tools`);
+    console.log(`  ${BOLD}lockout${RESET}    Record reviewer lockouts (reject, assign, submit, approve, override)`);
+    console.log(`             Usage: lockout <reject|assign|submit|approve|override|status> <subject>`);
+    console.log(`  ${BOLD}hook${RESET}       Claude Code hook entry point (advisory; set claudeHooks in config.json)`);
     console.log(`  ${BOLD}doctor${RESET}     Validate squad setup (check files, config, health)`);
     console.log(`  ${BOLD}health${RESET}     Validate team state for CI (team/registry/routing/backend/env)`);
     console.log(`             Flags: --json (structured output for CI)`);
@@ -554,6 +557,16 @@ async function main(): Promise<void> {
     const { runMemoryCommand } = await import('./cli/commands/memory.js');
     await runMemoryCommand(getSquadStartDir(), args.slice(1));
     return;
+  }
+
+  if (cmd === 'hook') {
+    const { runHookCommand } = await import('./cli/commands/hook.js');
+    process.exit(await runHookCommand(args.slice(1)));
+  }
+
+  if (cmd === 'lockout') {
+    const { runLockoutCommand } = await import('./cli/commands/lockout.js');
+    process.exit(await runLockoutCommand(getSquadStartDir(), args.slice(1)));
   }
 
   if (cmd === 'state-mcp') {

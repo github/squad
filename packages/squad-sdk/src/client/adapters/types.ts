@@ -38,8 +38,17 @@ export type ProjectionFile =
    * team member). Apply and rollback delete it only while it still carries `ownedMarker`.
    */
   | { kind: 'obsolete'; path: string; ownedMarker: string }
-  /** Read-modify-write of a user-shared JSON config; only Squad keys are touched. */
-  | { kind: 'json'; path: string; update: (existing: Record<string, unknown>) => Record<string, unknown> }
+  /**
+   * Read-modify-write of a user-shared JSON config; only Squad keys are touched. `remove` undoes
+   * `update` on rollback (default: drop the `squad_state` MCP entry). An update that leaves an
+   * empty object never creates the file, and removes it when it exists.
+   */
+  | {
+      kind: 'json';
+      path: string;
+      update: (existing: Record<string, unknown>) => Record<string, unknown>;
+      remove?: (existing: Record<string, unknown>) => Record<string, unknown>;
+    }
   /** Marker-delimited block inside a user-owned text file. */
   | { kind: 'block'; path: string; content: string; id?: string }
   /**
