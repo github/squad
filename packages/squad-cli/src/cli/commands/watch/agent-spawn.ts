@@ -256,12 +256,82 @@ export function buildCustomAgentCommand(
   return { cmd: cmd!, args };
 }
 
+/** Built-in agent runners for `squad watch`. `copilot` is the default. */
+export const AGENT_PRESETS = ['copilot', 'claude'] as const;
+export type AgentPreset = (typeof AGENT_PRESETS)[number];
+
+/**
+ * Build a headless Claude Code invocation.
+ *
+ * `session` runs the projected coordinator (`--agent squad`, from `squad init|upgrade --client
+ * claude`), which treats the "Ralph, Go!" prompt as its Ralph-mode trigger and dispatches members
+ * as subagents. Without it, the prompt runs in a plain Claude Code session (monitor and hygiene
+ * prompts). The project's `.mcp.json` is passed explicitly because `claude -p` does not load
+ * unapproved project MCP servers, and the coordinator halts without `squad_state`.
+ */
+export function buildClaudeCommand(
+  prompt: string,
+  context: Pick<WatchContext, 'teamRoot' | 'claudeFlags'>,
+  options: { session?: boolean } = {},
+): { cmd: string; args: string[] } {
+  const args = ['-p', prompt];
+  if (options.session) args.push('--agent', 'squad');
+  const mcpConfig = path.join(context.teamRoot, '.mcp.json');
+  if (existsSync(mcpConfig)) {
+    args.push('--mcp-config', mcpConfig);
+  } else {
+    console.warn(
+      `[squad] ⚠  .mcp.json not found at ${mcpConfig}. Run \`squad upgrade --client claude\` to create it. ` +
+        'squad_state tools will NOT be available in this session.',
+    );
+  }
+  // stream-json (which needs --verbose with -p) ends with a `result` event even when the run
+  // fails, so a failed session is reported as a failure; see parseClaudeStreamResult.
+  args.push('--output-format', 'stream-json', '--verbose');
+  if (context.claudeFlags) args.push(...context.claudeFlags.trim().split(/\s+/));
+  return { cmd: 'claude', args };
+}
+
+/** Is the Claude Code CLI on PATH? Used by preflight when the Claude preset is selected. */
+export function checkClaudeCli(): Promise<{ ok: true } | { ok: false; reason: string }> {
+  return new Promise((resolve) => {
+    execFile('claude', ['--version'], { shell: IS_WINDOWS, timeout: 10_000 }, (err) => {
+      resolve(err ? { ok: false, reason: "Claude preset: Claude Code CLI ('claude') not found on PATH" } : { ok: true });
+    });
+  });
+}
+
+/**
+ * Read the final `result` event of a Claude Code `stream-json` run. Returns an error message when
+ * the session reported a failure (Claude Code can exit 0 after, for example, hitting its turn
+ * limit), or `undefined` when it succeeded or the output has no result event.
+ */
+export function parseClaudeStreamResult(stdout: string): string | undefined {
+  const lines = stdout.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!.trim();
+    if (!line.startsWith('{')) continue;
+    let event: { type?: unknown; is_error?: unknown; subtype?: unknown; result?: unknown };
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (event.type !== 'result') continue;
+    if (event.is_error !== true && (event.subtype === undefined || event.subtype === 'success')) return undefined;
+    const detail = typeof event.result === 'string' && event.result.trim() ? event.result.trim() : String(event.subtype ?? 'error');
+    return `Claude Code session failed: ${detail.slice(0, 500)}`;
+  }
+  return undefined;
+}
+
 /**
  * Build the command + args array for an agent invocation.
  *
  * Resolution order:
  *   1. `context.agentCmd` (explicit override from config / CLI)
- *   2. Runtime detection via `resolveCopilotCmd()`:
+ *   2. `context.agentPreset === 'claude'`: a plain headless Claude Code session
+ *   3. Runtime detection via `resolveCopilotCmd()`:
  *      - standalone `copilot` if available on PATH
  *      - `gh copilot` as fallback
  */
@@ -272,6 +342,7 @@ export function buildAgentCommand(
   if (context.agentCmd) {
     return buildCustomAgentCommand(context.agentCmd, prompt);
   }
+  if (context.agentPreset === 'claude') return buildClaudeCommand(prompt, context);
 
   // Default: detect available copilot CLI at runtime (cached)
   const { cmd, cmdPrefix } = resolveCopilotCmd();
@@ -290,7 +361,8 @@ export function buildAgentCommand(
  * Unlike {@link buildAgentCommand}, this always defaults to the bare
  * `copilot` binary rather than probing for a `gh copilot` fallback — used
  * by capabilities that spawn a full agent session against the repo
- * (execute, wave-dispatch).
+ * (execute, wave-dispatch). With the Claude preset, the session runs the
+ * projected Squad coordinator instead.
  */
 export function buildCopilotCommand(
   prompt: string,
@@ -299,6 +371,7 @@ export function buildCopilotCommand(
   if (context.agentCmd) {
     return buildCustomAgentCommand(context.agentCmd, prompt);
   }
+  if (context.agentPreset === 'claude') return buildClaudeCommand(prompt, context, { session: true });
   const args = ['-p', prompt];
   if (context.copilotFlags) args.push(...context.copilotFlags.trim().split(/\s+/));
   return { cmd: 'copilot', args: withAdditionalMcpConfig('copilot', args, context.teamRoot) };
@@ -599,6 +672,7 @@ export function spawnAgent(
   pidTracking?: { tracker: NonNullable<WatchContext['pidTracker']>; label: string },
   usageOutputFile?: string,
   signal?: AbortSignal,
+  checkStdout?: (stdout: string) => string | undefined,
 ): Promise<AgentSpawnResult> {
   const { args: safeArgs, cleanup } = prepareArgsForSpawn(args);
   return runProcessTreeCommand(cmd, safeArgs, {
@@ -638,6 +712,10 @@ export function spawnAgent(
         ...(timedOut ? { timedOut: true } : {}),
         ...(run.error?.signal ? { signal: run.error.signal } : {}),
       };
+    }
+    const reportedError = checkStdout?.(run.stdout);
+    if (reportedError) {
+      return { success: false, error: reportedError, usage: usageResult.usage, usageError: usageResult.error };
     }
     return {
       success: true,

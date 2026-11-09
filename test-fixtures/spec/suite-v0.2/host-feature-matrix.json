@@ -1793,12 +1793,12 @@
           ]
         },
         "claude": {
-          "capability": "degraded",
+          "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd \"<host> … {prompt}\"`) is configured; no built-in preset for this host.",
+          "mechanism": "Built-in preset: `--agent-preset claude` (or `watch.agentPreset: \"claude\"`) runs `claude -p {prompt} --agent squad --mcp-config .mcp.json --output-format stream-json --verbose`; execute mode defaults to `--permission-mode bypassPermissions`. Fleet dispatch stays Copilot-only.",
           "evidence": [
             "validated-test:test/ralph-triage.test.ts::*",
-            "static-only"
+            "validated-test:test/cli/watch-claude-preset.test.ts::*"
           ]
         },
         "kiro": {

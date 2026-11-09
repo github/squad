@@ -394,6 +394,8 @@ function printWatchHelp(name: 'triage' | 'watch', version: string): void {
   console.log(`Core flags:`);
   console.log(`  ${BOLD}--execute${RESET}                   Spawn agents to work on issues`);
   console.log(`  ${BOLD}--copilot-flags "..."${RESET}       Extra flags for Copilot CLI`);
+  console.log(`  ${BOLD}--agent-preset <name>${RESET}       Agent runner: copilot (default) or claude`);
+  console.log(`  ${BOLD}--claude-flags "..."${RESET}        Extra flags for the claude preset`);
   console.log(`  ${BOLD}--max-concurrent N${RESET}          Parallel issue limit (default 1)`);
   console.log(`  ${BOLD}--timeout N${RESET}                 Max minutes per issue (default 30)`);
   console.log(`  ${BOLD}--claims <none|git-ref>${RESET}     Claim issues across watchers (default none)`);

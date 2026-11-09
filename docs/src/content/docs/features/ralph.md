@@ -259,6 +259,34 @@ When all features are enabled, each round follows this cycle:
 6. **Monitor**: Scan Teams/email for new actionable items
 7. **Housekeep**: Check for retro, merge decision inbox if needed
 8. **Report**: Log round summary, sleep until next interval
+### Claude Code runner: `--agent-preset claude`
+
+By default `--execute` runs each round through the Copilot CLI. To run it
+through Claude Code instead, project the team for Claude and pick the preset:
+
+```bash
+squad upgrade --client claude
+squad watch --execute --agent-preset claude
+```
+
+Or set it once in `.squad/config.json`:
+
+```json
+{ "watch": { "agentPreset": "claude" } }
+```
+
+Each round runs `claude -p "<prompt>" --agent squad --mcp-config .mcp.json
+--output-format stream-json --verbose`, so the projected Squad coordinator
+handles the issues. Preflight fails if `.claude/agents/squad.md` or the `claude`
+CLI is missing. A session that exits cleanly but reports an error in its final
+`result` event (for example `error_max_turns`) counts as a failed round.
+
+Execute mode adds `--permission-mode bypassPermissions` by default, the
+counterpart of Copilot's `--yolo`. Pass your own flags with
+`--claude-flags "--permission-mode acceptEdits --model sonnet"` (or
+`watch.claudeFlags`) to replace that default. `--agent-cmd` still overrides the
+preset, and `--dispatch-mode fleet` stays Copilot-only.
+
 ### Advanced: `--agent-cmd` (Hidden Flag)
 For advanced users who know what they're doing:
 ```bash

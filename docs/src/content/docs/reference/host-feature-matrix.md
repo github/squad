@@ -68,7 +68,7 @@ Capability counts and validation counts are independent breakdowns of the same c
 | Host | ✅ supported | ⚠️ degraded | ❌ unsupported | — n/a | 🖥️ validated-live | 🧪 validated-test | 📄 static-only | ❔ untested | ⛔ blocked | of which expected-failure gaps |
 |------|-------------|-------------|----------------|-------|-------------------|-------------------|----------------|------------|------------|--------------------------------|
 | `copilot` | 45 | 0 | 6 | 0 | 0 | 49 | 2 | 0 | 0 | 6 |
-| `claude` | 42 | 1 | 5 | 3 | 18 | 30 | 3 | 0 | 0 | 5 |
+| `claude` | 43 | 0 | 5 | 3 | 18 | 30 | 3 | 0 | 0 | 5 |
 | `kiro` | 40 | 2 | 6 | 3 | 0 | 47 | 3 | 0 | 1 | 6 |
 | `opencode` | 41 | 1 | 6 | 3 | 18 | 30 | 3 | 0 | 0 | 6 |
 | `cursor` | 40 | 2 | 6 | 3 | 0 | 47 | 3 | 0 | 1 | 6 |
@@ -150,7 +150,7 @@ These digest gaps are pinned as expected failures, one test per host and gap: th
 |---------|------|---|---|---|---|---|---|---|
 | [@copilot coding agent member (`squad copilot`, GitHub assignment)](#copilot-coding-agent) | a, b, e | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 |
 | [Ralph — interactive work monitor ("Ralph, go")](#ralph-coordinator-loop) | b, e | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 |
-| [Ralph CLI (`squad triage` / `watch` / `loop` --execute)](#ralph-cli-triage-watch) | a, e (host-independent) | ✅ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 |
+| [Ralph CLI (`squad triage` / `watch` / `loop` --execute)](#ralph-cli-triage-watch) | a, e (host-independent) | ✅ 🧪 | ✅ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 | ⚠️ 🧪 |
 | [GitHub Issues mode (connect, list, route, branch → PR → merge)](#github-issues-mode) | b, e | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 |
 | [Labels & triage (`squad` / `squad:<member>` taxonomy)](#labels-triage) | a, b, e | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🖥️ | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 |
 | [Project boards (`squad triage --board`)](#project-boards) | a, e (host-independent) | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 | ✅ 🧪 |
@@ -492,7 +492,7 @@ Depends on: **a, e** (host-independent) · docs: [features/ralph](/squad/docs/fe
 | Host | Capability | Validation | Mechanism | Evidence |
 |------|------------|------------|-----------|----------|
 | `copilot` | ✅ supported | 🧪 validated-test | Default `agentCmd` is the Copilot CLI (`copilot -p …`). | `validated-test:test/ralph-triage.test.ts::*`<br>`validated-test:test/ralph-monitor.test.ts::*`<br>`validated-test:test/watch-fleet-dispatch.test.ts::*` |
-| `claude` | ⚠️ degraded | 🧪 validated-test | Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd "<host> … {prompt}"`) is configured; no built-in preset for this host. | `validated-test:test/ralph-triage.test.ts::*`<br>`static-only` |
+| `claude` | ✅ supported | 🧪 validated-test | Built-in preset: `--agent-preset claude` (or `watch.agentPreset: "claude"`) runs `claude -p {prompt} --agent squad --mcp-config .mcp.json --output-format stream-json --verbose`; execute mode defaults to `--permission-mode bypassPermissions`. Fleet dispatch stays Copilot-only. | `validated-test:test/ralph-triage.test.ts::*`<br>`validated-test:test/cli/watch-claude-preset.test.ts::*` |
 | `kiro` | ⚠️ degraded | 🧪 validated-test | Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd "<host> … {prompt}"`) is configured; no built-in preset for this host. _Live run blocked on 2026-10-22: kiro quota/usage limit reached on the reference machine._ | `validated-test:test/ralph-triage.test.ts::*`<br>`static-only` |
 | `opencode` | ⚠️ degraded | 🧪 validated-test | Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd "<host> … {prompt}"`) is configured; no built-in preset for this host. | `validated-test:test/ralph-triage.test.ts::*`<br>`static-only` |
 | `cursor` | ⚠️ degraded | 🧪 validated-test | Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd "<host> … {prompt}"`) is configured; no built-in preset for this host. _Live run blocked on 2026-10-22: cursor quota/usage limit reached on the reference machine._ | `validated-test:test/ralph-triage.test.ts::*`<br>`static-only` |

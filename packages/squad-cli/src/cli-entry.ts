@@ -641,6 +641,19 @@ async function main(): Promise<void> {
       ? args[agentCmdIdx + 1]
       : undefined;
 
+    const agentPresetIdx = args.indexOf('--agent-preset');
+    const rawAgentPreset = agentPresetIdx !== -1 ? args[agentPresetIdx + 1] : undefined;
+    if (agentPresetIdx !== -1 && rawAgentPreset !== 'copilot' && rawAgentPreset !== 'claude') {
+      console.error(`\u26a0\ufe0f --agent-preset must be "copilot" or "claude"${rawAgentPreset ? ` (got "${rawAgentPreset}")` : ''}`);
+      process.exit(1);
+    }
+    const agentPreset = rawAgentPreset as 'copilot' | 'claude' | undefined;
+
+    const claudeFlagsIdx = args.indexOf('--claude-flags');
+    const claudeFlags = (claudeFlagsIdx !== -1 && args[claudeFlagsIdx + 1])
+      ? args[claudeFlagsIdx + 1]
+      : undefined;
+
     const maxConcurrentIdx = args.indexOf('--max-concurrent');
     const maxConcurrent = (maxConcurrentIdx !== -1 && args[maxConcurrentIdx + 1])
       ? parseInt(args[maxConcurrentIdx + 1]!, 10)
@@ -765,6 +778,8 @@ async function main(): Promise<void> {
         timeout,
         copilotFlags,
         agentCmd,
+        agentPreset,
+        claudeFlags,
         verbose,
         dispatchMode,
         logFile,
@@ -787,7 +802,7 @@ async function main(): Promise<void> {
     // After parsing all flags, check for positional args that look like prompts.
     // Skip values that follow known value-flags (e.g. "--interval 5" → "5" is not positional).
     const knownValueFlags = new Set([
-      '--interval', '--max-rounds', '--max-duration', '--copilot-flags', '--agent-cmd', '--max-concurrent', '--timeout', '--board-project', '--board-owner', '--auth-user',
+      '--interval', '--max-rounds', '--max-duration', '--copilot-flags', '--agent-cmd', '--agent-preset', '--claude-flags', '--max-concurrent', '--timeout', '--board-project', '--board-owner', '--auth-user',
       '--dispatch-mode', '--log-file', '--notify-level', '--overnight-start', '--overnight-end', '--sentinel-file', '--state-backend',
       '--claims',
     ]);

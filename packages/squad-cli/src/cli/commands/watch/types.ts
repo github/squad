@@ -45,7 +45,11 @@ export interface WatchContext {
   config: Record<string, unknown>;
   /** Hidden --agent-cmd override. */
   agentCmd?: string;
+  /** Built-in runner: `copilot` (default) or `claude`. `agentCmd` takes precedence. */
+  agentPreset?: 'copilot' | 'claude';
   copilotFlags?: string;
+  /** Extra flags for the Claude preset (execute mode defaults to `--permission-mode bypassPermissions`). */
+  claudeFlags?: string;
   /** Verbose diagnostic output enabled. */
   verbose?: boolean;
   /** PID tracker for child process cleanup (optional — only set when watch is running). */

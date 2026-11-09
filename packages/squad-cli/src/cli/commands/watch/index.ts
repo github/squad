@@ -782,7 +782,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     verbose: config.verbose ?? false,
     interval: `${config.interval}m`,
     execute: config.execute ?? false,
-    agentCmd: config.agentCmd ?? '(default: copilot)',
+    agentCmd: config.agentCmd ?? `(preset: ${config.agentPreset ?? 'copilot'})`,
     dispatchMode: config.capabilities['wave-dispatch'] ? 'wave' : 'task',
     maxConcurrent: config.maxConcurrent ?? 1,
   });
@@ -933,7 +933,9 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     roster: roster.map(r => ({ name: r.name, label: r.label, expertise: [] as string[] })),
     config: {},
     agentCmd: config.agentCmd,
+    ...(config.agentPreset ? { agentPreset: config.agentPreset } : {}),
     copilotFlags: config.copilotFlags,
+    ...(config.claudeFlags ? { claudeFlags: config.claudeFlags } : {}),
     verbose: config.verbose,
     pidTracker,
     claims: claimProvider,
@@ -949,7 +951,9 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   const platformTag = ` [${adapter.type}]`;
   console.log(`\n${BOLD}🔄 Ralph — Watch Mode${RESET}${modeTag}${platformTag}`);
   console.log(`${DIM}Polling every ${interval} minute(s) for squad work. Ctrl+C to stop.${RESET}`);
-  if (config.execute && config.copilotFlags) {
+  if (config.execute && !config.agentCmd && config.agentPreset === 'claude') {
+    console.log(`${DIM}Runner: Claude Code (claude -p --agent squad)${config.claudeFlags ? ` | flags: ${config.claudeFlags}` : ''}${RESET}`);
+  } else if (config.execute && config.copilotFlags) {
     console.log(`${DIM}Copilot flags: ${config.copilotFlags}${RESET}`);
   }
   if (config.execute) {
