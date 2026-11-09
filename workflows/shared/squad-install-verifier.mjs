@@ -1052,9 +1052,32 @@ function strictCompileMatches(root) {
   }
 }
 
+export const SAFE_ENVIRONMENT_KEYS = Object.freeze([
+  'APPDATA',
+  'CI',
+  'GH_CONFIG_DIR',
+  'GH_DATA_DIR',
+  'GH_HOST',
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'LOCALAPPDATA',
+  'NO_COLOR',
+  'PATH',
+  'SHELL',
+  'SystemRoot',
+  'TEMP',
+  'TERM',
+  'TMP',
+  'TMPDIR',
+  'USERPROFILE',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+]);
+
 function spawnChecked(command, args, cwd, options = {}) {
   const safeEnvironment = Object.fromEntries(
-    ['CI', 'GH_CONFIG_DIR', 'GH_HOST', 'HOME', 'LANG', 'LC_ALL', 'NO_COLOR', 'PATH', 'SHELL', 'TERM', 'TMPDIR']
+    SAFE_ENVIRONMENT_KEYS
       .filter((key) => process.env[key] !== undefined)
       .map((key) => [key, process.env[key]]),
   );
