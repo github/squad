@@ -470,8 +470,8 @@ const UPGRADE_CLEANUP = [LEGACY_OWNERSHIP, UNOWNED_MUTABLE_ROUTER_SKILL];
 function upgradeBlock(path: string, content: string): string {
   const blocks = fencedBlocks(content).filter(block => block.includes(`${INSTALL_COMMAND} --force`));
   expect(blocks, `${path} must contain exactly one upgrade block`).toHaveLength(1);
-  // The guide's block starts with a placeholder that the reader replaces.
-  return blocks[0].replace(/^SQUAD_SHA="<40-character-commit-sha>"$/m, `SQUAD_SHA="${UPGRADE_SHA}"`);
+  // The guide's block starts with a default or placeholder SHA that the test replaces.
+  return blocks[0].replace(/^SQUAD_SHA="[^"]*"/m, `SQUAD_SHA="${UPGRADE_SHA}"`);
 }
 
 function runUpgradeBlock(block: string, addStatus: number) {
@@ -581,7 +581,7 @@ gh() {
 git() { printf 'CALL git %s\\n' "$*" >&3; }
 node() { printf 'CALL node %s\\n' "$*" >&3; }
 SQUAD_SHA="${BRANCH_REF}"
-${block.replace(/^SQUAD_SHA="<40-character-commit-sha>"/m, `SQUAD_SHA="${BRANCH_REF}"`)}
+${block.replace(/^SQUAD_SHA="[^"]*"/m, `SQUAD_SHA="${BRANCH_REF}"`)}
 echo "MANIFEST BLOCK COMPLETED"
 `;
     const result = spawnSync('bash', ['-c', script], {

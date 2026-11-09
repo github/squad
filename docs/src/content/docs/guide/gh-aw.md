@@ -107,7 +107,7 @@ fi
 # guidance) for the current supported revision. The identity check stops unless
 # that revision's workflows/squad-workflows.manifest.json declares
 # "package": "github/squad/workflows".
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -200,7 +200,7 @@ one immutable 40-character commit. The package owns the
 complete eight-workflow set, runtime guards, integrity manifest, and enlistment
 skill as one update unit. For an upgrade, resolve or select one reviewed commit
 and reinstall that same package as described in
-[Upgrading the workflows](#upgrading-the-workflows).
+[Upgrading the workflows](#upgrading).
 
 The bootstrap installation PR is an explicit human trust boundary. Because its
 base branch does not yet contain the Squad review guard and manifest, no job,
@@ -578,7 +578,7 @@ existing bootstrap branch rather than failing.
 # SQUAD_SHA must be an explicit, maintainer-approved 40-character commit SHA.
 # Never resolve it from `dev`'s moving tip (`commits/dev`) — that would install
 # an unbounded, mutable revision instead of one reviewed, immutable commit.
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -2620,7 +2620,7 @@ Pin upgrades to one immutable 40-character Squad commit SHA, then update the
 same native package as one unit:
 
 ```bash
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="534894c5d1702d20e71d49778c95764fba92f383" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
