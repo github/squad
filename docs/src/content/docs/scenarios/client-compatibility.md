@@ -4,7 +4,7 @@
 
 > **New in Squad 2.0:** `squad init --client copilot|claude|kiro|opencode|cursor|codex|antigravity|all` and `squad upgrade --client ...` now project host-native adapters across all 7 supported hosts (GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex, and Google Antigravity) while keeping the backend contract portable. Start with [Using Squad across clients](./using-squad-across-clients.md) for the hands-on walkthrough and [Squad 2.0 architecture](../concepts/squad-2-0-architecture.md) for the three-plane model, MCP-vs-HTTP transport story, and the `G1`-`G9` conformance gates.
 
-Squad runs on multiple Copilot surfaces — each with its own agent spawning mechanism, tool set, and constraints. This document maps Squad's core capabilities across CLI, VS Code, JetBrains, and GitHub.com to help you understand what works where.
+Squad runs on multiple Copilot surfaces — each with its own agent spawning mechanism, tool set, and constraints. This document maps Squad's core capabilities across CLI, VS Code, JetBrains, and GitHub.com to help you understand what works where. The Quick Reference table covers Copilot surfaces only; [Claude Code](#claude-code) has its own section below, and the [Host Feature Matrix](../reference/host-feature-matrix.md) covers every supported host feature by feature.
 
 ## Quick Reference
 
@@ -183,6 +183,40 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 - Can GitHub Copilot spawn agents for background work?
 - Can agents read `.ai-team/` files from the repository?
 - Is there a GitHub-specific command protocol for delegation?
+
+---
+
+## Claude Code
+
+**Status:** Supported through `squad init --client claude` (or `squad upgrade --client claude`), with live lab runs. Per-feature status is in the [Host Feature Matrix](../reference/host-feature-matrix.md); work to make Claude Code a first-class host is tracked in [#2438](https://github.com/github/squad/issues/2438).
+
+### What Squad projects
+
+- `.claude/agents/squad.md` — the coordinator, as a Claude Code subagent named `squad`
+- `.mcp.json` — the `squad_state` MCP server, merged without touching your other servers
+- `CLAUDE.md` — a Squad-managed marker block
+- `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
+
+### Starting a session
+
+```bash
+claude --agent squad --mcp-config .mcp.json
+```
+
+Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until you approve them, so pass the config explicitly. Headless runs (`claude -p`) need `--mcp-config` too, or a prior approval for the project; without it, the coordinator stops at the state-backend handshake.
+
+### Capabilities
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Sub-agent spawning** | ✅ `Agent` tool | Each member runs as a general-purpose subagent with its charter inlined. Squad dispatches specialists only from the coordinator; members don't spawn subagents of their own. This is Squad's dispatch policy and doesn't depend on whether your Claude Code version allows nested subagents. |
+| **Parallel fan-out** | ✅ | Independent `Agent` calls in one message run in parallel. |
+| **Background/async execution** | ✅ `run_in_background` | Validated in live runs. |
+| **Worktree isolation** | ✅ `isolation: "worktree"` | Claude Code creates worktrees under `.claude/worktrees/`, which Squad ignores in git. |
+| **Per-spawn model selection** | ❌ Not used yet | Claude Code supports it (a per-call `model`, plus `model` and `effort` in subagent frontmatter), but the Squad coordinator doesn't use it yet. Tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **MCP server access** | ✅ | `squad_state` tools appear as `mcp__squad_state__*`; subagents inherit them. |
+| **Hooks** | ❌ Not projected yet | Tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **`squad watch --execute`** | ⚠️ Limited | Runs through the Copilot CLI unless you pass `--agent-cmd` with a `claude -p …` command. A built-in preset is tracked in [#2442](https://github.com/github/squad/issues/2442). |
 
 ---
 

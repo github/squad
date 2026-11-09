@@ -289,7 +289,7 @@ distinct from negotiated `effectiveCapabilities`.
 | Host (`ClientId` / `hostKind`) | Agent anchor | MCP config | Support files | `submit` projection |
 |---|---|---|---|---|
 | GitHub Copilot (`copilot` / `github-copilot`) | `.github/agents/squad.agent.md` | `.mcp.json` | `.github/copilot-instructions.md` when present | `create_session`, `task`, or `runSubagent` depending on surface |
-| Claude Code (`claude` / `claude-code`) | `.claude/agents/squad.md` | `.mcp.json` | `CLAUDE.md` marker block, `.gitignore` `# squad:claude` lines | Claude `Task` subagent tool |
+| Claude Code (`claude` / `claude-code`) | `.claude/agents/squad.md` | `.mcp.json` | `CLAUDE.md` marker block, `.gitignore` `# squad:claude` lines | Claude `Agent` subagent tool |
 | Kiro (`kiro`) | `.kiro/steering/squad.md` | `.kiro/settings/mcp.json` | `.kiro/agents/squad.json`, Kiro spec and steering hooks | Kiro agent or spec execution hook |
 | OpenCode (`opencode`) | `.opencode/agent/squad.md` | `opencode.json` | host agent and MCP definition blocks in `opencode.json` | OpenCode agent execution entry declared in `opencode.json` |
 | Cursor (`cursor`) | `.cursor/agents/squad.md` | `.cursor/mcp.json` | `.cursor/rules/squad.mdc` | Cursor agent dispatch or inline agent run with projected rules |
@@ -364,9 +364,19 @@ detail inside the harness adapter rather than a different workspace contract.
 
 ### 7.2 `submit`
 
-`submit` maps to Claude Code's `Task` subagent tool. The harness adapter is
-responsible for shaping the portable prompt, handling streaming callbacks, and
-projecting Claude's task identity into the broker run identity.
+`submit` maps to Claude Code's `Agent` subagent tool (named `Task` in earlier
+Claude Code releases). Each call takes a `prompt` and a `subagent_type`, and
+optionally:
+
+- `model`: a per-call model override; subagent definitions in
+  `.claude/agents/` can also set `model` and `effort` in their frontmatter;
+- `run_in_background`: run the subagent without blocking the caller;
+- `isolation: "worktree"`: run the subagent in its own git worktree under
+  `.claude/worktrees/` (which is why the projection ignores that directory).
+
+The harness adapter is responsible for shaping the portable prompt, handling
+streaming callbacks, and projecting Claude's subagent identity into the broker
+run identity.
 
 ### 7.3 `projectWorkspace`
 
@@ -499,9 +509,12 @@ Companion-file ownership is explicit:
 
 - `.kiro/steering/squad.md`, `.kiro/agents/squad.json`, and
   `.kiro/settings/mcp.json` are fully Squad-managed once projected;
-- `.claude/worktrees/` integration uses Squad-owned ID-scoped `.gitignore`
-  marker blocks with `<!-- SQUAD:claude:START -->` and
-  `<!-- SQUAD:claude:END -->`;
+- `.claude/worktrees/` integration adds Squad-owned `.gitignore` lines under
+  an ID-scoped `# squad:claude` comment; rollback removes that comment and the
+  listed lines directly beneath it, and lines the user already had stay;
+- the `CLAUDE.md` integration is a marker block between
+  `<!-- squad:begin (managed by Squad; do not edit between markers) -->` and
+  `<!-- squad:end -->`;
 - `AGENTS.md` and `GEMINI.md` integrations are marker-scoped and therefore use
   byte-preserving rollback outside those managed regions.
 

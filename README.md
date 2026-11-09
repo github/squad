@@ -4,7 +4,7 @@
 
 **Human-led AI agent teams for any project.** One command. A team that helps you move faster with your code.
 
-[![Platform](https://img.shields.io/badge/platform-GitHub%20Copilot-blue)](#what-is-squad)
+[![Platform](https://img.shields.io/badge/platform-GitHub%20Copilot%20%2B%206%20more%20hosts-blue)](#use-squad-in-other-ai-hosts)
 
 Breaking changes are documented in [CHANGELOG.md](CHANGELOG.md).
 
@@ -442,7 +442,7 @@ When agents finish, the coordinator records follow-up work and leaves a breadcru
 
 **And it's all in git.** Anyone who clones your repo gets the team — with all their accumulated knowledge.
 
-**Each agent gets the right model.** Squad picks models quality-first by default: premium for architecture, research and review, standard for code and docs, fast for mechanical work. Opt in to the `balanced` or `economy` profile, or to the `hydrafusion` research preview with `"modelProfile": "hydrafusion"` in `.squad/config.json`. Per-agent selection works in the Copilot CLI and app; VS Code runs every agent on the one session model. See [Model Selection](https://github.github.com/squad/docs/features/model-selection/).
+**Each agent gets the right model.** Squad picks models quality-first by default: premium for architecture, research and review, standard for code and docs, fast for mechanical work. Opt in to the `balanced` or `economy` profile, or to the `hydrafusion` research preview with `"modelProfile": "hydrafusion"` in `.squad/config.json`. Per-agent selection works in the Copilot CLI and app; VS Code runs every agent on the one session model, and so do the other hosts (Claude Code, Kiro, OpenCode, Cursor, Codex, Antigravity) for now — see the [Host Feature Matrix](docs/src/content/docs/reference/host-feature-matrix.md). See [Model Selection](https://github.github.com/squad/docs/features/model-selection/).
 
 ---
 

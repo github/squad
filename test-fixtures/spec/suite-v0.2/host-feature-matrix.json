@@ -51,7 +51,7 @@
       "runtime": {
         "subagents": true,
         "backgroundRuns": true,
-        "perSpawnModel": false,
+        "perSpawnModel": true,
         "sqlTool": false,
         "shell": true,
         "mcpInheritedBySubagents": true
@@ -441,7 +441,7 @@
           "capability": "unsupported",
           "validation": "validated-test",
           "expectedFailure": true,
-          "mechanism": "`Task` has no per-call model; only subagent-definition `model:` frontmatter. Digest lacks the model-selection section.",
+          "mechanism": "Host can: the `Agent` tool takes a per-call `model`, and subagent definitions take `model` and `effort` frontmatter. Unsupported because the digest lacks the model-selection section, so the coordinator never uses them; per-member `model`/`effort` frontmatter is tracked in #2442.",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
@@ -4546,7 +4546,7 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Subagents inherit MCP servers (Claude `Task`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
+          "mechanism": "Subagents inherit MCP servers (Claude `Agent`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
           "evidence": [
             "validated-manual:lab:parallel-fanout@2026-10-22"
           ],
@@ -4556,7 +4556,7 @@
           "capability": "supported",
           "validation": "blocked",
           "blockedReason": "live run blocked on the reference machine: kiro-cli chat failed: \"The monthly usage limit has been reached\".",
-          "mechanism": "Subagents inherit MCP servers (Claude `Task`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
+          "mechanism": "Subagents inherit MCP servers (Claude `Agent`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
           "evidence": [
             "static-only"
           ],
@@ -4565,7 +4565,7 @@
         "opencode": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Subagents inherit MCP servers (Claude `Task`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
+          "mechanism": "Subagents inherit MCP servers (Claude `Agent`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
           "evidence": [
             "validated-manual:lab:parallel-fanout@2026-10-22"
           ],
@@ -4575,7 +4575,7 @@
           "capability": "supported",
           "validation": "blocked",
           "blockedReason": "live run blocked on the reference machine: cursor-agent -p failed: \"You've hit your usage limit\".",
-          "mechanism": "Subagents inherit MCP servers (Claude `Task`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
+          "mechanism": "Subagents inherit MCP servers (Claude `Agent`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
           "evidence": [
             "static-only"
           ],
@@ -4584,7 +4584,7 @@
         "codex": {
           "capability": "supported",
           "validation": "untested",
-          "mechanism": "Subagents inherit MCP servers (Claude `Task`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
+          "mechanism": "Subagents inherit MCP servers (Claude `Agent`, Codex `spawn_agent`, OpenCode child sessions, Kiro subagents).",
           "evidence": [
             "static-only"
           ],

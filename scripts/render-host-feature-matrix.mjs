@@ -117,7 +117,7 @@ export function render(matrix) {
   if (Array.isArray(matrix.expectedFailures) && matrix.expectedFailures.length > 0) {
     lines.push('## Expected failures (`it.fails`)');
     lines.push('');
-    lines.push('These digest gaps are pinned as expected failures, one test per host and gap: the `[<host>]` test turns red the moment a stack adds the section for that host. Until then the cell is **unsupported** for that host (validated by the failing test), never degraded or supported.');
+    lines.push('These digest gaps are pinned as expected failures, one test per host and gap: the `[<host>]` test turns red the moment a stack adds the section for that host. Until then the cell is **unsupported** for that host (validated by the failing test), never degraded or supported. A gap listed for every host lives in the shared coordinator digest, so it is not a host-specific gap: host-specific work (for example making Claude Code a first-class host, #2438) does not close it.');
     lines.push('');
     lines.push('| Feature | Test (title; each generated test appends the host as `[<host>]`) | Hosts | Meaning |');
     lines.push('|---------|-----------------------------|-------|---------|');

@@ -100,7 +100,7 @@ describe('coordinator instructions', () => {
   });
   it('mentions the host-specific spawn primitive', () => {
     expect(buildCoordinatorInstructions('copilot')).toMatch(/runSubagent/);
-    expect(buildCoordinatorInstructions('claude')).toMatch(/`Task`/);
+    expect(buildCoordinatorInstructions('claude')).toMatch(/`Agent`/);
     expect(buildCoordinatorInstructions('opencode')).toMatch(/`general` subagent/);
   });
 });
