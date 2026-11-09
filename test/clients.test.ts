@@ -39,6 +39,7 @@ import { runInit } from '../packages/squad-cli/src/cli/core/init.js';
 import * as clientEntry from '../packages/squad-sdk/src/client/index.js';
 
 import * as canonical from '../packages/squad-sdk/src/client/adapters/index.js';
+import { claudeCoordinatorSkills } from '../packages/squad-sdk/src/client/adapters/coordinator.js';
 import * as deprecatedClients from '../packages/squad-sdk/src/clients/index.js';
 import {
   AdapterUnboundError,
@@ -222,10 +223,19 @@ describe('shared files and TOML helper', () => {
   });
 });
 
+/**
+ * Everything a host's coordinator can load: the digest, plus (Claude Code only) the on-demand
+ * `squad-coordinator-*` skills its digest points to (#2438 Phase 4).
+ */
+function coordinatorContract(id: ClientId, squadDir?: string): string {
+  const digest = buildCoordinatorInstructions(id, squadDir);
+  return id === 'claude' ? [digest, ...claudeCoordinatorSkills(squadDir).map((k) => k.body)].join('\n') : digest;
+}
+
 describe('coordinator Ralph mode', () => {
   it('coordinator prompt includes host-agnostic Ralph mode driven by the coordinator', () => {
     for (const id of CLIENT_IDS) {
-      const t = buildCoordinatorInstructions(id);
+      const t = coordinatorContract(id);
       expect(t).toMatch(/Ralph mode/);
       expect(t).toMatch(/squad:<member>/);
       expect(t).toMatch(/subagents cannot spawn subagents/);
@@ -254,7 +264,7 @@ describe('coordinator behavioral-contract parity', () => {
   ];
   for (const id of CLIENT_IDS) {
     it(`${id} prompt carries the full coordinator contract`, () => {
-      const text = buildCoordinatorInstructions(id);
+      const text = coordinatorContract(id);
       for (const [name, pats] of sections) {
         for (const p of pats) expect(text, `${id}: ${name} ${p}`).toMatch(p);
       }
@@ -264,7 +274,7 @@ describe('coordinator behavioral-contract parity', () => {
     for (const id of CLIENT_IDS) expect(Buffer.byteLength(buildCoordinatorInstructions(id), 'utf8')).toBeLessThan(24_000);
   });
   it('honors a custom squad dir in every referenced path', () => {
-    const t = buildCoordinatorInstructions('claude', '.team');
+    const t = coordinatorContract('claude', '.team');
     expect(t).toContain('.team/skills/');
     expect(t).toContain('.team/casting/');
     expect(t).not.toContain('.squad/skills/');

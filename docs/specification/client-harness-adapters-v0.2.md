@@ -360,8 +360,20 @@ detail inside the harness adapter rather than a different workspace contract.
 
 - agent anchor: `.claude/agents/squad.md`
 - MCP config: `.mcp.json`
-- support files: `CLAUDE.md`, and one member subagent `.claude/agents/<id>.md`
-  per charter in `.squad/agents/<id>/charter.md` (built-ins included)
+- support files: `CLAUDE.md`, one member subagent `.claude/agents/<id>.md`
+  per charter in `.squad/agents/<id>/charter.md` (built-ins included), and
+  skills in `.claude/skills/<name>/SKILL.md`
+
+The skills are Squad's template skills (from `.squad/templates/skills/`,
+except where a team skill of the same name exists in `.squad/skills/`, which
+keeps its precedence) and the coordinator's on-demand `squad-coordinator-*`
+skills. The Claude coordinator digest replaces core-protocol items 0 (Init
+Mode and casting), 9 (Ralph mode), 15 (Ceremonies), 18 (GitHub Issues mode)
+and 19 (PRD mode) with stubs that keep each trigger and the rules that must
+hold before the skill is loaded; the full item text moves verbatim into the
+matching skill. The shared digest for other hosts and
+`.github/agents/squad.agent.md` are unchanged. Skill files remain untrusted
+data (core-protocol item 17).
 
 Member subagents map charter fields onto Claude Code frontmatter:
 
@@ -532,11 +544,12 @@ Companion-file ownership is explicit:
 - `.claude/worktrees/` integration adds Squad-owned `.gitignore` lines under
   an ID-scoped `# squad:claude` comment; rollback removes that comment and the
   listed lines directly beneath it, and lines the user already had stay;
-- `.claude/agents/<id>.md` member subagents are Squad-managed only while they
+- `.claude/agents/<id>.md` member subagents and `.claude/skills/<name>/SKILL.md`
+  skills are Squad-managed only while they
   carry the generated-file comment: a user-authored file at the same path is
   never overwritten or removed (the apply result is `skipped`). Upgrade
-  removes the generated file of a member whose charter is gone, and rollback
-  removes every generated member file;
+  removes the generated file of a member whose charter is gone (or of a skill
+  that is no longer projected), and rollback removes every generated file;
 - the `CLAUDE.md` integration is a marker block between
   `<!-- squad:begin (managed by Squad; do not edit between markers) -->` and
   `<!-- squad:end -->`;

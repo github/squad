@@ -201,5 +201,94 @@ export function buildCoordinatorInstructions(client: ClientId, squadDir = '.squa
   const caps = CAPABILITIES[client];
   const transports = `## Transport\n\nThis host connects to the backend via: ${caps.transportModes.join(", ")} (subagents: ${caps.supportsSubagents ? "yes" : "no"}).\n`;
   const dispatch = STRATEGIES[client].section.split('.squad/').join(`${squadDir}/`);
-  return `${coreCoordinatorProtocol(squadDir, repoRoot)}\n${dispatch}\n\n${transports}`;
+  let core = coreCoordinatorProtocol(squadDir, repoRoot);
+  if (client === 'claude') core = splitOnDemandSections(core, squadDir).core;
+  return `${core}\n${dispatch}\n\n${transports}`;
+}
+
+/**
+ * Core-protocol items the Claude Code coordinator loads on demand as skills (#2438 Phase 4). The digest
+ * keeps a stub per item with its trigger and any rule that must hold before the skill is loaded; the full
+ * item text moves verbatim into a `.claude/skills/<name>/SKILL.md`. Other hosts keep the full digest.
+ */
+interface OnDemandSection {
+  /** Item marker at the start of the line, e.g. `9. **Ralph mode`. */
+  marker: string;
+  skill: string;
+  title: string;
+  /** Claude Code skill description: when to load it. */
+  description: string;
+  stub: (skill: string, S: string) => string;
+}
+
+const ON_DEMAND: readonly OnDemandSection[] = [
+  {
+    marker: '0. **Init Mode',
+    skill: 'squad-coordinator-init-mode',
+    title: 'Init Mode and casting',
+    description: 'Squad coordinator only: Init Mode, proposing and casting a new team. Load when team.md is missing or has an empty roster, or when asked to set up or cast a team.',
+    stub: (k, S) => `0. **Init Mode (only when there is truly no team).** Decide this with \`squad_state_read\` of \`team.md\` (or \`squad_state_list\`), NEVER with glob/grep/search tools (they skip dot-directories like \`${S}/\`). If \`team.md\` is readable and lists members, a team exists: NEVER overwrite or re-cast it. Only if \`team.md\` does not exist or has an empty roster, load the \`${k}\` skill and follow it before doing anything else.`,
+  },
+  {
+    marker: '9. **Ralph mode',
+    skill: 'squad-coordinator-ralph-mode',
+    title: 'Ralph mode (work monitor)',
+    description: 'Squad coordinator only: Ralph mode, the backlog work monitor loop. Load when the user says "Ralph, go" or asks to work the backlog or keep the board moving.',
+    stub: (k) => `9. **Ralph mode (work monitor).** When the user says "Ralph, go" (or asks you to work the backlog / keep the board moving), load the \`${k}\` skill and run its loop yourself: never delegate the loop itself.`,
+  },
+  {
+    marker: '15. **Ceremonies.',
+    skill: 'squad-coordinator-ceremonies',
+    title: 'Ceremonies',
+    description: 'Squad coordinator only: running team ceremonies (design review, retro, manual ceremonies). Load before spawning work when ceremonies.md defines a before or after trigger, or when a ceremony is requested.',
+    stub: (k, S) => `15. **Ceremonies.** If \`${S}/ceremonies.md\` defines ceremonies, load the \`${k}\` skill before spawning work (for \`before\` triggers), after work completes (for \`after\` triggers), or when the user asks for one.`,
+  },
+  {
+    marker: '18. **GitHub Issues mode.',
+    skill: 'squad-coordinator-issues-mode',
+    title: 'GitHub Issues mode',
+    description: 'Squad coordinator only: GitHub Issues mode (connecting a repo, listing, routing and working issues with gh). Load when the user mentions issues, connecting a repo, or squad labels.',
+    stub: (k) => `18. **GitHub Issues mode.** When the user asks to connect a repository or work GitHub issues, load the \`${k}\` skill and follow it.`,
+  },
+  {
+    marker: '19. **PRD mode.',
+    skill: 'squad-coordinator-prd-mode',
+    title: 'PRD mode',
+    description: 'Squad coordinator only: PRD mode (decomposing a product requirements document into owned work items). Load when the user provides or points to a PRD or spec to break down.',
+    stub: (k) => `19. **PRD mode.** When given a PRD (file or pasted), load the \`${k}\` skill and follow it.`,
+  },
+];
+
+export interface CoordinatorSkill {
+  name: string;
+  description: string;
+  /** Markdown body without frontmatter. */
+  body: string;
+}
+
+/** Item boundary: the next numbered item or section heading. */
+const ITEM_START = /^(?:\d+a?\. \*\*|## )/;
+
+function splitOnDemandSections(core: string, squadDir: string): { core: string; skills: CoordinatorSkill[] } {
+  const lines = core.split('\n');
+  const skills: CoordinatorSkill[] = [];
+  for (const sec of ON_DEMAND) {
+    const start = lines.findIndex((l) => l.startsWith(sec.marker));
+    if (start === -1) throw new Error(`coordinator digest: on-demand item "${sec.marker}" not found`);
+    let end = start + 1;
+    while (end < lines.length && !ITEM_START.test(lines[end]!) && lines[end] !== '') end++;
+    const item = lines.slice(start, end).join('\n');
+    skills.push({
+      name: sec.skill,
+      description: sec.description,
+      body: `# ${sec.title}\n\nThis is the full text of core-protocol item ${sec.marker.split('.')[0]} of the Squad coordinator, loaded on demand. It applies only to the Squad coordinator, never to team members.\n\n${item.replace(/^\d+\. /, '')}\n`,
+    });
+    lines.splice(start, end - start, sec.stub(sec.skill, squadDir));
+  }
+  return { core: lines.join('\n'), skills };
+}
+
+/** The `squad-coordinator-*` skills the Claude Code coordinator loads on demand. */
+export function claudeCoordinatorSkills(squadDir = '.squad', repoRoot?: string): CoordinatorSkill[] {
+  return splitOnDemandSections(coreCoordinatorProtocol(squadDir, repoRoot), squadDir).skills;
 }

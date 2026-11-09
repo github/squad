@@ -194,6 +194,7 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 
 - `.claude/agents/squad.md` — the coordinator, as a Claude Code subagent named `squad`
 - `.claude/agents/<member>.md` — one subagent per team member, built-ins included, generated from `.squad/agents/<member>/charter.md`. `squad cast` adds the new member's file. If you already have your own file at one of these paths, Squad leaves it alone and reports it as skipped.
+- `.claude/skills/<name>/SKILL.md` — Squad's skills as native Claude Code skills, plus `squad-coordinator-*` skills the coordinator loads on demand (Init Mode, Ralph, ceremonies, GitHub Issues and PRD modes), which keeps its always-loaded prompt smaller. A team skill of the same name in `.squad/skills/` takes precedence, so that template isn't projected. Your own skills in `.claude/skills/` are left alone.
 - `.mcp.json` — the `squad_state` MCP server, merged without touching your other servers
 - `CLAUDE.md` — a Squad-managed marker block
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment

@@ -10,6 +10,7 @@ import { CAPABILITIES } from './capabilities.js';
 import { upsertTomlTable } from './apply.js';
 import { buildCoordinatorInstructions, dispatchStrategy } from './coordinator.js';
 import { projectClaudeMembers } from './claude-members.js';
+import { projectClaudeSkills } from './claude-skills.js';
 import type { HostProjection, ClientContext, ClientId, ProjectionFile } from './types.js';
 import { CLIENT_IDS } from './types.js';
 
@@ -117,6 +118,8 @@ const claude: HostProjection = {
     { kind: 'lines', path: '.gitignore', id: 'claude', lines: ['.claude/worktrees/'] },
     // One subagent per member charter; user-authored files at the same path are never overwritten.
     ...projectClaudeMembers(ctx, GENERATED_NOTE, GENERATED_NOTE_TEXT),
+    // Template skills plus the coordinator's on-demand sections, as native Claude Code skills.
+    ...projectClaudeSkills(ctx, GENERATED_NOTE, GENERATED_NOTE_TEXT),
   ],
 };
 

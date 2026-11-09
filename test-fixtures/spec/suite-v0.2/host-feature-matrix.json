@@ -166,8 +166,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "CLI scaffolds `.squad/`; coordinator Init Mode (digest §0) uses `squad_state_read team.md`, auto-confirms headless, casts via `squad cast --name`, never hand-edits `.squad/casting/`.",
+          "mechanism": "CLI scaffolds `.squad/`; the digest stub (§0) decides Init Mode with `squad_state_read team.md`, never glob, and loads the `squad-coordinator-init-mode` skill, which auto-confirms headless, casts via `squad cast --name` and never hand-edits `.squad/casting/`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::field findings from the live demo: Init Mode, scratch files, casting registry",
             "validated-test:test/cli/init.test.ts::*",
@@ -1098,8 +1099,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Digest §17 lists `.squad/skills/` → `.copilot/skills/` → `.github/skills/` → `.claude/skills/` → `.agents/skills/` with earlier-wins precedence.",
+          "mechanism": "Digest §17 lists `.squad/skills/` → `.copilot/skills/` → `.github/skills/` → `.claude/skills/` → `.agents/skills/` with earlier-wins precedence. Squad's template skills are also projected as native skills in `.claude/skills/`, except where a team skill of the same name exists in `.squad/skills/`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/skills.test.ts::*",
             "validated-manual:lab:skills-precedence@2026-10-22"
@@ -1438,8 +1440,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Digest §15 reads `ceremonies.md`, spawns a facilitator, records via `squad_decide`.",
+          "mechanism": "The digest stub (§15) loads the `squad-coordinator-ceremonies` skill, which reads `ceremonies.md`, spawns a facilitator and records via `squad_decide`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "static-only"
           ]
@@ -1699,8 +1702,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Digest §9: coordinator runs the loop itself via `gh`; circuit breaker template. Requires `gh` authenticated inside the host.",
+          "mechanism": "The digest stub (§9) loads the `squad-coordinator-ralph-mode` skill; the coordinator runs the loop itself via `gh`, with the circuit breaker template. Requires `gh` authenticated inside the host.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator Ralph mode",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-manual:lab:ralph-no-repo@2026-10-22"
@@ -1872,8 +1876,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Digest §19; `prd-intake.md` template on demand.",
+          "mechanism": "The digest stub (§19) loads the `squad-coordinator-prd-mode` skill; `prd-intake.md` template on demand.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "static-only"
           ]
