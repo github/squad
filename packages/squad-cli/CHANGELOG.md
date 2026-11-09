@@ -1,5 +1,23 @@
 # @bradygaster/squad-cli
 
+## 2.0.0-preview.4
+
+### Patch Changes
+
+- Complete the repository move to `github/squad` across published package metadata, CLI user-facing links, `squad init` templates, and the `gh-aw-enlistment` skill and install verifier (`github/squad/workflows` identity, explicit `SQUAD_SHA` manifest preflight verification, legacy `bradygaster/squad/workflows` migration guidance, Windows/XDG `gh` extension environment preservation, and first-install safe-update secrets).
+
+- Preserve governed memory transactionally when migrating `local` or `worktree` storage to `orphan` or `two-layer` storage, including decision inbox records, the array index, configuration, audit archives, and tombstones. Abort on destination conflicts or transfer failure before changing backend authority, and retain source files until the configuration write succeeds.
+
+- Keep all `.squad/casting/` configuration on the normal source branch for every state backend, refresh managed git hooks without retaining the obsolete casting staging block, reject runtime casting policy mutations, and align memory and identity safeguards and coordinator instructions with their actual scope.
+
+- Hold `@github/copilot-sdk` below `1.0.29` so interactive shell and Copilot features do not fail with `ERR_PACKAGE_PATH_NOT_EXPORTED` after a fresh install (#2414).
+
+- Expose versioned machine-readable runtime and state-backend metadata in health reports.
+
+- Preserve customized `squad-ci` workflows during `squad upgrade`.
+
+- Return a failing exit status from `squad doctor` when validation checks fail.
+
 ## 2.0.0-preview.3
 
 ### Minor Changes
