@@ -26,6 +26,7 @@ import {
   upsertTomlTable,
   BLOCK_BEGIN,
   type ClientContext,
+  type ClientId,
 } from '../packages/squad-sdk/src/client/index.js';
 import {
   persistClients,
@@ -295,15 +296,22 @@ describe('coordinator digest vs. host feature matrix', () => {
     });
   }
 
-  const gaps: Array<[string, RegExp, string]> = [
+  // The optional fourth entry lists hosts whose digest has closed the gap: they assert it instead of `it.fails`.
+  const gaps: Array<[string, RegExp, string, ClientId[]?]> = [
     ['team-root resolution (teamRoot / stateLocation / TEAM_ROOT)', /teamRoot|stateLocation|TEAM_ROOT/, 'monorepo-team-root, dual-root-remote-mode'],
     ['Azure DevOps issue tracking (az boards / ADO)', /az boards|Azure DevOps/, 'azure-devops (F3)'],
     ['GitLab issue tracking (glab)', /glab|GitLab/, 'gitlab-issues (F2)'],
-    ['per-agent model / reasoning / context-tier selection', /reasoning[- ]effort|context[- ]tier|defaultModel/, 'model-selection'],
+    // Claude (#2442): member subagent frontmatter plus the per-spawn `model` rules in its dispatch section.
+    ['per-agent model / reasoning / context-tier selection', /reasoning[- ]effort|context[- ]tier|defaultModel/, 'model-selection', ['claude']],
     ['plugin marketplace browse on cast', /marketplace/, 'marketplace-plugins'],
   ];
-  for (const [name, pat, cells] of gaps) {
-    for (const id of CLIENT_IDS) {
+  for (const [name, pat, cells, closed = []] of gaps) {
+    for (const id of closed) {
+      it(`digest carries: ${name} [${id}]`, () => {
+        expect(buildCoordinatorInstructions(id), `${id}: ${name} (matrix cells: ${cells})`).toMatch(pat);
+      });
+    }
+    for (const id of CLIENT_IDS.filter((h) => !closed.includes(h))) {
       it.fails(`digest gap (expected until the stack adds it): ${name} [${id}]`, () => {
         expect(buildCoordinatorInstructions(id), `${id}: ${name} (matrix cells: ${cells})`).toMatch(pat);
       });

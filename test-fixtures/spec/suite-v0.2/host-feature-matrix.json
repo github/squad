@@ -438,15 +438,13 @@
           "notes": "Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The CLI/SDK side works, but the projected digest carries no section for it, so the coordinator is not told about it on this host. Unsupported on this host until the section ships."
         },
         "claude": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "Host can: the `Agent` tool takes a per-call `model`, and subagent definitions take `model` and `effort` frontmatter. Unsupported because the digest lacks the model-selection section, so the coordinator never uses them; per-member `model`/`effort` frontmatter is tracked in #2442.",
+          "mechanism": "Each member's `.claude/agents/<id>.md` carries the charter's `Preferred` model (Claude models and aliases only) and the reasoning effort resolved from `.squad/config.json` (`agentReasoningEffortOverrides`, `defaultReasoningEffort`) over the charter. The Claude dispatch section applies the higher-precedence model layers (user directive, `agentModelOverrides`, `defaultModel`, session choice) as the per-call `Agent` `model`. A non-Claude model, a per-spawn effort directive (the `Agent` tool has no per-call effort) and `long_context` without a long-context Claude model are reported, not applied.",
           "evidence": [
-            "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
-            "static-only"
-          ],
-          "notes": "Expected-fail digest gap (per-host it.fails in test/clients.test.ts): unsupported on this host until the section ships."
+            "validated-test:test/claude-members.test.ts::*",
+            "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix"
+          ]
         },
         "kiro": {
           "capability": "unsupported",
@@ -5049,7 +5047,6 @@
       "perHost": true,
       "hosts": [
         "copilot",
-        "claude",
         "kiro",
         "opencode",
         "cursor",

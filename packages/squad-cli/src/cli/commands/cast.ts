@@ -364,12 +364,31 @@ export async function runCastAdd(cwd: string, options: CastAddOptions): Promise<
   info(`  Charter: ${charterPath}`);
   info(`  History: ${historyPath}`);
 
+  // Claude Code gets one subagent per member: refresh the projection so the new member is spawnable.
+  // Local mode only; remote and external state refresh on the next `squad upgrade`.
+  if (!externalSquadDir && paths.mode === 'local') await refreshClaudeMembers(teamRoot, squadDir);
+
   return {
     agentId: slug,
     agentDir,
     charterPath,
     historyPath,
   };
+}
+
+async function refreshClaudeMembers(root: string, squadDir: string): Promise<void> {
+  try {
+    // Lazy import: most cast invocations have no client projections to refresh.
+    const { readConfiguredClients, syncClients, reportClientResults } = await import('../core/clients.js');
+    if (!readConfiguredClients(squadDir).includes('claude')) return;
+    const synced = await syncClients(root, squadDir);
+    reportClientResults(
+      synced.results.filter((r) => r.path.startsWith('.claude/agents/')),
+      (m) => info(`  ${m}`),
+    );
+  } catch (err) {
+    info(`  Could not refresh Claude Code subagents (run \`squad upgrade\`): ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /**

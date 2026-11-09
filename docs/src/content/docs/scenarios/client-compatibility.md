@@ -193,6 +193,7 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 ### What Squad projects
 
 - `.claude/agents/squad.md` — the coordinator, as a Claude Code subagent named `squad`
+- `.claude/agents/<member>.md` — one subagent per team member, built-ins included, generated from `.squad/agents/<member>/charter.md`. `squad cast` adds the new member's file. If you already have your own file at one of these paths, Squad leaves it alone and reports it as skipped.
 - `.mcp.json` — the `squad_state` MCP server, merged without touching your other servers
 - `CLAUDE.md` — a Squad-managed marker block
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
@@ -209,11 +210,11 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Sub-agent spawning** | ✅ `Agent` tool | Each member runs as a general-purpose subagent with its charter inlined. Squad dispatches specialists only from the coordinator; members don't spawn subagents of their own. This is Squad's dispatch policy and doesn't depend on whether your Claude Code version allows nested subagents. |
+| **Sub-agent spawning** | ✅ `Agent` tool | Each member runs as its own subagent (`subagent_type: "<member>"`), which reads its charter. Squad dispatches specialists only from the coordinator; members don't spawn subagents of their own. This is Squad's dispatch policy and doesn't depend on whether your Claude Code version allows nested subagents. |
 | **Parallel fan-out** | ✅ | Independent `Agent` calls in one message run in parallel. |
 | **Background/async execution** | ✅ `run_in_background` | Validated in live runs. |
 | **Worktree isolation** | ✅ `isolation: "worktree"` | Claude Code creates worktrees under `.claude/worktrees/`, which Squad ignores in git. |
-| **Per-spawn model selection** | ❌ Not used yet | Claude Code supports it (a per-call `model`, plus `model` and `effort` in subagent frontmatter), but the Squad coordinator doesn't use it yet. Tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **Per-spawn model selection** | ✅ | A member's subagent uses the Claude model in its charter's `Preferred` field, and the reasoning effort from `.squad/config.json` or the charter. The coordinator passes a per-call `model` when your request, `agentModelOverrides`, `defaultModel` or the session's model takes precedence. Re-run `squad upgrade` after changing reasoning-effort config. A non-Claude model, a one-off effort request and `long_context` without a long-context Claude model are reported rather than applied. |
 | **MCP server access** | ✅ | `squad_state` tools appear as `mcp__squad_state__*`; subagents inherit them. |
 | **Hooks** | ❌ Not projected yet | Tracked in [#2442](https://github.com/github/squad/issues/2442). |
 | **`squad watch --execute`** | ⚠️ Limited | Runs through the Copilot CLI unless you pass `--agent-cmd` with a `claude -p …` command. A built-in preset is tracked in [#2442](https://github.com/github/squad/issues/2442). |

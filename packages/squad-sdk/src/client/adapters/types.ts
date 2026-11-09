@@ -28,8 +28,16 @@ export interface ClientContext {
 
 /** A projected file, relative to {@link ClientContext.root}. */
 export type ProjectionFile =
-  /** Fully Squad-owned file; overwritten on every refresh. */
-  | { kind: 'managed'; path: string; content: string }
+  /**
+   * Fully Squad-owned file; overwritten on every refresh. With `ownedMarker`, an existing file that
+   * lacks the marker is user-authored: apply skips it (action `skipped`) and rollback leaves it.
+   */
+  | { kind: 'managed'; path: string; content: string; ownedMarker?: string }
+  /**
+   * A previously generated file that the current projection no longer produces (e.g. a removed
+   * team member). Apply and rollback delete it only while it still carries `ownedMarker`.
+   */
+  | { kind: 'obsolete'; path: string; ownedMarker: string }
   /** Read-modify-write of a user-shared JSON config; only Squad keys are touched. */
   | { kind: 'json'; path: string; update: (existing: Record<string, unknown>) => Record<string, unknown> }
   /** Marker-delimited block inside a user-owned text file. */
@@ -78,10 +86,11 @@ export interface HostProjection {
   project(ctx: ClientContext): ProjectionFile[];
 }
 
-export type ApplyAction = 'created' | 'updated' | 'unchanged' | 'removed' | 'error';
+export type ApplyAction = 'created' | 'updated' | 'unchanged' | 'removed' | 'skipped' | 'error';
 
 export interface ApplyResult {
   path: string;
   action: ApplyAction;
+  /** Failure reason for `error`, or why the file was left alone for `skipped`. */
   error?: string;
 }

@@ -360,7 +360,26 @@ detail inside the harness adapter rather than a different workspace contract.
 
 - agent anchor: `.claude/agents/squad.md`
 - MCP config: `.mcp.json`
-- support files: `CLAUDE.md`
+- support files: `CLAUDE.md`, and one member subagent `.claude/agents/<id>.md`
+  per charter in `.squad/agents/<id>/charter.md` (built-ins included)
+
+Member subagents map charter fields onto Claude Code frontmatter:
+
+| Charter field | Frontmatter |
+|---|---|
+| `Identity: ID` (or the charter directory name) | `name` |
+| `Identity: Purpose` (or name and role), plus the member's `routing.md` work types | `description` |
+| `Model: Preferred` | `model`, only for a Claude model or alias; omitted for `auto` |
+| `Model: Reasoning Effort` | `effort`; omitted for `auto` |
+| `X-squad-host-claude: Tools` | `tools` |
+| `X-squad-host-claude: Isolation` (`worktree`) | `isolation` |
+
+`X-squad-host-claude` is a charter extension (charter v0.1 §8: namespace
+`squad`, name `host-claude`). Its values are runtime configuration, not
+authorization (charter v0.1 §13.1). A preference the projection cannot apply
+(a non-Claude model, an invalid extension value, or `long_context` without a
+long-context Claude model) is recorded in a comment in the generated file
+rather than dropped silently (execution preferences v0.1 §6).
 
 ### 7.2 `submit`
 
@@ -381,8 +400,9 @@ run identity.
 ### 7.3 `projectWorkspace`
 
 The adapter reports the repository root, current working directory, and the
-pair `.claude/agents/squad.md` plus `CLAUDE.md` so the broker can verify that
-the projected host files are in sync with the portable Squad contract.
+pair `.claude/agents/squad.md` plus `CLAUDE.md`, with the member subagents
+under `supportFiles`, so the broker can verify that the projected host files
+are in sync with the portable Squad contract.
 
 ## 8. Kiro projection
 
@@ -512,6 +532,11 @@ Companion-file ownership is explicit:
 - `.claude/worktrees/` integration adds Squad-owned `.gitignore` lines under
   an ID-scoped `# squad:claude` comment; rollback removes that comment and the
   listed lines directly beneath it, and lines the user already had stay;
+- `.claude/agents/<id>.md` member subagents are Squad-managed only while they
+  carry the generated-file comment: a user-authored file at the same path is
+  never overwritten or removed (the apply result is `skipped`). Upgrade
+  removes the generated file of a member whose charter is gone, and rollback
+  removes every generated member file;
 - the `CLAUDE.md` integration is a marker block between
   `<!-- squad:begin (managed by Squad; do not edit between markers) -->` and
   `<!-- squad:end -->`;

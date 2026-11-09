@@ -9,6 +9,7 @@ import path from 'node:path';
 import { CAPABILITIES } from './capabilities.js';
 import { upsertTomlTable } from './apply.js';
 import { buildCoordinatorInstructions, dispatchStrategy } from './coordinator.js';
+import { projectClaudeMembers } from './claude-members.js';
 import type { HostProjection, ClientContext, ClientId, ProjectionFile } from './types.js';
 import { CLIENT_IDS } from './types.js';
 
@@ -114,6 +115,8 @@ const claude: HostProjection = {
     },
     // Claude Code creates embedded git worktrees here for isolated subagents.
     { kind: 'lines', path: '.gitignore', id: 'claude', lines: ['.claude/worktrees/'] },
+    // One subagent per member charter; user-authored files at the same path are never overwritten.
+    ...projectClaudeMembers(ctx, GENERATED_NOTE, GENERATED_NOTE_TEXT),
   ],
 };
 
