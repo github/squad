@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Stable promotion notes
+
+- Stable `v1.1.0` predates the following fixes; merging them into `dev` did not publish a fixed stable package. Carry these notes into the next stable release when it is actually promoted. No stable version or publication date is assigned here.
+- `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). Available in `v2.0.0-preview.2` and later previews, not stable `v1.1.0`.
+- `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. Available in `v2.0.0-preview.3`, not stable `v1.1.0`. Existing-memory backend migration is a separate issue (#2425).
+
 ## [2.0.0-preview.3] - 2026-10-29
 
 Third Squad 2.0 preview. npm continues to use `insider` as the canonical dist-tag with `preview` as a compatibility alias; `latest` remains on 1.1.0. Homebrew, WinGet, and stable promotion remain held. Optional built-in roster members remain opt-in through `squad roster add`, and multi-machine watch claims remain off by default.

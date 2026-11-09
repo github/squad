@@ -2,7 +2,7 @@
  * Helpers for managing the squad-state .gitignore marker block.
  *
  * When the state backend is 'two-layer' or 'orphan', .squad/decisions.md
- * and .squad/agents/history.md are owned by the squad-state orphan branch.
+ * and .squad/agents/<name>/history.md, memory/ and identity/ are owned by the squad-state branch.
  * Adding them to .gitignore prevents accidental staging via git add .,
  * git add -A, IDE "stage all", or git commit -am -- defense-in-depth
  * complement to the pre-commit hook installed by squad upgrade --state-backend.
@@ -22,13 +22,15 @@ const SQUAD_STATE_GITIGNORE_BLOCK =
   SQUAD_STATE_GITIGNORE_OPEN_MARKER + '\n' +
   '.squad/decisions.md\n' +
   '.squad/agents/*/history.md\n' +
+  '.squad/memory/\n' +
+  '.squad/identity/\n' +
   SQUAD_STATE_GITIGNORE_CLOSE_MARKER + '\n';
 
 /**
  * Append the squad-state marker block to .gitignore if not already present.
  *
- * Idempotent: if the opening marker already exists in the file, this is a
- * no-op. Returns true if the block was added, false if it was already present.
+ * Idempotently upgrades older blocks to include memory and identity.
+ * Returns true if the block was added or upgraded.
  */
 export function addSquadStateGitignoreBlock(
   gitignorePath: string,
@@ -40,7 +42,15 @@ export function addSquadStateGitignoreBlock(
   }
 
   if (content.includes(SQUAD_STATE_GITIGNORE_OPEN_MARKER)) {
-    return false;
+    const lines = content.split('\n');
+    const start = lines.findIndex(line => line.trimEnd() === SQUAD_STATE_GITIGNORE_OPEN_MARKER);
+    const end = lines.findIndex((line, index) => index > start && line.trimEnd() === SQUAD_STATE_GITIGNORE_CLOSE_MARKER);
+    if (start < 0 || end < 0) throw new Error('Malformed squad-state .gitignore block; repair its markers before retrying.');
+    const missing = ['.squad/memory/', '.squad/identity/'].filter(entry => !lines.slice(start + 1, end).some(line => line.trimEnd() === entry));
+    if (missing.length === 0) return false;
+    lines.splice(end, 0, ...missing);
+    storage.writeSync(gitignorePath, lines.join('\n'));
+    return true;
   }
 
   const prefix = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
@@ -69,20 +79,20 @@ export function removeSquadStateGitignoreBlock(
   }
 
   const lines = content.split('\n');
-  const openIdx = lines.findIndex((l) => l === SQUAD_STATE_GITIGNORE_OPEN_MARKER);
+  const openIdx = lines.findIndex((l) => l.trimEnd() === SQUAD_STATE_GITIGNORE_OPEN_MARKER);
   if (openIdx === -1) return false;
 
   // Find the closing marker starting from the opening marker
   let closeIdx = -1;
   for (let i = openIdx + 1; i < lines.length; i++) {
-    if (lines[i] === SQUAD_STATE_GITIGNORE_CLOSE_MARKER) {
+    if (lines[i]!.trimEnd() === SQUAD_STATE_GITIGNORE_CLOSE_MARKER) {
       closeIdx = i;
       break;
     }
   }
 
-  // If no closing marker found, remove from opening marker to end
-  const endIdx = closeIdx !== -1 ? closeIdx : lines.length - 1;
+  if (closeIdx === -1) throw new Error('Malformed squad-state .gitignore block; repair its markers before retrying.');
+  const endIdx = closeIdx;
 
   const before = lines.slice(0, openIdx);
   const after = lines.slice(endIdx + 1);
