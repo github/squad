@@ -14,6 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { addSquadStateGitignoreBlock, FSStorageProvider } from '@bradygaster/squad-sdk';
 
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
@@ -111,11 +112,11 @@ fi
 ${SQUAD_HOOK_MARKER}
 # WI-1: Guard against accidentally committing two-layer mutable state into the
 # working tree. If the user has staged any .squad/ paths that are owned by the
-# two-layer/orphan backend (decisions.md, agents/*/history.md, casting/, routing/),
+# two-layer/orphan backend (decisions.md, agents/*/history.md, memory/, identity/),
 # warn and abort so the state stays on the squad-state orphan branch.
 # Installed by: squad init / squad upgrade --state-backend (two-layer/orphan)
 if [ -z "$SQUAD_SYNC_ACTIVE" ]; then
-  STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '^\\.squad/(decisions\\.md|agents/.+/history\\.md|casting/|routing/)' || true)
+  STAGED=$(git diff --cached --diff-filter=ACMRT --name-only 2>/dev/null | grep -E '^\\.squad/(decisions\\.md$|agents/[^/]+/history\\.md$|memory/|identity/)' || true)
   if [ -n "$STAGED" ]; then
     echo "⚠ squad pre-commit: refusing to commit two-layer state into the working tree." >&2
     echo "  These paths belong on the 'squad-state' orphan branch, not in your normal commits:" >&2
@@ -128,7 +129,7 @@ fi
   'post-commit': `#!/bin/sh
 ${SQUAD_HOOK_MARKER}
 # WI-1: After a working-tree commit, sync any pending two-layer state (decisions,
-# histories, casting) onto the squad-state orphan branch so team-state stays
+# histories, governed memory and identity) onto the squad-state orphan branch so team-state stays
 # durable and shareable. Best-effort — never blocks the commit.
 # Installed by: squad init / squad upgrade --state-backend (two-layer/orphan)
 if [ -z "$SQUAD_SYNC_ACTIVE" ]; then
@@ -182,12 +183,14 @@ function installHook(hooksDir: string, hookName: string, content: string, force:
     // Already has our marker — skip unless force
     if (existing.includes(SQUAD_HOOK_MARKER)) {
       if (!force) return 'skipped';
-      // Force: remove old squad section and re-append
-      const cleaned = existing.split('\n').filter(line => {
-        // Remove lines between markers
-        return true; // simplified: just replace the file
-      }).join('\n');
-      // For simplicity on force, rewrite with chaining
+      // Legacy sections end at the unindented outer `fi`. Remove every
+      // previously appended section, preserving user content on either side.
+      const cleaned = existing.replace(/^# --- squad-sync-hook ---\r?\n[\s\S]*?^fi(?:\r?\n|$)/gm, '').trimEnd();
+      if (cleaned.includes(SQUAD_HOOK_MARKER)) {
+        throw new Error(`Cannot safely replace squad section in ${hookPath}; repair the hook manually.`);
+      }
+      fs.writeFileSync(hookPath, cleaned + '\n\n' + content.split('\n').slice(1).join('\n'), { mode: 0o755 });
+      return 'chained';
     }
 
     // Chain: existing hook runs first, then squad hook (without shebang)
@@ -274,6 +277,7 @@ export function ensureHooksForBackend(cwd: string): void {
 
   // Only orphan/two-layer need hooks
   if (backend !== 'orphan' && backend !== 'two-layer') return;
+  addSquadStateGitignoreBlock(path.join(cwd, '.gitignore'), new FSStorageProvider());
 
   // Check if hooks are already installed
   let hooksDir: string;
@@ -289,10 +293,11 @@ export function ensureHooksForBackend(cwd: string): void {
     const hookPath = path.join(hooksDir, hookName);
     if (!fs.existsSync(hookPath)) { allInstalled = false; break; }
     const content = fs.readFileSync(hookPath, 'utf-8');
-    if (!content.includes(SQUAD_HOOK_MARKER)) { allInstalled = false; break; }
+    if (content.split(SQUAD_HOOK_MARKER).length !== 2 ||
+        !content.includes(HOOK_TEMPLATES[hookName]!.split('\n').slice(1).join('\n'))) { allInstalled = false; break; }
   }
   if (allInstalled) return;
 
   // Hooks missing — install them
-  installGitHooks(cwd, { force: false });
+  installGitHooks(cwd, { force: true });
 }

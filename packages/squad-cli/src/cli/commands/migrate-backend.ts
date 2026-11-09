@@ -10,7 +10,7 @@
  *
  * In addition to flipping the `stateBackend` key in `.squad/config.json`, this
  * function MIGRATES pre-existing working-tree state (`decisions.md`,
- * `agents/<name>/history.md`) onto the squad-state orphan branch when moving
+ * `agents/<name>/history.md`, governed memory and decision inbox records) onto the squad-state orphan branch when moving
  * from a working-tree backend to an orphan-storage backend, so post-upgrade
  * agents can read pre-upgrade content (UPGRADE-NO-MIGRATION fix).
  */
@@ -18,7 +18,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { installGitHooks } from './install-hooks.js';
+import { installGitHooks, ensureHooksForBackend } from './install-hooks.js';
 import { FSStorageProvider } from '@bradygaster/squad-sdk';
 import { addSquadStateGitignoreBlock, removeSquadStateGitignoreBlock } from '@bradygaster/squad-sdk';
 
@@ -31,6 +31,7 @@ const RESET = '\x1b[0m';
 const VALID_TARGETS = ['local', 'worktree', 'orphan', 'two-layer'];
 const ORPHAN_BACKENDS = new Set(['orphan', 'two-layer']);
 const WORKTREE_BACKENDS = new Set(['local', 'worktree']);
+type StateFile = { relPath: string; content: Buffer };
 
 /** Paths inside .squad/ that should be carried over to the orphan branch on migration. */
 const MIGRATABLE_PATHS = [
@@ -57,7 +58,7 @@ export function ensureOrphanBranch(dest: string): boolean {
       const commitHash = execFileSync('git', ['commit-tree', treeHash, '-m', 'init: squad-state orphan branch'], {
         cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
-      execFileSync('git', ['update-ref', 'refs/heads/squad-state', commitHash], {
+      execFileSync('git', ['update-ref', 'refs/heads/squad-state', commitHash, '0000000000000000000000000000000000000000'], {
         cwd: dest, stdio: ['pipe', 'pipe', 'pipe'],
       });
       return true;
@@ -72,14 +73,14 @@ export function ensureOrphanBranch(dest: string): boolean {
  * Collect existing working-tree state files that should be migrated to the orphan branch.
  * Returns array of {path, content} pairs (paths are relative to .squad/).
  */
-function collectWorktreeState(dest: string): Array<{ relPath: string; content: string }> {
+function collectWorktreeState(dest: string): StateFile[] {
   const squadDir = path.join(dest, '.squad');
-  const collected: Array<{ relPath: string; content: string }> = [];
+  const collected: StateFile[] = [];
 
   for (const p of MIGRATABLE_PATHS) {
     const full = path.join(squadDir, p);
     if (fs.existsSync(full) && fs.statSync(full).isFile()) {
-      collected.push({ relPath: p, content: fs.readFileSync(full, 'utf-8') });
+      collected.push({ relPath: p, content: fs.readFileSync(full) });
     }
   }
 
@@ -91,11 +92,31 @@ function collectWorktreeState(dest: string): Array<{ relPath: string; content: s
       if (fs.existsSync(histPath) && fs.statSync(histPath).isFile()) {
         collected.push({
           relPath: path.posix.join('agents', agentName, 'history.md'),
-          content: fs.readFileSync(histPath, 'utf-8'),
+          content: fs.readFileSync(histPath),
         });
       }
     }
   }
+
+  // DECISION memories live outside memory/, in decisions/inbox.
+  const collectDirectory = (relative: string): void => {
+    const full = path.join(squadDir, relative);
+    if (!fs.existsSync(full)) return;
+    if (fs.lstatSync(full).isSymbolicLink()) {
+      throw new Error(`Cannot migrate symbolic link .squad/${relative}; source was retained.`);
+    }
+    if (!fs.statSync(full).isDirectory()) {
+      throw new Error(`Expected .squad/${relative} to be a directory; source was retained.`);
+    }
+    for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
+      const relPath = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) collectDirectory(relPath);
+      else if (entry.isFile()) collected.push({ relPath, content: fs.readFileSync(path.join(squadDir, relPath)) });
+      else throw new Error(`Cannot migrate non-regular file .squad/${relPath}; source was retained.`);
+    }
+  };
+  collectDirectory('memory');
+  collectDirectory('decisions/inbox');
 
   return collected;
 }
@@ -103,27 +124,43 @@ function collectWorktreeState(dest: string): Array<{ relPath: string; content: s
 /**
  * Write a set of files onto the squad-state orphan branch via git plumbing.
  * Preserves any files already on the branch (merges trees by path).
- * Returns the number of files written, or -1 on failure.
+ * Returns the number imported (including identical files); throws on failure.
  */
-function writeFilesToOrphanBranch(dest: string, files: Array<{ relPath: string; content: string }>): number {
+function writeFilesToOrphanBranch(dest: string, files: StateFile[]): number {
   if (files.length === 0) return 0;
+  let indexDir: string | undefined;
   try {
     // Load the current squad-state tree into the index using a temporary index file
     const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], {
       cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
-    const indexFile = path.resolve(dest, gitDir, 'squad-migrate-index');
-    if (fs.existsSync(indexFile)) fs.unlinkSync(indexFile);
+    indexDir = fs.mkdtempSync(path.resolve(dest, gitDir, 'squad-migrate-'));
+    const indexFile = path.join(indexDir, 'index');
 
     const env = { ...process.env, GIT_INDEX_FILE: indexFile };
+    const parentSha = execFileSync('git', ['rev-parse', 'refs/heads/squad-state'], {
+      cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    const existing = new Set(execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', parentSha], {
+      cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+    }).split('\0').filter(Boolean));
 
     // Seed index with existing squad-state tree
-    execFileSync('git', ['read-tree', 'refs/heads/squad-state'], {
+    execFileSync('git', ['read-tree', parentSha], {
       cwd: dest, env, stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     // Add each migrated file
     for (const f of files) {
+      if (existing.has(f.relPath)) {
+        const content = execFileSync('git', ['show', `${parentSha}:${f.relPath}`], {
+          cwd: dest, stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        if (!content.equals(f.content)) {
+          throw new Error(`Conflicting state at ${f.relPath}. Reconcile the source and squad-state copies before retrying; neither copy was changed.`);
+        }
+        continue;
+      }
       const blobHash = execFileSync('git', ['hash-object', '-w', '--stdin'], {
         cwd: dest, env, encoding: 'utf-8', input: f.content, stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
@@ -136,9 +173,10 @@ function writeFilesToOrphanBranch(dest: string, files: Array<{ relPath: string; 
       cwd: dest, env, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
 
-    const parentSha = execFileSync('git', ['rev-parse', 'refs/heads/squad-state'], {
+    const parentTree = execFileSync('git', ['rev-parse', `${parentSha}^{tree}`], {
       cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
+    if (treeHash === parentTree) return files.length;
 
     const commitHash = execFileSync(
       'git',
@@ -150,13 +188,11 @@ function writeFilesToOrphanBranch(dest: string, files: Array<{ relPath: string; 
       cwd: dest, stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    // Cleanup the temporary index
-    if (fs.existsSync(indexFile)) fs.unlinkSync(indexFile);
-
     return files.length;
   } catch (err) {
-    console.log(`${YELLOW}⚠ Could not migrate state onto squad-state branch: ${err instanceof Error ? err.message : err}${RESET}`);
-    return -1;
+    throw new Error(`Could not migrate state onto squad-state branch: ${err instanceof Error ? err.message : err}`, { cause: err });
+  } finally {
+    if (indexDir) fs.rmSync(indexDir, { recursive: true, force: true });
   }
 }
 
@@ -182,17 +218,27 @@ export async function migrateStateBackend(dest: string, target: string): Promise
 
   try {
     if (fs.existsSync(configPath)) {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const parsed: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Expected a config object.');
+      }
+      config = parsed as Record<string, unknown>;
     }
-  } catch { /* start fresh */ }
+  } catch (err) {
+    throw new Error('Cannot read squad config; backend migration was not started.', { cause: err });
+  }
 
-  const current = (config['stateBackend'] as string) || 'local';
+  const current = config['stateBackend'] ?? 'local';
+  if (typeof current !== 'string' || !VALID_TARGETS.includes(current)) {
+    throw new Error(`Unsupported source backend '${String(current)}'; backend was not switched.`);
+  }
 
   if (current === target) {
     console.log(`${YELLOW}⚠ Backend is already '${target}'. Ensuring hooks + config are consistent.${RESET}`);
     if (ORPHAN_BACKENDS.has(target)) {
-      ensureOrphanBranch(dest);
-      installGitHooks(dest, { force: false });
+      if (!ensureOrphanBranch(dest)) throw new Error('Cannot initialize squad-state; backend was not switched.');
+      ensureHooksForBackend(dest);
+      addSquadStateGitignoreBlock(path.join(dest, '.gitignore'), new FSStorageProvider());
     }
     return;
   }
@@ -201,10 +247,11 @@ export async function migrateStateBackend(dest: string, target: string): Promise
 
   // Step 1: Ensure orphan branch exists when the target needs it
   if (ORPHAN_BACKENDS.has(target)) {
-    if (!ensureOrphanBranch(dest)) return;
+    if (!ensureOrphanBranch(dest)) throw new Error('Cannot initialize squad-state; backend was not switched.');
     console.log(`  ${GREEN}✓${RESET} squad-state branch ready`);
   }
 
+  let migratedFiles: StateFile[] = [];
   // Step 2 (UPGRADE-NO-MIGRATION): move working-tree state onto the orphan branch
   // when transitioning from a worktree backend to an orphan-storage backend.
   if (WORKTREE_BACKENDS.has(current) && ORPHAN_BACKENDS.has(target)) {
@@ -212,70 +259,76 @@ export async function migrateStateBackend(dest: string, target: string): Promise
     if (files.length > 0) {
       const wrote = writeFilesToOrphanBranch(dest, files);
       if (wrote > 0) {
+        migratedFiles = files;
         console.log(`  ${GREEN}✓${RESET} migrated ${wrote} state file(s) onto squad-state branch:`);
         for (const f of files) {
           console.log(`      ${DIM}.squad/${f.relPath}${RESET}`);
         }
 
-        // F1 fix (Round 5, P1.1): the working-tree copies are now stale — the
-        // orphan branch is the source of truth for an orphan/two-layer backend.
-        // Remove them so `git status` is clean and post-upgrade agents can't
-        // accidentally read stale content. Mirrors liftInitMutableStateOntoOrphan
-        // behavior. Only files we just successfully migrated are removed; we
-        // never touch config.json, charter.md, team.md, casting/, templates/, etc.
-        const squadDir = path.join(dest, '.squad');
-        const removed: string[] = [];
-        const removeFailed: string[] = [];
-        for (const f of files) {
-          const full = path.join(squadDir, f.relPath);
-          try {
-            if (fs.existsSync(full)) fs.unlinkSync(full);
-            removed.push(f.relPath);
-          } catch {
-            removeFailed.push(f.relPath);
-          }
-        }
-        // Clean up now-empty agent directories (e.g. .squad/agents/data/) so
-        // they don't leak as zero-content folders post-upgrade.
-        const agentsDir = path.join(squadDir, 'agents');
-        if (fs.existsSync(agentsDir) && fs.statSync(agentsDir).isDirectory()) {
-          for (const agentName of fs.readdirSync(agentsDir)) {
-            const agentDir = path.join(agentsDir, agentName);
-            try {
-              if (
-                fs.statSync(agentDir).isDirectory() &&
-                fs.readdirSync(agentDir).length === 0
-              ) {
-                fs.rmdirSync(agentDir);
-              }
-            } catch { /* best-effort */ }
-          }
-        }
-
-        if (removed.length > 0) {
-          console.log(`  ${GREEN}✓${RESET} removed ${removed.length} stale working-tree file(s) (now sourced from squad-state):`);
-          for (const r of removed) {
-            console.log(`      ${DIM}.squad/${r}${RESET}`);
-          }
-        }
-        if (removeFailed.length > 0) {
-          console.log(`  ${YELLOW}⚠${RESET} could not remove: ${removeFailed.join(', ')} (will appear in git status)`);
-        }
-      } else if (wrote === 0) {
+      } else {
         console.log(`  ${DIM}no working-tree state files to migrate${RESET}`);
       }
-      // If wrote === -1 we already printed a warning; continue so config still updates.
     } else {
       console.log(`  ${DIM}no migratable state in working tree${RESET}`);
     }
   }
 
-  // Step 3 (UPGRADE-FLAG-IGNORED + Bug E): JSON-merge the new value.
-  // Reading + re-stringifying guarantees one canonical `stateBackend` key.
+  // Recheck the snapshot before switching authority. A retry can reuse the
+  // identical imported tree after a failed config write without losing source.
+  if (WORKTREE_BACKENDS.has(current) && ORPHAN_BACKENDS.has(target)) {
+    const snapshot = new Map(collectWorktreeState(dest).map(file => [file.relPath, file.content]));
+    if (snapshot.size !== migratedFiles.length || migratedFiles.some(file => !snapshot.get(file.relPath)?.equals(file.content))) {
+      throw new Error('Source changed during migration. Backend was not switched; reconcile before retrying.');
+    }
+  }
   config['stateBackend'] = target;
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  const configTempDir = fs.mkdtempSync(path.join(path.dirname(configPath), '.config-migrate-'));
+  try {
+    const configTempPath = path.join(configTempDir, 'config.json');
+    fs.writeFileSync(configTempPath, JSON.stringify(config, null, 2) + '\n');
+    fs.renameSync(configTempPath, configPath);
+  } finally {
+    fs.rmSync(configTempDir, { recursive: true, force: true });
+  }
   console.log(`  ${GREEN}✓${RESET} config.json updated: stateBackend = ${target}`);
+
+  if (migratedFiles.length > 0) {
+    // Only remove the imported snapshot, never a concurrent local edit.
+    const squadDir = path.join(dest, '.squad');
+    const removed: string[] = [];
+    const removeFailed: string[] = [];
+    for (const f of migratedFiles) {
+      const full = path.join(squadDir, f.relPath);
+      try {
+        if (fs.existsSync(full)) {
+          if (!fs.readFileSync(full).equals(f.content)) throw new Error('Source changed after migration');
+          fs.unlinkSync(full);
+        }
+        removed.push(f.relPath);
+      } catch {
+        removeFailed.push(f.relPath);
+      }
+    }
+    const agentsDir = path.join(squadDir, 'agents');
+    if (fs.existsSync(agentsDir) && fs.statSync(agentsDir).isDirectory()) {
+      for (const agentName of fs.readdirSync(agentsDir)) {
+        const agentDir = path.join(agentsDir, agentName);
+        try {
+          if (fs.statSync(agentDir).isDirectory() && fs.readdirSync(agentDir).length === 0) {
+            fs.rmdirSync(agentDir);
+          }
+        } catch { /* best-effort empty-directory cleanup */ }
+      }
+    }
+    if (removed.length > 0) {
+      console.log(`  ${GREEN}✓${RESET} removed ${removed.length} stale working-tree file(s) (now sourced from squad-state):`);
+      for (const r of removed) console.log(`      ${DIM}.squad/${r}${RESET}`);
+    }
+    if (removeFailed.length > 0) {
+      console.log(`  ${YELLOW}⚠${RESET} source retained (changed or could not be removed): ${removeFailed.join(', ')}. Reconcile these files with squad-state.`);
+    }
+  }
 
   // Step 4 (WI-1): re-install hooks (force so new pre-commit/post-commit land)
   if (ORPHAN_BACKENDS.has(target)) {
@@ -289,17 +342,17 @@ export async function migrateStateBackend(dest: string, target: string): Promise
   // files are committable again.
   const gitignorePath = path.join(dest, '.gitignore');
   const storage = new FSStorageProvider();
-  if (ORPHAN_BACKENDS.has(target) && !ORPHAN_BACKENDS.has(current)) {
-    // Transitioning FROM a worktree backend TO orphan/two-layer — add block
+  if (ORPHAN_BACKENDS.has(target)) {
+    // Also upgrade older marker blocks during orphan/two-layer transitions.
     const added = addSquadStateGitignoreBlock(gitignorePath, storage);
     if (added) {
-      console.log(`  ${GREEN}✓${RESET} added 2 entries to .gitignore (.squad/decisions.md, .squad/agents/*/history.md) — these now live on squad-state branch`);
+      console.log(`  ${GREEN}✓${RESET} updated .gitignore protections for decisions, histories, memory and identity`);
     }
   } else if (WORKTREE_BACKENDS.has(target) && ORPHAN_BACKENDS.has(current)) {
     // Transitioning FROM orphan/two-layer BACK TO a local backend — remove block
     const removed = removeSquadStateGitignoreBlock(gitignorePath, storage);
     if (removed) {
-      console.log(`  ${GREEN}✓${RESET} removed 2 entries from .gitignore — .squad/decisions.md and agent histories are now committable again`);
+      console.log(`  ${GREEN}✓${RESET} removed squad-state .gitignore block — local state is committable again`);
     }
   }
 
@@ -317,7 +370,7 @@ export async function migrateStateBackend(dest: string, target: string): Promise
  *
  * Source-of-truth hierarchy preserved: static files (team.md, charters,
  * ceremonies.md, casting/*, templates/*) are NEVER touched — only mutable
- * state (decisions.md, agents/<n>/history.md) migrates.
+ * state (decisions.md, agents/<n>/history.md, memory/ and decisions/inbox/) migrates.
  *
  * Returns the relative paths of files that were migrated + removed.
  */
@@ -331,10 +384,13 @@ export function liftInitMutableStateOntoOrphan(dest: string): string[] {
   for (const f of files) {
     const full = path.join(squadDir, f.relPath);
     try {
-      if (fs.existsSync(full)) fs.unlinkSync(full);
+      if (fs.existsSync(full)) {
+        if (!fs.readFileSync(full).equals(f.content)) throw new Error('Source changed after import');
+        fs.unlinkSync(full);
+      }
       removed.push(f.relPath);
-    } catch {
-      // Leave file behind rather than aborting; the runtime bridge already has authoritative copy.
+    } catch (err) {
+      console.warn(`Could not remove imported .squad/${f.relPath}; source was retained: ${err instanceof Error ? err.message : err}`);
     }
   }
   return removed;
