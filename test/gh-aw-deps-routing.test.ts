@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractSafeOutputsConfigJson } from './helpers/gh-aw-lock.js';
@@ -119,6 +120,7 @@ function compileSafeOutputs(workflowId: string): Record<string, Record<string, u
   const workflowDir = resolve(workspace, '.github', 'workflows');
   mkdirSync(workflowDir, { recursive: true });
   cpSync(resolve(ROOT, 'workflows'), workflowDir, { recursive: true });
+  seedCompilerActionPins(workspace);
   execFileSync('git', ['init', '--quiet'], { cwd: workspace });
   execFileSync(
     'gh',

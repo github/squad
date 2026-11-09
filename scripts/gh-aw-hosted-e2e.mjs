@@ -15,6 +15,7 @@ import {
 } from './gh-aw-hosted-e2e-contract.mjs';
 import {
   CONTRACT_DESTINATION,
+  LEGACY_OWNERSHIP_DESTINATIONS,
   OWNERSHIP_ENTRY_COUNT,
   OWNERSHIP_DESTINATION,
   PACKAGE_NAME,
@@ -24,7 +25,7 @@ import {
   verifyStagedInstall,
 } from '../workflows/shared/squad-install-verifier.mjs';
 
-const TRUSTED_SOURCE = Object.freeze({
+export const TRUSTED_SOURCE = Object.freeze({
   repository: 'github/squad',
   repositoryId: 1151205052,
   owner: 'github',
@@ -292,7 +293,7 @@ function packageArtifactCategories(contract) {
     runtimePackageDestinations: contract.runtime.map(({ packageDestination }) => packageDestination),
     runtimeDestinations: contract.runtime.map(({ destination }) => destination),
     manifest: [CONTRACT_DESTINATION],
-    ownership: [OWNERSHIP_DESTINATION],
+    ownership: [OWNERSHIP_DESTINATION, ...LEGACY_OWNERSHIP_DESTINATIONS],
     skill: contract.skills.map(({ destination }) => destination),
     triggerSentinel: [TRIGGER_PROBE_DESTINATION],
   };
@@ -954,6 +955,9 @@ function verifyInstalledTrusted(repositoryRoot, checkout, sourceSha) {
   assertInstalledManifestIdentity(repositoryRoot, checkout);
   const result = verifyInstall(checkout, { expectedRevision: sourceSha });
   if (result.failures.length > 0) throw new Error(result.failures.join('\n'));
+  if (result.packageName !== PACKAGE_NAME) {
+    throw new Error(`Hosted install must be owned by ${PACKAGE_NAME}; found ${result.packageName}.`);
+  }
   const ownership = JSON.parse(readFileSync(
     resolve(checkout, OWNERSHIP_DESTINATION),
     'utf8',

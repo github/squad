@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { execFileSync } from 'node:child_process';
 import { dirname, matchesGlob, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 import { extractSafeOutputsConfigJson } from './helpers/gh-aw-lock.js';
 
 // #1748 slice S2: `squad-deps-worker.md` gains Wave 1 `protected-files.exclude`
@@ -87,6 +88,7 @@ function compileWorker(workflowId: string): Record<string, unknown> {
   const workflowDir = resolve(workspace, '.github', 'workflows');
   mkdirSync(workflowDir, { recursive: true });
   cpSync(resolve(ROOT, 'workflows'), workflowDir, { recursive: true });
+  seedCompilerActionPins(workspace);
   if (workflowId === 'squad-deps-worker') {
     cpSync(
       resolve(ROOT, 'workflows/package/squad-deps-worker.md'),
@@ -484,6 +486,7 @@ describe('gh-aw squad-deps-worker S2: Wave 1 protected-files.exclude (#1748)', (
         const workflowDir = resolve(workspace, '.github', 'workflows');
         mkdirSync(workflowDir, { recursive: true });
         cpSync(resolve(ROOT, 'workflows'), workflowDir, { recursive: true });
+        seedCompilerActionPins(workspace);
 
         const canonicalSource = read('workflows/package/squad-deps-worker.md');
         const mutatedSource = canonicalSource.replace(/^\s+- CHANGELOG\.md\s*$/m, '');
@@ -538,6 +541,7 @@ describe('gh-aw squad-deps-worker S2: Wave 1 protected-files.exclude (#1748)', (
         cpSync(resolve(ROOT, 'workflows'), workflowDir, { recursive: true });
 
         // Inject package.json into the general worker's protected-files.exclude.
+        seedCompilerActionPins(workspace);
         const generalWorkerPath = resolve(workflowDir, 'squad-implement-worker.md');
         const originalSource = read('workflows/squad-implement-worker.md');
         const mutatedSource = originalSource.replace(

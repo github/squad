@@ -1241,6 +1241,8 @@ describe('trusted synchronous publication completion (source and strict-compiled
         expect(f.createIssue).toHaveBeenCalledTimes(1);
       }
     },
+    // The pinned renderer processes thousands of quoted lines through real prepare/create/finalize jobs.
+    20_000,
   );
 
   for (const implementation of ['source', 'compiled']) {

@@ -69,7 +69,9 @@ describe('gh-aw 1.x canonical upstream installation contract', () => {
     ownership[key] = value;
     writeFileSync(path, JSON.stringify(ownership));
     expect(verifyInstall(root, { expectedRevision: revision }).failures.join('\n'), `${label}: ${value}`)
-      .toMatch(/installer|ownership record/);
+      .toContain(key === 'package'
+        ? `Package ownership source must be ${value}@${revision}.`
+        : 'Package ownership installer must be gh-aw v1.0.1.');
   }, 120_000);
 
   it('rejects a realistic mutation of the emitted immutable compiler pin and complete lock bytes', () => {

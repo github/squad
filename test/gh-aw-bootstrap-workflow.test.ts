@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 import { fileURLToPath } from 'node:url';
 import { compileFunction, constants as vmConstants } from 'node:vm';
 import { parse } from 'yaml';
@@ -626,6 +627,7 @@ function compileWorkflow(source = WORKFLOW): string {
   mkdirSync(workflowDir, { recursive: true });
   cpSync(resolve(ROOT, 'workflows/shared'), join(workflowDir, 'shared'), { recursive: true });
   writeFileSync(join(workflowDir, 'squad-bootstrap.md'), source);
+  seedCompilerActionPins(root);
   execFileSync('git', ['init', '--quiet'], { cwd: root });
   execFileSync(
     'gh',

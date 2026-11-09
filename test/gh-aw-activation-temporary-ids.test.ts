@@ -6,6 +6,7 @@ import { afterAll, describe, it, expect } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 import { activationRequest, validateCreateReceipt } from '../workflows/shared/squad-activation.mjs';
 
 const WORKFLOWS_DIR = join(process.cwd(), 'workflows');
@@ -155,6 +156,7 @@ describe('gh-aw: require-temporary-id compiles into the real safe-output config 
     const workspace = mkdtempSync(join(TEST_WORKSPACES_DIR, 'temp-ids-'));
     execFileSync('git', ['init', '--quiet'], { cwd: workspace });
     cpSync(WORKFLOWS_DIR, join(workspace, '.github', 'workflows'), { recursive: true });
+    seedCompilerActionPins(workspace);
     execFileSync(compiler, [...prefix, 'compile', '.github/workflows/squad.md', '--strict', '--no-check-update'], {
       cwd: workspace, encoding: 'utf8', stdio: 'pipe',
     });

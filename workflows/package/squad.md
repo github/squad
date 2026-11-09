@@ -1005,8 +1005,8 @@ jobs:
         id: squad-cli
         uses: github/squad/.github/actions/squad-init@5c662ba015ec4f99befa51b0e8ca4f2148b0497f
         with:
-          repository: github/squad
           skip-init: "true"
+          repository: github/squad
       - name: Initialize Squad team
         env:
           GH_TOKEN: ${{ steps.squad-app-token.outputs.token || secrets.SQUAD_GITHUB_TOKEN || github.token }}

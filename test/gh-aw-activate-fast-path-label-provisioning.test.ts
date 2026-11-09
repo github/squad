@@ -6,6 +6,7 @@ import { afterAll, describe, it, expect, vi } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 import {
   ACTIVATION_RECEIPT_SCHEMA, buildActivationBindings, digest, parseActivationPlan,
   validateCreateReceipt, validateReceiptSet,
@@ -258,6 +259,7 @@ describe('gh-aw: native compiled policy remains bounded outside activation', () 
     const root = workspace('compile-');
     execFileSync('git', ['init', '--quiet'], { cwd: root });
     cpSync(WORKFLOWS_DIR, join(root, '.github/workflows'), { recursive: true });
+    seedCompilerActionPins(root);
     execFileSync(compiler, [...prefix, 'compile', '.github/workflows/squad.md', '--strict', '--no-check-update'],
       { cwd: root, encoding: 'utf8', stdio: 'pipe' });
     const lockPath = join(root, '.github/workflows/squad.lock.yml');
