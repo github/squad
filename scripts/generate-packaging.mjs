@@ -197,8 +197,7 @@ export function renderHomebrewCask({ version, repo, checksums }) {
   sha256 arm:   "${armSha}",
          intel: "${intelSha}"
 
-  url "https://github.com/${repo}/releases/download/v#{version}/squad-darwin-#{arch}.tar.gz",
-      verified: "github.com/${repo}/"
+  url "https://github.com/${repo}/releases/download/v#{version}/squad-darwin-#{arch}.tar.gz"
   name "Squad"
   desc "Programmable multi-agent runtime for GitHub Copilot${channelLabel}"
   homepage "${HOMEPAGE}"
@@ -207,7 +206,7 @@ ${livecheck}
 ${conflicts},
   ]
 
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   binary "squad-darwin-#{arch}/squad"
 
