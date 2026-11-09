@@ -252,13 +252,13 @@ describe('state-mcp bridge', () => {
   );
 
   it.each(['orphan', 'two-layer'] as const)(
-    'writes casting policy but rejects individual casting pair writes through the %s backend',
+    'rejects source-branch casting configuration writes through the %s backend',
     async (stateBackend) => {
       initSquad(stateBackend);
       const messages: JsonRpcMessage[] = [];
       const session = createStateMcpSession(TMP, message => messages.push(message as JsonRpcMessage));
       const castingState = [
-        ['casting/policy.json', '{"mode":"auto"}\n', false],
+        ['casting/policy.json', '{"mode":"auto"}\n', true],
         ['casting/registry.json', '{"agents":{}}\n', true],
         ['casting/history.json', '{"events":[]}\n', true],
       ] as const;
