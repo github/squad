@@ -20,13 +20,35 @@ import { fileURLToPath } from 'node:url';
 export const COMMENT_MARKER = '<!-- squad-pr-readiness -->';
 
 /**
- * Check-run names belonging to this workflow (filtered from CI checks).
+ * Check-run names of the other `workflow_run` writers split out by #2409
+ * (filtered from CI checks). Like `readiness-bind`, these jobs run from the
+ * default branch, so their check runs land on the default-branch tip — the
+ * head commit of any PR from dev (dev to main) — not on the PR that triggered
+ * them. Their workflows cancel superseded runs (`cancel-in-progress`), so a
+ * quick push on any PR leaves a `cancelled` run there, and a binding or
+ * posting error leaves a `failure`. Neither says anything about the dev PR.
+ *
+ * - `impact`: squad-impact.yml (job id; no `name:`)
+ * - `Post Repo Health findings`: squad-repo-health-report.yml
+ * - `heartbeat`: squad-heartbeat.yml (and the squad-heartbeat-pr-closed.yml
+ *   signal job of the same name)
+ */
+export const WORKFLOW_RUN_WRITER_CHECK_NAMES = ['impact', 'Post Repo Health findings', 'heartbeat'];
+
+/**
+ * Check-run names excluded from the "CI passing" check.
  * `readiness` is the job of squad-pr-readiness-request.yml (reported on the PR
  * head) and the posting job of squad-pr-readiness.yml; `readiness-bind` is that
  * workflow's bind job. workflow_run check runs land on the default-branch tip,
- * which is the head commit of any PR from dev (dev to main).
+ * which is the head commit of any PR from dev (dev to main), which is why the
+ * other workflow_run writers are excluded too.
  */
-export const SELF_CHECK_NAMES = ['readiness', 'readiness-bind', 'PR Readiness Check'];
+export const SELF_CHECK_NAMES = [
+  'readiness',
+  'readiness-bind',
+  'PR Readiness Check',
+  ...WORKFLOW_RUN_WRITER_CHECK_NAMES,
+];
 
 /** Regex for source files that require a changeset. */
 export const SOURCE_PATTERN = /^packages\/squad-(sdk|cli)\/src\//;
