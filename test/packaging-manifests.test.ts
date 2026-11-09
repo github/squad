@@ -103,6 +103,12 @@ describe('renderHomebrewCask', () => {
     expect(insider).toContain('cask "squad-insider"');
     expect(insider).toContain('"squad-preview"');
   });
+
+  it('avoids deprecated Homebrew cask syntax (verified: redundant with homepage, string macos comparison)', () => {
+    expect(cask).not.toContain('verified:');
+    expect(cask).toContain('depends_on macos: :big_sur');
+    expect(cask).not.toContain('depends_on macos: ">= :big_sur"');
+  });
 });
 
 describe('renderWingetInstaller', () => {

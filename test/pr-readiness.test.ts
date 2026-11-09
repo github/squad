@@ -352,6 +352,51 @@ describe('checkCIStatus', () => {
     expect(result.detail).toContain('failing');
   });
 
+  // #2409 moved these writers onto workflow_run, whose check runs land on the
+  // default-branch tip: the head commit of every dev-to-main PR. Cancelled or
+  // failed runs there come from other PRs and must not fail the dev PR's CI.
+  describe('ignores workflow_run writer check runs that land on the default-branch tip', () => {
+    const writerChecks = ['readiness-bind', 'impact', 'Post Repo Health findings', 'heartbeat'];
+
+    it('lists every workflow_run writer check', () => {
+      for (const name of writerChecks) {
+        expect(SELF_CHECK_NAMES, name).toContain(name);
+      }
+    });
+
+    for (const name of writerChecks) {
+      for (const conclusion of ['cancelled', 'failure']) {
+        it(`a ${conclusion} "${name}" run does not fail CI`, () => {
+          const checks = [
+            { name: 'build', conclusion: 'success', status: 'completed' },
+            { name, conclusion, status: 'completed' },
+          ];
+          const result = checkCIStatus(checks, []);
+          expect(result.pass).toBe(true);
+          expect(result.detail).toContain('All checks passing');
+        });
+      }
+
+      it(`an in-progress "${name}" run does not leave CI pending`, () => {
+        const checks = [
+          { name: 'build', conclusion: 'success', status: 'completed' },
+          { name, conclusion: null, status: 'in_progress' },
+        ];
+        expect(checkCIStatus(checks, []).pass).toBe(true);
+      });
+    }
+
+    it('still reports a real failure alongside an ignored writer run', () => {
+      const checks = [
+        { name: 'impact', conclusion: 'cancelled', status: 'completed' },
+        { name: 'build', conclusion: 'failure', status: 'completed' },
+      ];
+      const result = checkCIStatus(checks, []);
+      expect(result.pass).toBe(false);
+      expect(result.detail).toBe('1 check(s) failing: build');
+    });
+  });
+
   it('handles null checkRuns/statuses gracefully', () => {
     const result = checkCIStatus(null, null);
     expect(result.pass).toBe(false);
@@ -785,6 +830,10 @@ describe('constants', () => {
   it('SELF_CHECK_NAMES contains expected values', () => {
     expect(SELF_CHECK_NAMES).toContain('readiness');
     expect(SELF_CHECK_NAMES).toContain('PR Readiness Check');
+    expect(SELF_CHECK_NAMES).toContain('readiness-bind');
+    expect(SELF_CHECK_NAMES).toContain('impact');
+    expect(SELF_CHECK_NAMES).toContain('Post Repo Health findings');
+    expect(SELF_CHECK_NAMES).toContain('heartbeat');
   });
 
   it('SOURCE_PATTERN matches SDK source files', () => {

@@ -51,8 +51,8 @@ condition and wait for a human decision — do not work around it.
 ### 0. Preflight — verify before you touch anything
 
 ```bash
-# gh is authenticated
-gh auth status
+# gh is authenticated on github.com
+gh auth status --hostname github.com
 
 # Prove the exact package-capable compiler version before creating artifacts
 # gh-aw-exact-version-start
@@ -92,7 +92,7 @@ git status --short
 > streams again. Stop before branch creation or file generation unless that
 > second check proves exactly `v0.91.5`; never select a newer release.
 
-- **STOP** if `gh auth status` is not logged in, or is logged in as the wrong
+- **STOP** if `gh auth status --hostname github.com` is not logged in, or is logged in as the wrong
   identity for this repo (see the `gh-auth-isolation` skill to operate as a
   specific account without switching the global default).
 - **STOP** if `owner_repo` or `default_branch` cannot be resolved.
@@ -329,16 +329,16 @@ already-approved revision.
 On a clean repo, `gh aw add` reports these expected safe updates and **nothing else**:
 
 <!-- allowlist-start -->
-- Restricted secrets: **`SQUAD_GITHUB_APP_PRIVATE_KEY`** and **`SQUAD_GITHUB_TOKEN`**
+- Restricted secrets: **`GH_AW_GITHUB_READ_APP_PRIVATE_KEY`**, **`SQUAD_GITHUB_APP_PRIVATE_KEY`**, and **`SQUAD_GITHUB_TOKEN`**
 - Action: **`github/squad/.github/actions/squad-init`**
 <!-- allowlist-end -->
 
 > **These are referenced names, not prerequisites.** `gh aw add` lists the secrets
 > the workflows *reference* so you can approve that surface — it is not asking you
-> to supply them. Both secrets are optional, they need not exist, and neither is
+> to supply them. All three secrets are optional, they need not exist, and none is
 > required to enlist a repository. Single-repo activation runs on the built-in
-> `github.token`. Configure them only for cross-repo access or elevated
-> permissions. Auth precedence: GitHub App token, then the PAT, then
+> `github.token`. Configure them only for cross-repo access, elevated
+> permissions, or optional CAO evidence collection. Auth precedence: GitHub App token, then the PAT, then
 > `github.token`. Never block an enlistment waiting for a credential.
 
 If — and only if — the report contains exactly those documented entries, complete
@@ -657,7 +657,7 @@ test "${squad_package}" = "github/squad/workflows" || {
 gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 
-# Safe-update report shows ONLY the two documented secrets + squad-init → approve once
+# Safe-update report shows ONLY the three documented secrets + squad-init → approve once
 gh aw compile --strict --approve
 node .github/workflows/shared/squad-install-verifier.mjs --materialize-runtime
 gh aw compile --strict           # final, no --approve; exactly the two documented warnings remain
@@ -684,8 +684,8 @@ gh api graphql -f query='
 ### ✓ Correct: STOP on an undocumented safe-update entry
 
 ```text
-gh aw add reports a third secret: `ACME_DEPLOY_KEY`.
-→ This is NOT in the allowlist (SQUAD_GITHUB_APP_PRIVATE_KEY, SQUAD_GITHUB_TOKEN)
+gh aw add reports an undocumented secret: `ACME_DEPLOY_KEY`.
+→ This is NOT in the allowlist (GH_AW_GITHUB_READ_APP_PRIVATE_KEY, SQUAD_GITHUB_APP_PRIVATE_KEY, SQUAD_GITHUB_TOKEN)
   and is NOT the squad-init action. Do NOT run `--approve`.
   Halt, report "unexpected safe-update entry: ACME_DEPLOY_KEY", and wait.
 ```
@@ -721,7 +721,7 @@ gh pr merge --squash                # auto-merge before human review. NEVER.
 - ❌ **Committing gh-aw's mutable router.** Remove only
   `.github/skills/agentic-workflows/SKILL.md`; keep the exact Squad-owned
   `.github/skills/gh-aw-enlistment/SKILL.md`.
-- ❌ **Approving unknown safe updates.** Approve ONLY `SQUAD_GITHUB_APP_PRIVATE_KEY`,
+- ❌ **Approving unknown safe updates.** Approve ONLY `GH_AW_GITHUB_READ_APP_PRIVATE_KEY`, `SQUAD_GITHUB_APP_PRIVATE_KEY`,
   `SQUAD_GITHUB_TOKEN`, and `github/squad/.github/actions/squad-init`. Anything
   else is a STOP.
 - ❌ **Treating `--approve` as the final compile.** Always finish with a plain

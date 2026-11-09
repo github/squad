@@ -185,6 +185,12 @@ function checkTeamRootResolves(squadDir: string, teamRoot: string): DoctorCheck 
 const STRAY_STATE_FILE = /\.(md|json)$/;
 const STRAY_STATE_MAX_DEPTH = 4;
 const STRAY_STATE_LIST_LIMIT = 10;
+const LEGACY_STRANDED_STATE_PATHS: ReadonlyArray<{ readonly root: string; readonly kind: 'file' | 'dir' }> = [
+  ...MUTABLE_STATE_PATHS,
+  // Pre-#2229 state tools could also write casting/policy.json before #2107 fixed linked team roots.
+  { root: 'casting/policy.json', kind: 'file' },
+];
+const LEGACY_STRANDED_STATE_KEYS = new Set(['casting/policy.json']);
 
 /** Push `/`-separated keys of files under `base/rel`. Skips dirs it cannot list. */
 function collectFileKeys(base: string, rel: string, depth: number, out: string[]): void {
@@ -225,7 +231,7 @@ function checkStrandedLinkedTeamState(squadDir: string): DoctorCheck | undefined
   if (paths.teamSquadDir === paths.teamDir) return undefined;
 
   const candidates: string[] = [];
-  for (const { root, kind } of MUTABLE_STATE_PATHS) {
+  for (const { root, kind } of LEGACY_STRANDED_STATE_PATHS) {
     const full = path.join(paths.teamDir, root);
     if (kind === 'file') {
       if (fileExists(full) && !isDirectory(full)) candidates.push(root);
@@ -235,7 +241,9 @@ function checkStrandedLinkedTeamState(squadDir: string): DoctorCheck | undefined
   }
   // Match only what the state tools could write, so an unrelated code dir
   // named agents/ or log/ does not trigger advice to move it.
-  const stray = candidates.filter(key => isMutableStateKey(key) && STRAY_STATE_FILE.test(key));
+  const stray = candidates.filter(
+    key => (isMutableStateKey(key) || LEGACY_STRANDED_STATE_KEYS.has(key)) && STRAY_STATE_FILE.test(key),
+  );
   if (stray.length === 0) return undefined;
 
   const toMerge = stray.filter(key => fileExists(path.join(paths.teamSquadDir, key)));

@@ -74,6 +74,38 @@ describe('addSquadStateGitignoreBlock', () => {
     const occurrences = (content.match(/# Squad: state owned by squad-state branch/g) ?? []).length;
     expect(occurrences).toBe(1);
   });
+
+  it.each(['\n', '\r\n'])('upgrades a legacy block once and preserves surrounding rules with %j endings', newline => {
+    const original = [
+      'node_modules/',
+      SQUAD_STATE_GITIGNORE_OPEN_MARKER,
+      '.squad/decisions.md',
+      '.squad/agents/*/history.md',
+      SQUAD_STATE_GITIGNORE_CLOSE_MARKER,
+      'custom/',
+      '',
+    ].join(newline);
+    storage.writeSync(GITIGNORE_PATH, original);
+    expect(addSquadStateGitignoreBlock(GITIGNORE_PATH, storage)).toBe(true);
+    const updated = storage.readSync(GITIGNORE_PATH) ?? '';
+    expect(updated).toContain('.squad/memory/');
+    expect(updated).toContain('.squad/identity/');
+    expect(updated).not.toContain('.squad/casting/');
+    expect(updated).toContain('node_modules/');
+    expect(updated).toContain('custom/');
+    expect(addSquadStateGitignoreBlock(GITIGNORE_PATH, storage)).toBe(false);
+    expect(storage.readSync(GITIGNORE_PATH)).toBe(updated);
+    expect(removeSquadStateGitignoreBlock(GITIGNORE_PATH, storage)).toBe(true);
+    expect(storage.readSync(GITIGNORE_PATH)).toBe(['node_modules/', 'custom/', ''].join(newline));
+  });
+
+  it('refuses an unterminated marker block without replacing user rules', () => {
+    const original = SQUAD_STATE_GITIGNORE_OPEN_MARKER + '\ncustom/\n';
+    storage.writeSync(GITIGNORE_PATH, original);
+    expect(() => addSquadStateGitignoreBlock(GITIGNORE_PATH, storage)).toThrow('Malformed');
+    expect(() => removeSquadStateGitignoreBlock(GITIGNORE_PATH, storage)).toThrow('Malformed');
+    expect(storage.readSync(GITIGNORE_PATH)).toBe(original);
+  });
 });
 
 describe('removeSquadStateGitignoreBlock', () => {
