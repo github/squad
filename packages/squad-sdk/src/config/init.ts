@@ -152,8 +152,6 @@ export interface InitOptions {
   version?: string;
   /** Project description prompt — stored for REPL auto-casting. */
   prompt?: string;
-  /** If true, disable extraction from consult sessions (read-only consultations) */
-  extractionDisabled?: boolean;
   /** Optional SubSquad definitions — generates .squad/workstreams.json when provided */
   streams?: SubSquadDefinition[];
   /** If true, use built-in base roles with useRole() in SDK config (default: false) */
@@ -227,6 +225,11 @@ const AGENT_TEMPLATES: Record<string, { displayName: string; description: string
     displayName: 'Ralph',
     description: 'Persistent memory agent that maintains context across sessions.'
   },
+  'rai': {
+    displayName: 'Rai',
+    description: 'Responsible AI reviewer ensuring content safety, bias detection, and ethical standards.'
+  },
+  // Legacy capitalized role id (pre-2.0 init passed `Rai`); canonical id is `rai`.
   'Rai': {
     displayName: 'Rai',
     description: 'Responsible AI reviewer ensuring content safety, bias detection, and ethical standards.'
@@ -1107,10 +1110,6 @@ All findings logged to \`.squad/fact-checker/audit-trail.md\` (append-only, succ
         adoSection._availableTypes = introspectedTypes;
       }
     }
-    // Only include extractionDisabled if explicitly set
-    if (options.extractionDisabled) {
-      squadConfig.extractionDisabled = true;
-    }
     if (mcpConfigMode === 'agent-frontmatter') {
       squadConfig.mcpConfigMode = mcpConfigMode;
     }
@@ -1355,7 +1354,7 @@ ${projectDescription ? `- **Description:** ${projectDescription}\n` : ''}- **Cre
           `MANIFEST_SKILL_NAMES references ${missing.length} skill(s) ` +
           `missing from the SDK templates dir (${skillsSrc}): ${missing.join(', ')}. ` +
           `This is a packaging bug — try \`squad upgrade\` or reinstall the SDK; ` +
-          `if it persists, please report it at https://github.com/bradygaster/squad/issues. ` +
+          `if it persists, please report it at https://github.com/github/squad/issues. ` +
           `(Contributors: re-run \`node scripts/sync-templates.mjs --sync\` from the repo root before packaging.)`
         );
       }
@@ -1369,20 +1368,20 @@ ${projectDescription ? `- **Description:** ${projectDescription}\n` : ''}- **Cre
   }
 
   // -------------------------------------------------------------------------
-  // Create .gitattributes for merge drivers
+  // Create .gitattributes for merge drivers and stable casting hashes
   // Append-only mutable state files use union merge to handle concurrent appends.
-  // Note: .squad/casting/* files are identity (not mutable) so they don't need
-  // union merge and are NOT listed here.
+  // Casting JSON is authoritative identity whose commit manifest hashes LF bytes.
   // -------------------------------------------------------------------------
 
   const gitattributesPath = join(teamRoot, '.gitattributes');
-  const unionRules = [
+  const gitattributesRules = [
     '.squad/decisions.md merge=union',
     '.squad/agents/*/history.md merge=union',
     '.squad/log/** merge=union',
     '.squad/orchestration-log/** merge=union',
     '.squad/rai/audit-trail.md merge=union',
     '.squad/fact-checker/audit-trail.md merge=union',
+    '.squad/casting/*.json text eol=lf',
   ];
 
   let existingAttrs = '';
@@ -1390,10 +1389,10 @@ ${projectDescription ? `- **Description:** ${projectDescription}\n` : ''}- **Cre
     existingAttrs = storage.readSync(gitattributesPath) ?? '';
   }
 
-  const missingRules = unionRules.filter(rule => !existingAttrs.includes(rule));
+  const missingRules = gitattributesRules.filter(rule => !existingAttrs.includes(rule));
   if (missingRules.length > 0) {
     const block = (existingAttrs && !existingAttrs.endsWith('\n') ? '\n' : '')
-      + '# Squad: union merge for append-only team state files\n'
+      + '# Squad: merge and line-ending rules for team state files\n'
       + missingRules.join('\n') + '\n';
     await storage.append(gitattributesPath, block);
     createdFiles.push(toRelativePath(gitattributesPath));

@@ -39,28 +39,60 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
     console.log(`Options:`);
     console.log(`  ${BOLD}--sdk${RESET}                       Use SDK builder syntax (squad.config.ts)`);
     console.log(`  ${BOLD}--roles${RESET}                     Seed the team with built-in base roles`);
-    console.log(`  ${BOLD}--global${RESET}                    Initialize in the personal (global) squad directory`);
     console.log(`  ${BOLD}--no-workflows${RESET}              Skip writing GitHub Actions workflows`);
     console.log(`  ${BOLD}--preset <name>${RESET}             Apply a curated preset after init`);
     console.log(`  ${BOLD}--state-backend <type>${RESET}      State backend (local|orphan|two-layer)`);
+    console.log(`  ${BOLD}--client <list>${RESET}             Client hosts to project (or "all"):`);
     console.log(`  ${BOLD}--mode remote <path>${RESET}        Point at an external team root (creates .squad/config.json)\n`);
   },
 
   upgrade: (version) => {
     header('upgrade', version, 'Update Squad-owned files to the latest version');
     console.log(`Usage: squad upgrade [options]\n`);
-    console.log(`Overwrites Squad-owned files (squad.agent.md, .squad/templates/) while`);
-    console.log(`leaving your team state under .squad/ and .ai-team/ untouched.\n`);
-    console.log(`Local customizations to squad.agent.md are backed up automatically.`);
-    console.log(`Use --dry-run to preview changes before applying.\n`);
+    console.log(`Overwrites Squad-owned files after comparing content (line endings ignored):`);
+    console.log(`  .github/agents/squad.agent.md, .github/skills/*, .github/workflows/squad-*.yml,`);
+    console.log(`  .squad/templates/** and the flat .squad/casting-*.json template copies.`);
+    console.log(`A file you customized is written to <file>.local-backup (verified) before it`);
+    console.log(`is overwritten; files that match what Squad shipped are replaced silently.`);
+    console.log(`Never touched: team.md, routing.md, decisions, agents/*/history.md, the casting`);
+    console.log(`registry/history pair, config.json and .ai-team/. Missing .gitignore and`);
+    console.log(`.gitattributes entries are appended in the file's own line-ending style.\n`);
+    console.log(`Use --dry-run to preview: it writes nothing and reports only files that would change.\n`);
     console.log(`Options:`);
-    console.log(`  ${BOLD}--dry-run${RESET}                   Preview changes without writing`);
-    console.log(`  ${BOLD}--global${RESET}                    Upgrade the personal (global) squad`);
+    console.log(`  ${BOLD}--dry-run${RESET}                   Preview changes without writing (also with --self)`);
     console.log(`  ${BOLD}--migrate-directory${RESET}         Rename legacy .ai-team/ to .squad/`);
     console.log(`  ${BOLD}--state-backend <type>${RESET}      Migrate to a new backend (orphan|two-layer)`);
-    console.log(`  ${BOLD}--self${RESET}                      Upgrade the squad CLI package itself`);
-    console.log(`  ${BOLD}--insider${RESET}                   With --self, install the @insider tag`);
-    console.log(`  ${BOLD}--force${RESET}                     Overwrite files without prompting\n`);
+    console.log(`  ${BOLD}--client <list>${RESET}             Add client hosts (or "all"):`);
+    console.log(`  ${BOLD}--self${RESET}                      Upgrade the squad CLI package itself, following the`);
+    console.log(`                              installed channel (prerelease → @insider, stable → @latest)`);
+    console.log(`  ${BOLD}--insider${RESET}                   With --self, force the @insider tag`);
+    console.log(`  ${BOLD}--force${RESET}                     Re-process all files when already current;`);
+    console.log(`                              with --self, allow installing an older version\n`);
+  },
+
+  client: (version) => {
+    header('client', version, 'Manage client host projections');
+    console.log(`Usage: squad client list [--json]`);
+    console.log(`       squad client add <list> [--dry-run]\n`);
+    console.log(`Lists the hosts configured in .squad/config.json (clients[]) and whether their`);
+    console.log(`projected files exist. An empty clients[] means only the default GitHub Copilot`);
+    console.log(`host (.github/agents/squad.agent.md + .mcp.json) is projected.\n`);
+    console.log(`Hosts: copilot, claude, kiro, opencode, cursor, codex, antigravity, or "all".\n`);
+    console.log(`Options:`);
+    console.log(`  ${BOLD}--json${RESET}                      Emit structured JSON instead of text`);
+    console.log(`  ${BOLD}--dry-run${RESET}                   With add: show what would be projected, write nothing\n`);
+  },
+
+  roster: (version) => {
+    header('roster', version, 'Explicitly configure optional built-in agents');
+    console.log(`Usage: squad roster add <rai|fact-checker|all> [--dry-run]`);
+    console.log(`       squad roster remove <rai|fact-checker|all> [--dry-run]\n`);
+    console.log(`Prints the exact team.md diff before applying it. The first add writes a`);
+    console.log(`byte-exact verified backup and records provenance. Remove deletes only rows`);
+    console.log(`added by this command and restores the original bytes when no later edits exist.\n`);
+    console.log(`Options:`);
+    console.log(`  ${BOLD}--dry-run${RESET}                   Preview the exact diff without writing\n`);
+    console.log(`Aliases for remove: disable, uninstall.\n`);
   },
 
   'update-check': (version) => {
@@ -87,8 +119,8 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
   status: (version) => {
     header('status', version, 'Show which squad is active and why');
     console.log(`Usage: squad status\n`);
-    console.log(`Reports the resolved squad directory, the resolution reason (repo vs.`);
-    console.log(`global), and the state of the personal squad path.\n`);
+    console.log(`Reports the resolved squad directory and any inherited upstreams.`);
+    console.log(`Fails with a clear message when run outside a project.\n`);
   },
 
   roles: (version) => {
@@ -143,7 +175,7 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
     header('cast', version, 'Show roster or add a new agent to the team');
     console.log(`Usage: squad cast                        ${DIM}# show the current cast (roster)${RESET}`);
     console.log(`       squad cast --name <name> --role <role> [--force]  ${DIM}# add a new agent${RESET}\n`);
-    console.log(`With no flags, displays the current session cast (project + personal agents).`);
+    console.log(`With no flags, displays the current session cast (project agents).`);
     console.log(`With --name and --role (or via "squad hire --name <name> --role <role>"), adds a new specialist agent to the project squad.\n`);
     console.log(`Options:`);
     console.log(`  ${BOLD}--name <name>${RESET}               Name for the new agent (required when adding)`);
@@ -229,9 +261,13 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
 
   'state-mcp': (version) => {
     header('state-mcp', version, 'MCP bridge exposing Squad runtime state tools');
-    console.log(`Usage: squad state-mcp\n`);
+    console.log(`Usage: squad state-mcp [--experimental-backend]\n`);
     console.log(`Starts a Model Context Protocol server over stdio that exposes Squad`);
     console.log(`state read/write tools to MCP-compatible hosts.\n`);
+    console.log(`Options:`);
+    console.log(`  ${BOLD}--experimental-backend${RESET}      Also expose the experimental squad_backend_* conversation`);
+    console.log(`                              tools (or set SQUAD_EXPERIMENTAL_BACKEND=1). Transcript/event-log`);
+    console.log(`                              only: no execution harness is bundled.\n`);
   },
 
   doctor: (version) => {
@@ -239,24 +275,6 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
     console.log(`Usage: squad doctor\n`);
     console.log(`Checks for required files, valid config, and a reachable Copilot CLI.`);
     console.log(`Exits non-zero if any required check fails.\n`);
-  },
-
-  consult: (version) => {
-    header('consult', version, 'Enter consult mode with your personal squad');
-    console.log(`Usage: squad consult [--status] [--check]\n`);
-    console.log(`Options:`);
-    console.log(`  ${BOLD}--status${RESET}                    Show consult session status`);
-    console.log(`  ${BOLD}--check${RESET}                     Run consult-mode prerequisites check\n`);
-  },
-
-  extract: (version) => {
-    header('extract', version, 'Extract learnings from a consult-mode session');
-    console.log(`Usage: squad extract [options]\n`);
-    console.log(`Options:`);
-    console.log(`  ${BOLD}--dry-run${RESET}                   Preview the extracted learnings`);
-    console.log(`  ${BOLD}--clean${RESET}                     Remove transient session files after extract`);
-    console.log(`  ${BOLD}--yes${RESET}                       Skip interactive confirmations`);
-    console.log(`  ${BOLD}--accept-risks${RESET}              Acknowledge data-handling implications\n`);
   },
 
   subsquads: (version) => {
@@ -290,13 +308,6 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
   schedule: (version) => {
     header('schedule', version, 'Manage scheduled Squad tasks');
     console.log(`Usage: squad schedule <list|run <id>|init|status>\n`);
-  },
-
-  personal: (version) => {
-    header('personal', version, 'Manage your personal squad (ambient agents)');
-    console.log(`Usage: squad personal <init|list|add <name>|remove <name>> [options]\n`);
-    console.log(`Options:`);
-    console.log(`  ${BOLD}--role <role>${RESET}               Built-in role to attach (see 'squad roles')\n`);
   },
 
   preset: (version) => {
@@ -385,7 +396,10 @@ function printWatchHelp(name: 'triage' | 'watch', version: string): void {
   console.log(`  ${BOLD}--copilot-flags "..."${RESET}       Extra flags for Copilot CLI`);
   console.log(`  ${BOLD}--max-concurrent N${RESET}          Parallel issue limit (default 1)`);
   console.log(`  ${BOLD}--timeout N${RESET}                 Max minutes per issue (default 30)`);
+  console.log(`  ${BOLD}--claims <none|git-ref>${RESET}     Claim issues across watchers (default none)`);
   console.log(`  ${BOLD}--interval <minutes>${RESET}        Polling interval (default 10)`);
+  console.log(`  ${BOLD}--max-rounds N${RESET}              Stop after N completed rounds`);
+  console.log(`  ${BOLD}--max-duration 8h${RESET}           Stop after elapsed time (ms, s, m, h, d)`);
   console.log(`  ${BOLD}--health${RESET}                    (watch only) print watch instance status\n`);
   console.log(`Capabilities (opt-in via --<name> or .squad/config.json):`);
   console.log(`  ${BOLD}--self-pull${RESET}                 git fetch/pull at round start`);

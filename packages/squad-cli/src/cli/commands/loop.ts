@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { effectiveSquadDir } from '../core/effective-squad-dir.js';
-import { fatal } from '../core/errors.js';
+import { fatal, fatalNoSquad } from '../core/errors.js';
 import { GREEN, RED, DIM, BOLD, RESET, YELLOW } from '../core/output.js';
 import { withAdditionalMcpConfig } from '../core/copilot-invocation.js';
 import {
@@ -140,9 +140,8 @@ export function buildLoopAgentCommand(
     return buildCustomAgentCommand(options.agentCmd, prompt);
   }
   const args = ['-p', prompt];
-  if (options.copilotFlags) {
-    args.push(...options.copilotFlags.trim().split(/\s+/));
-  }
+  const copilotFlags = options.copilotFlags?.trim() || '--yolo';
+  args.push(...copilotFlags.split(/\s+/));
   return { cmd: 'copilot', args: withAdditionalMcpConfig('copilot', args, options.teamRoot) };
 }
 
@@ -273,7 +272,7 @@ export async function runLoop(dest: string, options: LoopConfig): Promise<void> 
   const teamRoot = path.dirname(squadDirInfo.path);
 
   if (!existsSync(teamMd)) {
-    fatal('No squad found — run `squad init` first.');
+    fatalNoSquad();
   }
 
   // Locate loop.md relative to the same work tree used for execution

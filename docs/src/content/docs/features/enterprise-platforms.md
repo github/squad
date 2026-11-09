@@ -2,6 +2,8 @@
 
 Squad supports Azure DevOps and Microsoft Planner in addition to GitHub. When your git remote points to Azure DevOps, Squad automatically detects the platform and adapts its commands. For work-item tracking, Squad also supports a hybrid model where code lives in one platform and tasks live in Microsoft Planner.
 
+> **What "Azure DevOps support" means in Squad 2.0.** Platform **detection** (remote host or `config.platform`) and the CLI monitor loop — `squad triage` and `squad watch` — run on Azure DevOps through `az boards`. The **interactive Issues mode** inside a coordinator session ("show me the backlog", "work on item 42") is GitHub-only for now: the coordinator's Issues section is written for `gh`, and the Azure DevOps commands exist only as reference material in `.squad/templates/issue-lifecycle.md`, which the model has to apply by hand. Hosts do detect ADO from the remote and consult that template, so results are usable but not first-class. The `EXAMPLE-azure-devops` MCP server entry is seeded into Copilot's `.mcp.json` only.
+
 ## Prerequisites
 
 1. **Azure CLI** — Install from [https://aka.ms/install-az-cli](https://aka.ms/install-az-cli)
@@ -104,7 +106,7 @@ Squad uses the Azure CLI for ADO authentication — **no Personal Access Tokens 
 
 For GitHub repositories, Squad uses the `gh` CLI for authentication. When working across multiple GitHub accounts (e.g., personal GitHub and Enterprise Managed Users), use `gh auth switch` to toggle between accounts. See [Cross-organization authentication](../scenarios/cross-org-auth) for detailed multi-account setup.
 
-Alternatively, if the Azure DevOps MCP server is configured in your environment, Squad will use it automatically for richer API access. Add it to `.copilot/mcp-config.json`:
+Alternatively, if the Azure DevOps MCP server is configured in your environment, Squad will use it automatically for richer API access. Add it to `.mcp.json` at the repo root, next to `squad_state` (or to `~/.copilot/mcp-config.json` to keep it personal):
 
 ```json
 {

@@ -128,6 +128,7 @@ describe('ToolRegistry', () => {
     'squad_state_delete',
     'squad_state_list',
     'squad_state_health',
+    'squad_state_upstreams',
     'memory.classify',
     'memory.write',
     'memory.search',
@@ -156,6 +157,18 @@ describe('ToolRegistry', () => {
 
       const toolNames = tools.map(t => t.name);
       expect(toolNames).toEqual(expect.arrayContaining(builtInToolNames));
+    });
+
+    it('preserves flat state roots in health metadata', async () => {
+      const health = registry.getTool('squad_state_health')!;
+      const result = await health.handler({});
+      const metadataLine = result.textResultForLlm
+        .split('\n')
+        .find(line => line.startsWith('Health metadata: '));
+
+      expect(metadataLine).toBeDefined();
+      expect(JSON.parse(metadataLine!.slice('Health metadata: '.length)))
+        .toMatchObject({ resolvedTeamDir: path.resolve(testRoot) });
     });
 
     it('should register tools with descriptions and parameters', () => {
@@ -317,7 +330,7 @@ describe('ToolRegistry', () => {
   // #2107: doctor reads this allowlist to find state stranded in a linked team repo.
   describe('isMutableStateKey (#2107)', () => {
     it.each([
-      'decisions.md', 'decisions/inbox/a.md', 'casting/policy.json', 'agents/edie/history.md',
+      'decisions.md', 'decisions/inbox/a.md', 'agents/edie/history.md',
       'log/a.md', 'orchestration-log/a.md', 'sessions/s.json', '.scratch/n.md', 'identity/now.md',
     ])('accepts %s', (key) => {
       expect(isMutableStateKey(key), `${key} must be writable by the state tools`).toBe(true);
@@ -325,7 +338,7 @@ describe('ToolRegistry', () => {
 
     it.each([
       'team.md', 'routing.md', 'config.json', 'decisions', 'decisions/a.md', 'decisions.md/x',
-      'casting/registry.json', 'casting/history.json', 'agents/edie/charter.md', 'agents/edie/history.md/x',
+      'casting/policy.json', 'casting/registry.json', 'casting/history.json', 'agents/edie/charter.md', 'agents/edie/history.md/x',
       'agents/a/b/history.md', 'log', 'logs/a.md', 'identity', 'skills/x/SKILL.md',
     ])('rejects %s', (key) => {
       expect(isMutableStateKey(key), `${key} must not be writable by the state tools`).toBe(false);

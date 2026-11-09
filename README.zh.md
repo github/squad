@@ -40,13 +40,13 @@ git init
 | npm（所有平台，需要 Node.js 22.5+） | `npm install -g @bradygaster/squad-cli` |
 | Homebrew（macOS） | `brew install --cask bradygaster/squad/squad` |
 | WinGet（Windows） | `winget install --id bradygaster.Squad --exact` |
-| 安装脚本（macOS/Linux，无需 npm） | 查看[独立安装指南](https://bradygaster.github.io/squad/docs/features/standalone-install/) |
+| 安装脚本（macOS/Linux，无需 npm） | 查看[独立安装指南](https://github.github.com/squad/docs/features/standalone-install/) |
 
 预览版和 Insider 版也可通过 Homebrew 的 `squad-preview`、
 `squad-insider` cask，或 WinGet 的 `bradygaster.Squad.Preview`、
 `bradygaster.Squad.Insider` 软件包安装。
 
-你也可以从 [GitHub Releases](https://github.com/bradygaster/squad/releases/latest)
+你也可以从 [GitHub Releases](https://github.com/github/squad/releases/latest)
 直接下载 macOS、Linux 或 Windows 压缩包。
 
 ```bash
@@ -55,7 +55,7 @@ squad init
 
 所有方式安装的都是同一个 CLI。独立安装包自带 Node.js，无需安装
 Node.js，也无需访问 npm registry。完整要求和平台说明请参阅
-[安装指南](https://bradygaster.github.io/squad/docs/get-started/installation/)。
+[安装指南](https://github.github.com/squad/docs/get-started/installation/)。
 
 **✓ 验证：** 检查项目中是否创建了 `.squad/team.md`。
 
@@ -103,8 +103,8 @@ Squad 会提议一个团队 — 每个成员的名字都来自一个持久化的
 | npm | `npm install -g @bradygaster/squad-cli@latest` |
 | Homebrew | `brew upgrade --cask squad` |
 | WinGet | `winget upgrade --id bradygaster.Squad --exact` |
-| 安装脚本 | 重新运行[安装脚本](https://bradygaster.github.io/squad/docs/features/standalone-install/#macos-and-linux) |
-| 直接下载 | 从 [GitHub Releases](https://github.com/bradygaster/squad/releases/latest) 下载新版本 |
+| 安装脚本 | 重新运行[安装脚本](https://github.github.com/squad/docs/features/standalone-install/#macos-and-linux) |
+| 直接下载 | 从 [GitHub Releases](https://github.com/github/squad/releases/latest) 下载新版本 |
 
 **第二步：更新项目中 Squad 管理的文件**
 
@@ -122,8 +122,8 @@ squad upgrade
 
 | 命令 | 功能描述 |
 |---------|-------------|
-| `squad init` | **初始化** — 在当前目录初始化 Squad（幂等操作 — 可安全运行多次）；别名：`hire`；使用 `--global` 在个人 squad 目录初始化，`--mode remote <path>` 开启双根模式 |
-| `squad upgrade` | 将 Squad 管理的文件更新至最新版；绝不会触动你的团队状态；使用 `--global` 升级个人 squad，`--migrate-directory` 将 `.ai-team/` 重命名为 `.squad/` |
+| `squad init` | **初始化** — 在当前目录初始化 Squad（幂等操作 — 可安全运行多次）；别名：`hire`；使用 `--mode remote <path>` 开启双根模式 |
+| `squad upgrade` | 将 Squad 管理的文件更新至最新版；绝不会触动你的团队状态；使用 `--migrate-directory` 将 `.ai-team/` 重命名为 `.squad/` |
 | `squad status` | 显示当前活跃的小队及其原因 |
 | `squad triage` | 监控 issue 并自动分发给团队（别名：`watch`、`loop`）；使用 `--interval <minutes>` 设置轮询频率（默认 10 分钟） |
 | `squad copilot` | 添加/移除 Copilot 编码智能体 (@copilot)；使用 `--off` 移除，`--auto-assign` 启用自动分配 |

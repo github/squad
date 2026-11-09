@@ -98,8 +98,8 @@ describe('printCommandHelp', () => {
       'aspire',
       'build',
       'cast',
+      'client',
       'config',
-      'consult',
       'copilot',
       'copilot-bridge',
       'cost',
@@ -109,7 +109,6 @@ describe('printCommandHelp', () => {
       'economy',
       'export',
       'externalize',
-      'extract',
       'import',
       'init',
       'init-remote',
@@ -119,13 +118,13 @@ describe('printCommandHelp', () => {
       'memory',
       'migrate',
       'nap',
-      'personal',
       'plugin',
       'preset',
       'rc',
       'rc-tunnel',
       'remote-control',
       'roles',
+      'roster',
       'schedule',
       'scrub-emails',
       'start',
@@ -231,6 +230,8 @@ describe.skipIf(!cliBuilt)('squad <cmd> --help end-to-end', () => {
     const out = stdout + stderr;
     expect(out).toContain('squad watch');
     expect(out).toContain('Usage:');
+    expect(out).toContain('--max-rounds');
+    expect(out).toContain('--max-duration');
   });
 
   it('doctor --help prints help instead of running the doctor', async () => {

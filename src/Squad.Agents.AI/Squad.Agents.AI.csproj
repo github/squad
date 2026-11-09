@@ -10,8 +10,8 @@
     <Description>Community SquadAgent for Microsoft Agent Framework. Exposes the Squad multi-agent CLI as an AIAgent that can be composed into any MAF app or workflow.</Description>
     <Authors>Tamir Dresher</Authors>
     <PackageTags>squad;agents;ai;copilot;maf;multi-agent</PackageTags>
-    <PackageProjectUrl>https://github.com/bradygaster/squad</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/bradygaster/squad.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/github/squad</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/github/squad.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryBranch>main</RepositoryBranch>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Squad.Agents.AI.Tests" />
-    <PackageReference Include="Microsoft.Agents.AI.GitHub.Copilot" Version="1.24.0" />
+    <PackageReference Include="Microsoft.Agents.AI.GitHub.Copilot" Version="1.27.0" />
     <!--
       Direct reference to GitHub.Copilot.SDK so its build/ targets fire during our build.
       Without this, the SDK's MSBuild download/copy targets only flow to projects with a
@@ -46,10 +46,10 @@
     -->
     <PackageReference Include="GitHub.Copilot.SDK" Version="$(SquadCopilotSdkVersion)" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />

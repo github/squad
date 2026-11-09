@@ -6,11 +6,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, rm, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, chmodSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, chmodSync, renameSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomBytes } from 'crypto';
 import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade, ensureGitattributes, ensureGitignore, ensureDirectories, ensureCastingDefaults, selfUpgradeCli, migrateLegacyRaiAgent } from '@bradygaster/squad-cli/core/upgrade';
+import { runUpgrade, ensureGitattributes, ensureGitignore, ensureDirectories, ensureCastingDefaults, selfUpgradeCli, selfUpgradeCommand, detectPackageManager, migrateLegacyRaiAgent } from '@bradygaster/squad-cli/core/upgrade';
 import { getPackageVersion } from '@bradygaster/squad-cli/core/version';
 
 const TEST_ROOT = join(tmpdir(), `.test-cli-upgrade-${randomBytes(4).toString('hex')}`);
@@ -379,6 +379,7 @@ describe('CLI: upgrade command', () => {
     const content = readFileSync(join(dir, '.gitattributes'), 'utf8');
     expect(content).toContain('.squad/decisions.md merge=union');
     expect(content).toContain('.squad/log/** merge=union');
+    expect(content).toContain('.squad/casting/*.json text eol=lf');
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -394,6 +395,26 @@ describe('CLI: upgrade command', () => {
     expect(content).toContain('.squad/orchestration-log/** merge=union');
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it('upgrade accepts CRLF manifest-backed casting files and normalizes every casting JSON file to LF (#2266)', async () => {
+    const castingDir = join(TEST_ROOT, '.squad', 'casting');
+    const names = readdirSync(castingDir).filter(name => name.endsWith('.json'));
+    expect(names).toContain('registry-history.commit.json');
+    for (const name of names) {
+      const filePath = join(castingDir, name);
+      writeFileSync(filePath, readFileSync(filePath, 'utf8').replace(/\r?\n/g, '\r\n'));
+      expect(readFileSync(filePath, 'utf8')).toContain('\r\n');
+    }
+
+    const result = await runUpgrade(TEST_ROOT);
+
+    expect(readFileSync(join(TEST_ROOT, '.gitattributes'), 'utf8'))
+      .toContain('.squad/casting/*.json text eol=lf');
+    for (const name of names) {
+      expect(readFileSync(join(castingDir, name), 'utf8')).not.toContain('\r\n');
+      expect(result.filesUpdated).toContain(`.squad/casting/${name}`);
+    }
+  }, 20_000);
 
   it('ensureGitattributes is idempotent', () => {
     const dir = join(TEST_ROOT, 'gitattr-test-idempotent');
@@ -513,7 +534,61 @@ describe('CLI: upgrade command', () => {
 
   /* ── --self flag (selfUpgradeCli) ──────────────────────────── */
 
-  it.todo('selfUpgradeCli shells out with correct package tag (ESM spy limitation)');
+  describe('selfUpgradeCli shells out with the correct package manager and dist-tag', () => {
+    const EXPECTED: Record<'npm' | 'pnpm' | 'yarn', Record<'latest' | 'insider', string>> = {
+      npm: { latest: 'npm install -g @bradygaster/squad-cli@latest', insider: 'npm install -g @bradygaster/squad-cli@insider' },
+      pnpm: { latest: 'pnpm add -g @bradygaster/squad-cli@latest', insider: 'pnpm add -g @bradygaster/squad-cli@insider' },
+      yarn: { latest: 'yarn global add @bradygaster/squad-cli@latest', insider: 'yarn global add @bradygaster/squad-cli@insider' },
+    };
+
+    for (const pm of ['npm', 'pnpm', 'yarn'] as const) {
+      for (const tag of ['latest', 'insider'] as const) {
+        it(`${pm} × ${tag}: runs exactly "${EXPECTED[pm][tag]}" with inherited stdio`, async () => {
+          const exec = vi.fn();
+          await selfUpgradeCli({ insider: tag === 'insider', packageManager: pm, exec, currentVersion: '1.0.0', resolveTagVersion: async () => null });
+          expect(exec).toHaveBeenCalledTimes(1);
+          expect(exec).toHaveBeenCalledWith(EXPECTED[pm][tag], { stdio: 'inherit' });
+          expect(selfUpgradeCommand(pm, tag === 'insider')).toBe(EXPECTED[pm][tag]);
+        });
+      }
+    }
+
+    it('detects the package manager from npm_execpath / npm_config_user_agent (npm fallback)', async () => {
+      const saved = { execpath: process.env['npm_execpath'], ua: process.env['npm_config_user_agent'] };
+      try {
+        const cases: Array<[string | undefined, string | undefined, 'npm' | 'pnpm' | 'yarn']> = [
+          ['/usr/lib/node_modules/pnpm/bin/pnpm.cjs', undefined, 'pnpm'],
+          ['/usr/lib/node_modules/yarn/bin/yarn.js', undefined, 'yarn'],
+          ['/usr/lib/node_modules/npm/bin/npm-cli.js', 'npm/10.9.0 node/v22.0.0', 'npm'],
+          [undefined, 'pnpm/9.0.0 npm/? node/v22.0.0', 'pnpm'],
+          [undefined, 'yarn/1.22.0 npm/? node/v22.0.0', 'yarn'],
+          [undefined, undefined, 'npm'],
+        ];
+        for (const [execpath, ua, expected] of cases) {
+          if (execpath === undefined) delete process.env['npm_execpath']; else process.env['npm_execpath'] = execpath;
+          if (ua === undefined) delete process.env['npm_config_user_agent']; else process.env['npm_config_user_agent'] = ua;
+          expect(detectPackageManager(), `execpath=${execpath} ua=${ua}`).toBe(expected);
+          const exec = vi.fn();
+          await selfUpgradeCli({ insider: true, exec, currentVersion: '1.0.0', resolveTagVersion: async () => null });
+          expect(exec).toHaveBeenCalledWith(EXPECTED[expected].insider, { stdio: 'inherit' });
+        }
+      } finally {
+        if (saved.execpath === undefined) delete process.env['npm_execpath']; else process.env['npm_execpath'] = saved.execpath;
+        if (saved.ua === undefined) delete process.env['npm_config_user_agent']; else process.env['npm_config_user_agent'] = saved.ua;
+      }
+    });
+
+    it('surfaces package-manager failures as a thrown error with the retry command (no false success)', async () => {
+      const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      await expect(selfUpgradeCli({ packageManager: 'npm', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw eacces; } }))
+        .rejects.toThrow(/Self-upgrade failed: Permission denied\. Try: sudo npm install -g @bradygaster\/squad-cli@latest/);
+      const ebusy = Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      await expect(selfUpgradeCli({ insider: true, packageManager: 'pnpm', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw ebusy; } }))
+        .rejects.toThrow(/in use .*pnpm add -g @bradygaster\/squad-cli@insider/);
+      await expect(selfUpgradeCli({ packageManager: 'yarn', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw new Error('boom'); } }))
+        .rejects.toThrow(/Upgrade failed\. Try running manually: yarn global add @bradygaster\/squad-cli@latest/);
+    });
+  });
 
   /* ── ensureDirectories includes .squad/casting ──────────────── */
 
@@ -550,7 +625,7 @@ describe('CLI: upgrade command', () => {
     const castingDir = join(dir, '.squad', 'casting');
     mkdirSync(castingDir, { recursive: true });
     writeFileSync(join(castingDir, 'registry.json'), '{"agents":{"custom":true}}');
-    expect(() => ensureCastingDefaults(dir)).toThrow(/exactly one authoritative file exists/);
+    expect(() => ensureCastingDefaults(dir)).toThrow(/registry\.json cannot be read or repaired: .*could not be normalized[\s\S]*custom: entry is not an agent record[\s\S]*object with `name` and `role`/);
     expect(readFileSync(join(castingDir, 'registry.json'), 'utf8'))
       .toBe('{"agents":{"custom":true}}');
     expect(existsSync(join(castingDir, 'history.json'))).toBe(false);
@@ -583,6 +658,53 @@ describe('CLI: upgrade command', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('continues bridge and template upgrades when a legacy casting identity is unmapped', async () => {
+    const castingDir = join(TEST_ROOT, '.squad', 'casting');
+    const registryRaw = JSON.stringify({
+      agents: [{
+        persistent_name: 'Missing Agent',
+        role: 'Specialist',
+        universe: 'descriptive',
+        created_at: '2024-02-03T12:00:00.000Z',
+        status: 'active',
+      }],
+    }, null, 2) + '\n';
+    const historyRaw = JSON.stringify({
+      assignments: [{
+        assignment_id: 'historical-001',
+        universe: 'descriptive',
+        timestamp: '2024-02-03T12:30:00.000Z',
+        members: [{ name: 'Missing Agent', role: 'Specialist' }],
+      }],
+    }, null, 2) + '\n';
+    writeFileSync(join(castingDir, 'registry.json'), registryRaw);
+    writeFileSync(join(castingDir, 'history.json'), historyRaw);
+    rmSync(join(castingDir, 'registry-history.commit.json'), { force: true });
+    writeFileSync(join(TEST_ROOT, '.mcp.json'), JSON.stringify({
+      mcpServers: {
+        squad_state: {
+          command: '"npx"',
+          args: ['-y', '@bradygaster/squad-cli@0.9.1', 'state-mcp'],
+        },
+      },
+    }));
+    const output: string[] = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((...args) => output.push(args.join(' ')));
+    try {
+      await expect(runUpgrade(TEST_ROOT, { force: true })).resolves.toBeDefined();
+    } finally {
+      log.mockRestore();
+    }
+
+    const mcp = JSON.parse(readFileSync(join(TEST_ROOT, '.mcp.json'), 'utf8'));
+    expect(mcp.mcpServers.squad_state.command).not.toContain('"');
+    expect(mcp.mcpServers.squad_state.args.at(-1)).toBe('state-mcp');
+    expect(readFileSync(join(castingDir, 'registry.json'), 'utf8')).toBe(registryRaw);
+    expect(readFileSync(join(castingDir, 'history.json'), 'utf8')).toBe(historyRaw);
+    expect(output.join('\n')).toMatch(/continuing with the rest of the upgrade.*"Missing Agent".*matched 0 canonical agent folders/s);
+    expect(output.join('\n')).toMatch(/Upgrade completed, but legacy casting still needs repair/);
+  });
+
   it('upgrade scaffolds casting defaults for repos init before casting existed', async () => {
     // Remove casting directory to simulate pre-casting init
     const castingDir = join(TEST_ROOT, '.squad', 'casting');
@@ -598,7 +720,7 @@ describe('CLI: upgrade command', () => {
 
   /* ── warnIfSkillCustomized ──────────────────────────────────── */
 
-  it('warnIfSkillCustomized warns when a skill has been modified', async () => {
+  it('a customized skill is backed up and reported when a skill has been modified', async () => {
     const agentPath = join(TEST_ROOT, '.github', 'agents', 'squad.agent.md');
     const skillPath = join(TEST_ROOT, '.github', 'skills', 'squad-conventions', 'SKILL.md');
     expect(existsSync(skillPath)).toBe(true);
@@ -616,13 +738,13 @@ describe('CLI: upgrade command', () => {
     try {
       await runUpgrade(TEST_ROOT);
       const calls = spy.mock.calls.map(c => String(c[0]));
-      expect(calls.some(c => c.includes('has been customized'))).toBe(true);
+      expect(calls.some(c => c.includes('has local customizations'))).toBe(true);
     } finally {
       spy.mockRestore();
     }
   });
 
-  it('warnIfSkillCustomized does NOT warn for CRLF-only differences', async () => {
+  it('a skill is NOT reported as customized for CRLF-only differences', async () => {
     const agentPath = join(TEST_ROOT, '.github', 'agents', 'squad.agent.md');
     const skillPath = join(TEST_ROOT, '.github', 'skills', 'squad-conventions', 'SKILL.md');
     if (!existsSync(skillPath)) {
@@ -643,13 +765,13 @@ describe('CLI: upgrade command', () => {
     try {
       await runUpgrade(TEST_ROOT);
       const calls = spy.mock.calls.map(c => String(c[0]));
-      expect(calls.some(c => c.includes('has been customized'))).toBe(false);
+      expect(calls.some(c => c.includes('has local customizations'))).toBe(false);
     } finally {
       spy.mockRestore();
     }
   });
 
-  it('warnIfSkillCustomized does NOT warn for identical content', async () => {
+  it('a skill is NOT reported as customized for identical content', async () => {
     const agentPath = join(TEST_ROOT, '.github', 'agents', 'squad.agent.md');
 
     // Simulate old version to go through full manifest path
@@ -662,13 +784,13 @@ describe('CLI: upgrade command', () => {
     try {
       await runUpgrade(TEST_ROOT);
       const calls = spy.mock.calls.map(c => String(c[0]));
-      expect(calls.some(c => c.includes('has been customized'))).toBe(false);
+      expect(calls.some(c => c.includes('has local customizations'))).toBe(false);
     } finally {
       spy.mockRestore();
     }
   });
 
-  it('warnIfSkillCustomized warns during full version upgrade path', async () => {
+  it('a customized skill is backed up during the full version upgrade path', async () => {
     const agentPath = join(TEST_ROOT, '.github', 'agents', 'squad.agent.md');
     const skillPath = join(TEST_ROOT, '.github', 'skills', 'squad-conventions', 'SKILL.md');
     if (!existsSync(skillPath)) {
@@ -688,7 +810,7 @@ describe('CLI: upgrade command', () => {
     try {
       await runUpgrade(TEST_ROOT, { force: true });
       const calls = spy.mock.calls.map(c => String(c[0]));
-      const customizedWarnings = calls.filter(c => c.includes('has been customized'));
+      const customizedWarnings = calls.filter(c => c.includes('has local customizations'));
       expect(customizedWarnings.length).toBeGreaterThanOrEqual(1);
     } finally {
       spy.mockRestore();
@@ -706,15 +828,19 @@ describe('CLI: upgrade command', () => {
   rmSync(caseSensitivityProbeDir, { recursive: true, force: true });
 
   describe('legacy .squad/agents/Rai/ migration', () => {
-    // runInit (beforeEach, above) currently scaffolds the built-in agent
-    // directory using the mixed-case name `Rai`, reproducing the legacy
-    // on-disk state that `squad upgrade` must migrate to the canonical
-    // lowercase `rai`. Assertions below read the directory listing directly
+    // runInit (beforeEach, above) scaffolds the canonical lowercase `rai`; the
+    // first test recreates the mixed-case `Rai` layout older releases produced,
+    // which `squad upgrade` must migrate. Assertions below read the directory
+    // listing directly
     // (rather than `existsSync`) because macOS/Windows are case-insensitive
     // but case-preserving: `existsSync('.../rai')` would report a false
     // positive even when only the legacy `Rai` entry physically exists.
     it('renames .squad/agents/Rai/ to .squad/agents/rai/ on upgrade, preserving content', async () => {
       const agentsDir = join(TEST_ROOT, '.squad', 'agents');
+      // Recreate the legacy mixed-case layout older releases produced (two-step rename
+      // because the filesystem may be case-insensitive).
+      renameSync(join(agentsDir, 'rai'), join(agentsDir, '.legacy-tmp'));
+      renameSync(join(agentsDir, '.legacy-tmp'), join(agentsDir, 'Rai'));
       expect(readdirSync(agentsDir)).toContain('Rai');
 
       const legacyCharter = readFileSync(join(agentsDir, 'Rai', 'charter.md'), 'utf8');

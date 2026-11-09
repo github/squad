@@ -13,8 +13,10 @@ import { mkdir, rm, writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { randomBytes } from 'crypto';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
-const TEST_ROOT = join(process.cwd(), `.test-cast-${randomBytes(4).toString('hex')}`);
+const TEST_ROOT = join(tmpdir(), `.test-cast-${randomBytes(4).toString('hex')}`);
 
 /**
  * Charter using ## Identity sections, as expected by parseCharterMetadata().
@@ -43,18 +45,13 @@ async function scaffold(root: string): Promise<void> {
   );
 }
 
-// Mock personal agents to isolate project agent discovery
-vi.mock('@bradygaster/squad-sdk/agents/personal', () => ({
-  resolvePersonalAgents: vi.fn(async () => [] as unknown[]),
-  mergeSessionCast: vi.fn((project: unknown[], personal: unknown[]) => [...(project as unknown[]), ...(personal as unknown[])]),
-}));
-
 describe('squad cast', () => {
   beforeEach(async () => {
     if (existsSync(TEST_ROOT)) {
       await rm(TEST_ROOT, { recursive: true, force: true });
     }
     await mkdir(TEST_ROOT, { recursive: true });
+    execFileSync('git', ['init', '--quiet'], { cwd: TEST_ROOT });
   });
 
   afterEach(async () => {
@@ -79,7 +76,7 @@ describe('squad cast', () => {
     const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
     expect(output).toContain('TestAgent');
     expect(output).toContain('Session Cast');
-  });
+  }, 15_000);
 
   it('does not look in double-nested .squad/.squad/agents/ path', async () => {
     await scaffold(TEST_ROOT);

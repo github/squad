@@ -5,9 +5,8 @@
 
 import { afterEach } from 'vitest';
 import { join } from 'node:path';
-import { rmSync } from 'node:fs';
 import { createRegistry, runFeature } from './support/runner.js';
-import { registerCLISteps } from './steps/cli-steps.js';
+import { cleanupAcceptanceTempDirs, registerCLISteps } from './steps/cli-steps.js';
 import { TerminalHarness } from './harness.js';
 
 // Create step definition registry
@@ -20,6 +19,7 @@ afterEach(async (context) => {
   if (harness) {
     await harness.close();
   }
+  cleanupAcceptanceTempDirs();
 });
 
 // Run all feature files
@@ -39,10 +39,6 @@ runFeature(join(featuresDir, 'doctor-extended.feature'), registry);
 runFeature(join(featuresDir, 'help-comprehensive.feature'), registry);
 runFeature(join(featuresDir, 'error-paths.feature'), registry);
 runFeature(join(featuresDir, 'exit-codes.feature'), registry);
-
-// Consult and extract command tests
-runFeature(join(featuresDir, 'consult-command.feature'), registry);
-runFeature(join(featuresDir, 'extract-command.feature'), registry);
 
 // Subcommand --help intercept (#1201)
 runFeature(join(featuresDir, 'subcommand-help.feature'), registry);

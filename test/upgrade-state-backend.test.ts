@@ -11,12 +11,15 @@
  * .squad/files/validation/TWOLAYER-BASELINE-INSIDER3-CONSOLIDATED.md (data-5)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { migrateStateBackend } from '../packages/squad-cli/src/cli/commands/migrate-backend.js';
+import { migrateStateBackend, ensureOrphanBranch, liftInitMutableStateOntoOrphan } from '../packages/squad-cli/src/cli/commands/migrate-backend.js';
+import { LocalMemoryStore, FSStorageProvider } from '@bradygaster/squad-sdk';
+import { OrphanBranchBackend } from '../packages/squad-sdk/src/state-backend.js';
+import { createStateMcpToolRegistry } from '../packages/squad-cli/src/cli/commands/state-mcp.js';
 
 function mkRepo(backend: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-upgrade-mig-'));
@@ -42,7 +45,135 @@ function cleanup(dir: string): void {
 
 describe('squad upgrade --state-backend migration', () => {
   let dir: string;
-  afterEach(() => dir && cleanup(dir));
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (dir) cleanup(dir);
+  });
+
+  it.each(['orphan', 'two-layer'])('preserves actual governed stores and exposes existing memory through MCP after migrating to %s', { timeout: 120_000 }, async target => {
+    dir = mkRepo('local');
+    fs.writeFileSync(path.join(dir, '.squad', 'team.md'), '# Team\n');
+    const store = new LocalMemoryStore(new FSStorageProvider(), dir);
+    for (const requestedClass of ['LOCAL', 'DECISION', 'POLICY'] as const) {
+      const result = await store.write({ content: `Migration fixture ${requestedClass} guidance`, title: `${requestedClass} fixture`, requestedClass });
+      expect(result.stored).toBe(true);
+    }
+    const deleted = await store.write({ content: 'Retired fixture guidance', requestedClass: 'LOCAL' });
+    expect(await store.delete(deleted.id!)).toBe(true);
+    fs.writeFileSync(path.join(dir, '.squad', 'memory', 'audit.1.jsonl'), '{"archived":true}\n');
+    fs.writeFileSync(path.join(dir, '.squad', 'memory', 'opaque.dat'), Buffer.from([0, 255, 128, 10]));
+    const files = fs.readdirSync(path.join(dir, '.squad', 'memory'), { recursive: true, withFileTypes: true })
+      .filter(entry => entry.isFile())
+      .map(entry => path.relative(path.join(dir, '.squad'), path.join(entry.parentPath, entry.name)).replaceAll('\\', '/'));
+    const snapshot = new Map(files.map(relative => [relative, fs.readFileSync(path.join(dir, '.squad', relative))]));
+    const branch = new OrphanBranchBackend(dir);
+    branch.write('sessions/existing.md', 'unrelated destination record');
+
+    await migrateStateBackend(dir, target);
+    for (const [relative, bytes] of snapshot) {
+      expect(execFileSync('git', ['show', `squad-state:${relative}`], { cwd: dir })).toEqual(bytes);
+      expect(fs.existsSync(path.join(dir, '.squad', relative))).toBe(false);
+    }
+    expect(branch.read('sessions/existing.md')).toBe('unrelated destination record');
+    const registry = createStateMcpToolRegistry(dir);
+    const search = registry.getTools().find(tool => tool.name === 'memory.search')!;
+    const args = { query: 'Migration fixture' };
+    const result = await search.handler(args, { toolName: 'memory.search', toolCallId: 'migration-search', arguments: args, sessionId: 'test' }) as { textResultForLlm: string };
+    expect(result.textResultForLlm).toContain('LOCAL fixture');
+    expect(result.textResultForLlm).toContain('DECISION fixture');
+    const statePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', 'squad-state'], { cwd: dir, encoding: 'utf8' });
+    expect(statePaths).toMatch(/decisions\/inbox\/.+\.md/);
+    expect(statePaths).toMatch(/memory\/policy-inbox\/.+\.md/);
+    const head = execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' });
+    await migrateStateBackend(dir, target);
+    expect(execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' })).toBe(head);
+  });
+
+  it('refuses conflicting destination indices without switching authority or changing either store', { timeout: 30_000 }, async () => {
+    dir = mkRepo('local');
+    fs.mkdirSync(path.join(dir, '.squad', 'memory'));
+    fs.writeFileSync(path.join(dir, '.squad', 'memory', 'index.json'), '[]\n');
+    const branch = new OrphanBranchBackend(dir);
+    branch.write('memory/index.json', '[{"id":"destination-record"}]\n');
+    const head = execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' });
+    await expect(migrateStateBackend(dir, 'orphan')).rejects.toThrow('Conflicting state at memory/index.json');
+    expect(branch.read('memory/index.json')).toBe('[{"id":"destination-record"}]\n');
+    expect(fs.readFileSync(path.join(dir, '.squad', 'memory', 'index.json'), 'utf8')).toBe('[]\n');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, '.squad', 'config.json'), 'utf8')).stateBackend).toBe('local');
+    expect(execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' })).toBe(head);
+    expect(fs.readdirSync(path.join(dir, '.git')).filter(name => name.startsWith('squad-migrate-'))).toEqual([]);
+  });
+
+  it('retries an identical import after config publication fails without losing source or creating another commit', { timeout: 30_000 }, async () => {
+    dir = mkRepo('worktree');
+    const source = path.join(dir, '.squad', 'decisions.md');
+    fs.writeFileSync(source, '# Existing decision\n');
+    const rename = fs.renameSync.bind(fs);
+    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (String(to) === path.join(dir, '.squad', 'config.json')) throw new Error('injected config failure');
+      rename(from, to);
+    });
+    await expect(migrateStateBackend(dir, 'two-layer')).rejects.toThrow('injected config failure');
+    expect(fs.readFileSync(source, 'utf8')).toBe('# Existing decision\n');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, '.squad', 'config.json'), 'utf8')).stateBackend).toBe('worktree');
+    const head = execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' });
+    vi.restoreAllMocks();
+    await migrateStateBackend(dir, 'two-layer');
+    expect(fs.existsSync(source)).toBe(false);
+    expect(execFileSync('git', ['rev-parse', 'squad-state'], { cwd: dir, encoding: 'utf8' })).toBe(head);
+    expect(fs.readdirSync(path.join(dir, '.squad')).filter(name => name.startsWith('.config-migrate-'))).toEqual([]);
+  });
+
+  it('retains config and source when orphan import cannot publish its ref', { timeout: 30_000 }, async () => {
+    dir = mkRepo('local');
+    expect(ensureOrphanBranch(dir)).toBe(true);
+    fs.writeFileSync(path.join(dir, '.squad', 'decisions.md'), 'keep source');
+    const lock = path.join(dir, '.git', 'refs', 'heads', 'squad-state.lock');
+    fs.writeFileSync(lock, 'blocked');
+    await expect(migrateStateBackend(dir, 'orphan')).rejects.toThrow('Could not migrate state');
+    expect(fs.readFileSync(path.join(dir, '.squad', 'decisions.md'), 'utf8')).toBe('keep source');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, '.squad', 'config.json'), 'utf8')).stateBackend).toBe('local');
+  });
+
+  it('detects local edits made during import before switching backend authority', { timeout: 30_000 }, async () => {
+    dir = mkRepo('local');
+    const source = path.join(dir, '.squad', 'decisions.md');
+    fs.writeFileSync(source, 'original snapshot\n');
+    const remove = fs.rmSync.bind(fs);
+    vi.spyOn(fs, 'rmSync').mockImplementation((file, options) => {
+      remove(file, options);
+      if (path.basename(String(file)).startsWith('squad-migrate-')) {
+        fs.writeFileSync(source, 'concurrent edit\n');
+      }
+    });
+    await expect(migrateStateBackend(dir, 'orphan')).rejects.toThrow('Source changed during migration');
+    expect(fs.readFileSync(source, 'utf8')).toBe('concurrent edit\n');
+    expect(JSON.parse(fs.readFileSync(path.join(dir, '.squad', 'config.json'), 'utf8')).stateBackend).toBe('local');
+    expect(new OrphanBranchBackend(dir).read('decisions.md')).toBe('original snapshot\n');
+  });
+
+  it.each(['null', '[]', '{bad json'])('refuses malformed config %s before starting migration', async raw => {
+    dir = mkRepo('local');
+    const config = path.join(dir, '.squad', 'config.json');
+    fs.writeFileSync(config, raw);
+    await expect(migrateStateBackend(dir, 'orphan')).rejects.toThrow('Cannot read squad config');
+    expect(fs.readFileSync(config, 'utf8')).toBe(raw);
+    expect(() => execFileSync('git', ['rev-parse', '--verify', 'squad-state'], { cwd: dir, stdio: 'pipe' })).toThrow();
+  });
+
+  it('init lifts the governed scaffold while leaving all static casting files on disk', { timeout: 30_000 }, async () => {
+    dir = mkRepo('orphan');
+    const store = new LocalMemoryStore(new FSStorageProvider(), dir);
+    await store.write({ content: 'Init fixture guidance', requestedClass: 'LOCAL' });
+    const castingDir = path.join(dir, '.squad', 'casting');
+    fs.mkdirSync(castingDir);
+    const castingFiles = ['registry.json', 'history.json', 'policy.json', 'registry-history.commit.json'];
+    for (const file of castingFiles) fs.writeFileSync(path.join(castingDir, file), '{}\n');
+    expect(ensureOrphanBranch(dir)).toBe(true);
+    expect(liftInitMutableStateOntoOrphan(dir)).toContain('memory/index.json');
+    for (const file of castingFiles) expect(fs.readFileSync(path.join(castingDir, file), 'utf8')).toBe('{}\n');
+    expect(execFileSync('git', ['ls-tree', '-r', '--name-only', 'squad-state'], { cwd: dir, encoding: 'utf8' })).not.toContain('casting/');
+  });
 
   it('UPGRADE-FLAG-IGNORED: writes stateBackend to config.json with no duplicate keys', { timeout: 30_000 }, async () => {
     dir = mkRepo('worktree');

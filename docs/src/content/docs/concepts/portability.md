@@ -147,7 +147,7 @@ Repo config (local .squad/)
     ↓
 Agent instance
 ```
-Upstreams are read in order from `upstream.json` — **later entries override earlier ones** for the same content type. Your local `.squad/` always wins.
+Upstreams are read in order from `upstream.json` — your local `.squad/` always wins, then **earlier entries win** over later ones on a name conflict (skills, casting policy); each upstream's own upstreams follow it depth-first. Resolution reads local snapshots only and never fetches; see [Upstream Inheritance](../features/upstream-inheritance.md) for statuses and provenance.
 ### Quick Start
 ```bash
 # Local upstream
@@ -170,8 +170,8 @@ MCP (Model Context Protocol) servers extend Squad with external services. Agents
 
 | Platform | Config File |
 |----------|------------|
-| **Copilot CLI** | `.copilot/mcp-config.json` |
-| **VS Code** | `.vscode/settings.json` (under `copilot.mcp.servers`) |
+| **Copilot CLI** | `.mcp.json` at the repo root (shared) or `~/.copilot/mcp-config.json` (personal). Not a project-level `.copilot/mcp-config.json`. |
+| **VS Code** | `.vscode/mcp.json` (top-level key `servers`) or `~/.copilot/mcp-config.json` |
 
 ### Example: GitHub MCP
 ```json
@@ -231,7 +231,7 @@ Squad runs identically in VS Code — same `.squad/` state, same agents, same de
 - The export JSON is human-readable — inspect it to see exactly what your team knows.
 - Imported agents keep their names and universe casting.
 - Commit `.squad/` after importing so everyone who clones the repo gets the team.
-- Order matters in `upstream.json` — later entries override earlier ones. Use `remove` + `add` to reorder.
+- Order matters in `upstream.json` — earlier entries win over later ones (local `.squad/` always wins). Use `remove` + `add` to reorder.
 
 ---
 ## Sample Prompts

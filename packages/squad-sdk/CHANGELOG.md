@@ -2,6 +2,81 @@
 
 <!-- cspell:words ambiently -->
 
+## 2.0.0-preview.3
+
+### Minor Changes
+
+- Export the ADR-002 work-claim contract (`WorkClaimProvider`, fenced handles, canonical work keys, executor identity, and in-memory/no-op providers) plus `GitRefClaimProvider`, which coordinates distributed leases with compare-and-swap git refs and never touches the worktree or index. `getPodId()` now accepts an optional `env` argument.
+
+- Treat governed memory class names case-insensitively, reject unknown classes, and export `MEMORY_CLASSES`, `parseMemoryClass`, and `UnknownMemoryClassError`. The `memory.promote` tool now requires `targetClass` and refuses `FORBIDDEN` and `TRANSIENT` targets.
+
+### Patch Changes
+
+- Migrate evidence-backed Squad 0.9.x casting arrays without guessing identities or assignments, preserve byte-exact originals and assignment semantics, tolerate CRLF manifests, and keep unresolved casting isolated so other upgrade work can continue.
+
+- Carry an optional Squad shell session id in usage records so CLI cost reporting can group one shell run without breaking older ledgers.
+
+- Make governed memory search degrade to local results when an optional host-injected adapter is absent or fails, and guard registered provider calls with timeouts, status isolation, and governance checks on recalled data.
+
+- Let the Claude coordinator inherit all MCP tools present in the session, correct MCP configuration guidance, mark the old cross-machine task-file skill as an unimplemented proposal, and tell claimed-work agents to operate only on their fenced assignment.
+
+- Validate lease timing and claim records, cap claim output, use a fixed non-personal commit identity, pseudonymize hostname-derived machine ids, and expose whole-process-group fencing for lost claims.
+
+## 2.0.0-preview.2
+
+### Minor Changes
+
+- Recognize optional charter `Examples` without a noncanonical-section warning and preserve them through structured edits.
+
+### Patch Changes
+
+- Generate resolvable versioned state bridge declarations, probe them in `squad doctor`, report bridge identity in health output, and terminate stdio servers when their host transport closes.
+
+- `squad health` no longer reports markdown table headers, separator rows or `{placeholder}` cells as unknown routing agents, accepts built-in support agents (Scribe, Ralph, Rai, Fact Checker) as routing targets, parses legacy charters with a UTF-8 BOM or a one-line `**Role:** … | **Expertise:** …` identity, reports charters without an identity block as a warning with a hint instead of a failure, and reports optional Rai/Fact Checker charters absent from `team.md` as INFO (`available but not configured`). `squad upgrade` never modifies `team.md`; opt in explicitly with `squad roster add <rai|fact-checker|all>` (#2298, #2234, #1785).
+
+- Accept documented legacy routing table headers, column orders, and the historical flattened long-table layout. `squad health` validates every parsed target against the team or casting registry, fails for missing targets and zero rules, and reports duplicate or conflicting work types as deterministic warnings.
+
+- 2.0 preview command and migration fixes: `squad client list|add` lists configured host projections; the `agents/Rai` → `agents/rai` migration uses a two-step rename and `git mv` so the case change is recorded on Windows and macOS (templates now reference `agents/rai/`); the `undefined — previewing upgrade` header shows the project name; `squad update-check` flags caches older than 24h and shows the cache date; `squad_decide` writes to the active workstream inbox when one is resolvable and never truncates the summary slug below 60 characters; `squad doctor` reports `Mode: local` for a `teamRoot` that points at the same project and no longer triggers Node's DEP0190 warning (#2299, #2174).
+
+- Allow backend root aliases only for list-shaped operations and reject file or destructive operations before they can access or erase the entire state tree.
+
+- Skill frontmatter parser now supports YAML block-sequence arrays (for example, `triggers:` followed by `- item` lines) and strips surrounding quotes from scalar and inline-array values, so declared triggers are no longer dropped or quote-polluted.
+
+## 2.0.0-preview.1
+
+### Major Changes
+
+- Squad 2.0: multi-host client projections across 7 AI hosts, capability negotiation, transactional casting repair, and the experimental `@bradygaster/squad-sdk/backend` conversation and harness contract.
+
+  - **Seven AI hosts via `--client` (`copilot`, `claude`, `kiro`, `opencode`, `cursor`, `codex`, `antigravity`, `all`):** `squad init --client <list>` and `squad upgrade [--dry-run] --client <list>` project native coordinator and MCP configuration into GitHub Copilot (`.github/agents/squad.agent.md`, `.mcp.json`), Claude Code (`.claude/agents/squad.md`, `CLAUDE.md` marker block, `.mcp.json`, `# squad:claude` `.gitignore` line for `.claude/worktrees/`), Kiro (`.kiro/steering/squad.md` with `inclusion: manual`, `.kiro/agents/squad.json`, `.kiro/settings/mcp.json`), OpenCode (`.opencode/agent/squad.md`, `opencode.json` / `opencode.jsonc`), Cursor (`.cursor/agents/squad.md`, `.cursor/rules/squad.mdc` with `alwaysApply: false`, `.cursor/mcp.json`), OpenAI Codex (`.codex/agents/squad.toml` custom agent, `AGENTS.md` discovery pointer block, `.codex/config.toml`), and Google Antigravity (`.agents/agents/squad.md` with `mcpServers:` frontmatter, `GEMINI.md` pointer block). Configured hosts are persisted as portable slugs in `.squad/config.json` `clients[]` (`normalizeClientIds`, `assertPortableClients`).
+  - **Shared charters and capability negotiation (`@bradygaster/squad-sdk/client`):** Every host projects one coordinator that dispatches specialists using shared `.squad/agents/<member>/charter.md` files. Exports `HostProjection`, `createClientAdapter`, `installClients`, `uninstallClients`, `CAPABILITY_TOKENS_BY_HOST`, `capabilityFlagsFromTokens`, and `resolveEffectiveCapabilityTokens` (`effectiveCapabilities = clientCapabilities ∩ backendCapabilities ∩ policyCapabilities`).
+  - **Casting boundaries and handwritten registry repair (`@bradygaster/squad-sdk/casting`):** `squad upgrade` (including `--dry-run`) normalizes handwritten `.squad/casting/registry.json` files per record (preserving valid provenance records, extra fields, and `retired`/`inactive` statuses while bumping `revision`), backfills empty registries from `.squad/team.md` using provable `.squad/agents/<id>/charter.md` folder IDs, archives pre-repair originals under `.squad/casting/handwritten-archive-<sha256>/`, reconciles single Init Mode `history.json` snapshots, never rolls back a durable commit, and fails closed with an actionable `dropped` list instead of silently discarding entries.
+  - **Experimental backend and harness SPI (`@bradygaster/squad-sdk/backend`, `BACKEND_CONTRACT_STAGE = 'experimental'`):** Exports `SquadBackend` / `IConversationBackend`, `createSquadBackend`, `LocalSquadBackend`, `DurableHttpSquadBackend`, `createFileStateStore`, `createStateBackendStore`, `HarnessAdapter`, `DefaultHarnessRegistry`, and `validateExtensions`. In `squad state-mcp`, the 11 `squad_backend_*` conversation tools are opt-in via `--experimental-backend` or `SQUAD_EXPERIMENTAL_BACKEND=1` (`squad_backend_read_events` defaults `limit` to 500; `squad_backend_send_message` auto-selects a single registered in-process harness when `harness` is omitted and refuses instead of queueing when zero or multiple harnesses are registered). When a non-local state backend (`git-notes`, `orphan`, `two-layer`) is configured, `createStateBackendStore` places lock files in a deterministic machine-local directory derived from the shared `.git` common dir (`lockAnchor`) and state ref so `.squad/backend/` is never materialized in the working tree.
+  - **Breaking / behavior changes and deprecated aliases:**
+    - `@bradygaster/squad-sdk/clients` is now a deprecated alias for the canonical `@bradygaster/squad-sdk/client` subpath.
+    - `@bradygaster/squad-sdk/backend` is exported only from the `./backend` subpath and is not re-exported from the root `@bradygaster/squad-sdk` barrel.
+    - Plain `squad init` and `squad upgrade` (without `--client`) remain Copilot-only by default and no longer add `.claude/worktrees/` or `NUL` to `.gitignore` unless `--client claude` is enabled; `.squad/backend/` is added to `.gitignore` on upgrade.
+    - `SQUAD_BACKEND_URL` alone no longer enables the `squad_backend_*` MCP tools (pass `--experimental-backend` or `SQUAD_EXPERIMENTAL_BACKEND=1`). SDK callers using `createSquadBackend({ kind: 'durable-http', ... })` or `DurableHttpSquadBackend` must pass `baseUrl` (`https://`, or `http://` only for localhost) and optional `token` explicitly.
+    - Coordinator instructions and `squad_state_*` tools separate mutable runtime state from static team configuration (`team.md`, `routing.md`, `config.json`, `charter.md`), and forbid hand-editing `.squad/casting/` or killing processes by image name.
+  - **Upgrade and byte-preserving rollback:** Shared JSON, TOML, `.gitignore`, and markdown marker merges preserve existing line endings, indentation, and user entries atomically, refuse malformed JSON or commented `opencode.jsonc`, and restore preexisting files byte-for-byte via `uninstallClients(ids, ctx)`.
+  - **Conformance evidence and current limitations:** Validated against the `squad-protocol-v2.0-rc1` golden conformance trace (`G1`–`G9`) across all 7 host projections, local file/state-store backends, and `durable-http`. Squad ships the backend interfaces, local backend, and `durable-http` client; it does not bundle a remote DurableSquad server, server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending, and the `squad state-mcp` bridge bundles no execution harness (`executionAvailable: false` until a `HarnessAdapter` is registered).
+
+- Upstream inheritance works at runtime (Squad 2.0, finding F1). `squad upstream add|sync` already wrote `.squad/upstream.json`; sessions now actually inherit from it.
+
+  - **Runtime tool `squad_state_upstreams`** (exposed over `squad state-mcp` to all 7 hosts) resolves every declared upstream from its locally materialized snapshot (`local` path, `.squad/_upstream_repos/<name>/` for `git`, export file) and returns inherited skills, decisions, routing, wisdom and casting policy with `upstream:<name>@<ref>` provenance (`detail: true` returns the bodies, bounded to 48k characters). Resolution is deterministic (local `.squad/` wins, then declared order, depth-first through each upstream's own `upstream.json`, default depth limit 3), de-duplicates diamonds, detects cycles, reports `missing` / `invalid` / `unavailable` / `stale` sources with an actionable diagnostic, and **never fetches at session start** (`squad upstream sync` is the only network step). Upstream declarations are project-local: in linked (remote-mode) projects the tool reads the project's `.squad/upstream.json` while the state tools keep operating on the team root.
+  - **Confined, race-safe snapshot reads.** Every file is reached by an `lstat` walk from the snapshot root (symlinks and junctions are never followed), budgeted from `lstat` sizes before any read (1 MiB per file, 8 MiB and 2000 files per upstream, 500 entries per directory, depth 8), then opened (`O_NOFOLLOW` where available) and verified with `fstat` (same device/inode/size) before being read through the descriptor. Any refusal marks the whole upstream `invalid`; nothing from it is served.
+  - **Git sources are allow-listed.** `squad upstream add|sync` accepts `https://`, `ssh://` and `git@host:path` only; leading-dash sources, remote helpers (`ext::`, `fd::`), `file://` and `http://` are refused before anything is written or spawned, `--` precedes every positional, and the git subprocess runs with `GIT_CONFIG_PARAMETERS` disabling remote helpers and the file protocol (`protocol.allow=never`, https/ssh re-enabled) and `GIT_TERMINAL_PROMPT=0`.
+  - **Inherited content is data, not instructions.** The tool output labels every inherited body `UNTRUSTED` and the canonical coordinator gains an `Upstream Inheritance` section (digest item 16a on every host) saying the same. This fencing is a mitigation that labels the data, not a sandbox or an authorization boundary; inherited content cannot change tools, permissions, approvals, MCP servers or host settings.
+  - **CLI:** `squad doctor` gains an "upstream inheritance" check (unsynced/stale ⇒ warning with the sync hint; missing/invalid/cycle/depth ⇒ failure); `squad status` prints the inherited-context display.
+  - **SDK API (`@bradygaster/squad-sdk/upstream`):** `ResolvedUpstream` gained `provenance`, `origin`, `ref`, `depth`, `via`, `status`, `diagnostic`, `squadDir`, `lastSynced`; `UpstreamResolution` gained `diagnostics` and `maxDepth`; new `buildEffectiveUpstreamContext`, `formatUpstreamReport`, `upstreamProvenance`, `DEFAULT_UPSTREAM_MAX_DEPTH`, `DEFAULT_UPSTREAM_STALE_DAYS`, `UPSTREAM_REPORT_MAX_CHARS`, `UPSTREAM_MAX_FILE_BYTES`, `DEFAULT_UPSTREAM_READ_LIMITS`, `UpstreamReadLimits`, `UpstreamReadHook`; `resolveUpstreams(squadDir, storage?, options?)` accepts a source that already is a `.squad/` directory and resolves relative sources against the declaring squad's project root. `ToolRegistry` accepts a trailing `{ upstreamDir }` option. **Precedence clarified:** earlier entries in `upstream.json` win conflicts (the 1.x docs said later-wins; the code implemented neither).
+
+- Squad 2.0: breaking removals from the 1.x profile-level feature set; squad resolution is project-only; state-bridge fixes.
+
+  - **BREAKING:** Personal squads, consult mode and the global squad (`--global`) were removed; existing `personal-squad/` and global `.squad/` directories under the user profile are no longer read or written and may be deleted manually.
+  - Squad resolves `.squad/` only from the current directory and its parents. `squad status`, `squad doctor`, `squad cast` and `squad cost` run outside a project now fail with "No squad in this directory … run `squad init`" instead of resolving a user-profile directory; `squad init` and `squad upgrade` only ever write inside the project `.squad/`. The SDK exports, CLI subcommands, flags, environment switches, templates and coordinator sections that backed the removed features are gone with them; `resolveGlobalSquadPath()` remains only as the base of externalized project state (`squad externalize`).
+  - **State bridge fixes.** `squad_state_health` reports `State backend: local|orphan|two-layer` (plus storage class and team squad dir) as the coordinator digest promised (F6); `squad_state_list` without `dir` lists the root on git-backed backends instead of failing (F8); Claude Code declares `background-runs` in `capability-matrix.json` and `CAPABILITY_TOKENS_BY_HOST` (F7). `ToolRegistry` accepts `backendName` in its trailing options object.
+  - A retired-symbol gate (`test/retired-symbols.test.ts`) keeps the removed concepts out of source, templates, skills, docs, help text, schemas and the built package output.
+
 ## Unreleased
 
 ### Minor Changes

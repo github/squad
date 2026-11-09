@@ -2,7 +2,7 @@
 
 The programmable multi-agent CLI for GitHub Copilot. Build an AI team, assign roles, and let them work your repo—automating issue triage, code review, documentation, and more through orchestrated AI agents.
 
-Breaking changes are documented in [CHANGELOG.md](https://github.com/bradygaster/squad/blob/main/CHANGELOG.md).
+Breaking changes are documented in [CHANGELOG.md](https://github.com/github/squad/blob/main/CHANGELOG.md).
 
 ## Installation
 
@@ -61,12 +61,12 @@ cask or package before switching channels.
 **macOS or Linux with the verified install script:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradygaster/squad/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/github/squad/main/scripts/install.sh | sh
 ```
 
 You can also download the archive for your platform directly from
-[GitHub Releases](https://github.com/bradygaster/squad/releases/latest).
-See [Standalone Install](https://bradygaster.github.io/squad/docs/features/standalone-install/)
+[GitHub Releases](https://github.com/github/squad/releases/latest).
+See [Standalone Install](https://github.github.com/squad/docs/features/standalone-install/)
 for checksums, custom install locations, and CI usage.
 
 ### Verify Installation
@@ -108,7 +108,6 @@ For detailed documentation on each command, see the [CLI Reference](https://docs
 |---------|---------|
 | `squad` | Enter interactive shell (no arguments) |
 | `squad init` | Initialize Squad in current repo (idempotent) |
-| `squad init --global` | Create a personal squad in your home directory |
 | `squad status` | Show which squad is active and why |
 | `squad doctor` | Validate setup integrity and diagnose issues |
 | `squad upgrade` | Update Squad-owned files to latest version |
@@ -324,10 +323,11 @@ When Squad starts, it looks for `.squad/` in this order:
 
 1. Current directory (`./.squad/`)
 2. Parent directories (walk up to project root)
-3. Personal squad directory (platform-specific: `~/.config/squad/` on Linux, `~/Library/Application Support/squad/` on macOS, `%APPDATA%\squad\` on Windows)
-4. Global CLI default (fallback only)
 
-First match wins.
+First match wins. Squad never resolves a squad from your user profile: outside a
+project (no `.squad/` in the directory tree) state commands such as `squad status`,
+`squad doctor` and `squad cast` fail with `No squad in this directory` — run
+`squad init` in the project first.
 
 ## Troubleshooting
 
@@ -399,9 +399,9 @@ ensure your Node.js version is 22.5 or later.
 - **Documentation:** [docs.squad.ai](https://docs.squad.ai)
 - **CLI Reference:** [docs.squad.ai/reference/cli](https://docs.squad.ai/reference/cli) — detailed command docs
 - **SDK:** [@bradygaster/squad-sdk](https://www.npmjs.com/package/@bradygaster/squad-sdk) — programmatic API
-- **GitHub:** [github.com/bradygaster/squad](https://github.com/bradygaster/squad)
-- **Issues:** [github.com/bradygaster/squad/issues](https://github.com/bradygaster/squad/issues)
+- **GitHub:** [github.com/github/squad](https://github.com/github/squad)
+- **Issues:** [github.com/github/squad/issues](https://github.com/github/squad/issues)
 
 ## License
 
-MIT. See [LICENSE](https://github.com/bradygaster/squad/blob/main/LICENSE) in the repository root.
+MIT. See [LICENSE](https://github.com/github/squad/blob/main/LICENSE) in the repository root.

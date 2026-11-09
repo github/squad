@@ -41,7 +41,7 @@ The verified install script selects the correct archive, checks its SHA-256,
 and installs it under `/usr/local` or `$HOME/.local`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradygaster/squad/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/github/squad/main/scripts/install.sh | sh
 ```
 
 ### Homebrew on macOS
@@ -82,7 +82,7 @@ Homebrew cask or WinGet package before switching channels.
 ### Direct download
 
 Download the archive for your operating system and CPU from
-[GitHub Releases](https://github.com/bradygaster/squad/releases/latest):
+[GitHub Releases](https://github.com/github/squad/releases/latest):
 
 ```text
 squad-linux-x64.tar.gz     squad-darwin-x64.tar.gz    squad-win32-x64.zip
@@ -188,21 +188,6 @@ If you use the SDK, update it separately:
 npm install @bradygaster/squad-sdk@latest
 ```
 
-## Optional: Personal squad
-
-A personal squad lets projects inherit shared agent configuration without
-running `squad init` in each repository:
-
-```bash
-squad init --global
-```
-
-| Platform | Path |
-|----------|------|
-| Linux | `~/.config/squad/` |
-| macOS | `~/Library/Application Support/squad/` |
-| Windows | `%APPDATA%\squad\` |
-
 ## Troubleshooting
 
 ### `squad: command not found`
@@ -219,8 +204,8 @@ Releases, then switch to WinGet after the package becomes available.
 
 ### `Cannot find .squad/ directory`
 
-Run `squad init` from the repository root, or `squad init --global` for a
-personal squad.
+Run `squad init` from the repository root. Squad only resolves `.squad/` from the
+current directory and its parents; it never falls back to a user-profile directory.
 
 ### Version mismatch between CLI and SDK
 

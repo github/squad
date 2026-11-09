@@ -30,7 +30,7 @@ prerequisites, all supported methods, and update commands.
 | `squad` | **Deprecated** — Enter interactive shell (no args). Use `copilot --agent squad` instead. | No |
 | `squad init` | Initialize Squad in the current repo (idempotent — safe to run multiple times) | No |
 | `squad init --state-backend <type>` | Initialize with a specific state backend (`local`, `orphan`, `two-layer`) | No |
-| `squad init --global` | Create a personal squad in your platform-specific directory | No |
+| `squad init --client <list>` | Also project Squad into other AI hosts: comma-separated `copilot`, `claude`, `kiro`, `opencode`, `cursor`, `codex`, `antigravity`, or `all`; persisted in `.squad/config.json` `clients[]` | No |
 | `squad init --no-vscode-default` | Skip writing `chat.newSession.defaultMode` to `.vscode/settings.json` | No |
 | `squad init --mode remote <path>` | Initialize linked to a remote team root (dual-root mode) | No |
 | `squad link <team-repo-path>` | Link project to a remote team root | Yes |
@@ -40,9 +40,13 @@ prerequisites, all supported methods, and update commands.
 | `squad start [--tunnel] [--port N] [--command cmd]` | Start Copilot with remote phone access via PTY and WebSocket | No |
 | `squad status` | Show which squad is active and why | Yes |
 | `squad doctor` | Validate squad setup integrity and diagnose issues (alias: `heartbeat`) | Yes |
+| `squad health [--json]` | Check team readiness; JSON includes the versioned runtime, state backend, and resolved team metadata | Yes |
 | `squad upgrade` | Upgrade Squad-owned files to latest version; locally customized files are saved as `<file>.local-backup` | Yes |
+| `squad upgrade --client <list>` | Add hosts to the configured set and refresh every configured host projection; user settings in `.mcp.json`, `.kiro/settings/mcp.json`, `opencode.json`, `.cursor/mcp.json` and `.codex/config.toml` are preserved | Yes |
 | `squad upgrade --state-backend <type>` | Migrate state backend (`orphan`, `two-layer`); installs git hooks automatically | Yes |
 | `squad upgrade --migrate-directory` | Rename legacy `.ai-team/` directory to `.squad/` | Yes |
+| `squad roster add <rai\|fact-checker\|all> [--dry-run]` | Explicitly add optional built-ins to `team.md`; previews the exact diff, verifies a byte-exact backup, and records provenance | Yes |
+| `squad roster remove <rai\|fact-checker\|all> [--dry-run]` | Remove only provenance-owned rows and restore prior bytes when otherwise unchanged (`disable` and `uninstall` are aliases) | Yes |
 | `squad triage` | Auto-triage issues and assign to team (primary name; `watch` is an alias) | Yes |
 | `squad triage --interval <min>` | Continuous triage (default: every 10 min) | Yes |
 | `squad watch --execute` | Enable work execution (spawn Copilot to work on issues) | Yes |
@@ -55,6 +59,9 @@ prerequisites, all supported methods, and update commands.
 | `squad watch --decision-hygiene` | Auto-merge decision inbox | Yes |
 | `squad watch --max-concurrent N` | Max parallel issues per round (default: 1) | Yes |
 | `squad watch --timeout N` | Per-issue timeout in minutes (default: 30) | Yes |
+| `squad watch --max-rounds N` | Stop after N completed rounds | Yes |
+| `squad watch --max-duration D` | Stop after a duration such as `8h` (ms, s, m, h, d) | Yes |
+| `squad watch --claims <none\|git-ref>` | Claim issues before dispatch so several watchers never pick the same one (default: `none`; config: `watch.claims`) | Yes |
 | `squad watch --copilot-flags "..."` | Extra flags for Copilot CLI | Yes |
 | `squad shell` | **Deprecated** — Launch interactive shell explicitly. Use `copilot --agent squad` instead. | No |
 | `squad copilot` | Add the @copilot coding agent to the team | Yes |
@@ -70,10 +77,15 @@ prerequisites, all supported methods, and update commands.
 | `squad upstream add\|remove\|list\|sync` | Manage upstream Squad sources | Yes |
 | `copilot --agent squad` | Launch interactive shell explicitly | No |
 | `squad nap` | Context hygiene (compress, prune, archive .squad/ state) | Yes |
-| `squad nap --deep` | Thorough cleanup with recursive descent | Yes |
+| `squad nap --deep` | Same as `squad nap`, but keeps only the last 3 `##` history sections (default 5) | Yes |
 | `squad nap --dry-run` | Preview cleanup actions without changes | Yes |
 | `squad scrub-emails [directory]` | Remove email addresses from Squad state files (default: `.squad/`) | No |
+| `squad state-mcp [--experimental-backend]` | Run the `squad_state` stdio MCP server; pass `--experimental-backend` (or `SQUAD_EXPERIMENTAL_BACKEND=1`) to also expose the 11 experimental `squad_backend_*` conversation tools (transcript/event-log only until a harness is registered) | Yes |
 | `squad --version` | Print installed version | No |
+
+`squad health --json` preserves the `squad-health/v1` schema and includes `metadata` fields for `cliVersion`, `sdkVersion`, `stateBackend`, `resolvedTeamDir`, `bridgeVersion`, and `launchMode`. Human-readable output is unchanged.
+
+The `squad_state_health` MCP tool includes the same fields in a JSON `Health metadata` line while retaining its existing state and storage lines.
 
 ### Remote Init Mode
 
@@ -270,12 +282,12 @@ Agent name matching is **case-insensitive** — `@keaton`, `@Keaton`, and `@KEAT
 ├── skills/              # Reusable knowledge (markdown files)
 │   ├── auth-rate-limiting.md
 │   └── ...
-├── agents/
-│   ├── neo/
-│   │   ├── charter.md   # Role definition, expertise, tools
-│   │   └── history.md   # Accumulated knowledge
-│   └── ...
-└── history-archive/     # Archived old session logs
+└── agents/
+    ├── neo/
+    │   ├── charter.md          # Role definition, expertise, tools
+    │   ├── history.md          # Accumulated knowledge
+    │   └── history-archive.md  # Old history sections moved out by squad nap
+    └── ...
 ```
 
 ### `team.md`
@@ -341,10 +353,11 @@ When Squad starts, it looks for `.squad/` in this order:
 
 1. Current directory (`./.squad/`)
 2. Parent directories (walk up to project root)
-3. Personal squad directory (platform-specific: `~/.config/squad/` on Linux, `~/Library/Application Support/squad/` on macOS, `%APPDATA%\squad\` on Windows)
-4. Global CLI default (fallback only)
 
-First match wins.
+First match wins. Squad never resolves a squad from your user profile: outside a
+project (no `.squad/` in the directory tree) state commands such as `squad status`,
+`squad doctor` and `squad cast` fail with `No squad in this directory` — run
+`squad init` in the project first.
 
 ---
 
@@ -355,6 +368,9 @@ First match wins.
 | `SQUAD_CLIENT` | Detected client platform | `cli`, `vscode` |
 | `COPILOT_TOKEN` | Copilot auth token (SDK usage) | Token string |
 | `SQUAD_CONTEXT_WARNING_THRESHOLD` | Interactive-shell context utilization warning threshold | Fraction greater than `0` and at most `1` (default: `0.8`) |
+| `SQUAD_EXPERIMENTAL_BACKEND` | Opt in to the 11 experimental `squad_backend_*` MCP tools in `squad state-mcp` | `1` |
+| `SQUAD_BACKEND_URL` | External `/v1/conversations` server URL read by `squad state-mcp` when experimental backend tools are enabled (does not by itself enable the `squad_backend_*` tools; SDK callers must pass `baseUrl` explicitly to `createSquadBackend` / `DurableHttpSquadBackend`) | `https://` URL (`http://` only for localhost) |
+| `SQUAD_BACKEND_TOKEN` | Optional bearer token read by `squad state-mcp` alongside `SQUAD_BACKEND_URL` (SDK callers must pass `token` explicitly) | Token string |
 
 ---
 

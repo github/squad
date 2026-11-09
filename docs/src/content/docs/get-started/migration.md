@@ -27,7 +27,24 @@
 | `npx github:bradygaster/squad` | `npm install -g @bradygaster/squad-cli` |
 | `@bradygaster/create-squad` | `@bradygaster/squad-cli` |
 | `.ai-team/` directory | `.squad/` directory |
-| v0.5.4 (beta) | v1.1.0 (stable) |
+| v0.5.4 (beta) | v2.0.0 (stable) |
+
+---
+
+## Upgrading from v1.x to v2.0
+
+If you are already on Squad v1.x (`@bradygaster/squad-cli` and `@bradygaster/squad-sdk`), upgrading to v2.0 requires no reinitialization:
+
+```bash
+npm install -g @bradygaster/squad-cli@latest
+squad upgrade
+```
+
+- **Copilot-only projects:** `squad upgrade` without `--client` updates `.github/agents/squad.agent.md` and templates in place without creating files for other AI hosts.
+- **Multi-host projections:** Pass `--client claude,kiro,opencode,cursor,codex,antigravity` (or `--client all`) to `squad init` or `squad upgrade` to project your team across all 7 supported hosts; use `uninstallClients()` from `@bradygaster/squad-sdk/client` for byte-preserving rollback.
+- **SDK imports:** `@bradygaster/squad-sdk/client` is the canonical subpath for client and host-adapter APIs (`@bradygaster/squad-sdk/clients` is retained as a deprecated alias). Experimental backend APIs live under `@bradygaster/squad-sdk/backend`.
+- **Full details:** See [Upgrading to Squad 2.0](../scenarios/upgrading.md#upgrading-to-squad-20) and [Using Squad across clients](../scenarios/using-squad-across-clients.md).
+- **Which old versions are verified:** [Tested upgrade paths](../scenarios/upgrading.md#tested-upgrade-paths) lists every published release (0.9.1 through 1.1.0, pinned npm tarball or GitHub Release bundle) that the CI matrix upgrades on Windows and Linux under each project state shape, with per-row results, every not-applicable cell explained, and the known findings. There is no supported downgrade — see [There is no supported downgrade](../scenarios/upgrading.md#there-is-no-supported-downgrade).
 
 ---
 
@@ -370,7 +387,7 @@ You may be using the old package name. Use the correct name:
 npm install -g @bradygaster/squad-cli
 ```
 
-If the package genuinely isn't published yet, check [the npm page](https://www.npmjs.com/package/@bradygaster/squad-cli) or the [GitHub repo](https://github.com/bradygaster/squad) for release status.
+If the package genuinely isn't published yet, check [the npm page](https://www.npmjs.com/package/@bradygaster/squad-cli) or the [GitHub repo](https://github.com/github/squad) for release status.
 
 ### Permission denied during install
 
@@ -512,8 +529,8 @@ Key improvements since the migration from v0.5.4 beta:
 - **Casting system:** Universe-based agent naming with persistent registries (v0.8.25+).
 - **Stable v1 packages:** The CLI and SDK graduated from prerelease status in v1.0.0.
 
-For the full list of changes, see the [CHANGELOG](https://github.com/bradygaster/squad/blob/main/CHANGELOG.md).
+For the full list of changes, see the [CHANGELOG](https://github.com/github/squad/blob/main/CHANGELOG.md).
 
 ---
 
-*Questions or issues? Open an issue at [github.com/bradygaster/squad](https://github.com/bradygaster/squad/issues).*
+*Questions or issues? Open an issue at [github.com/github/squad](https://github.com/github/squad/issues).*

@@ -8,9 +8,18 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FSStorageProvider, stripTeamCapabilitiesBlock, syncTeamCapabilities } from '@bradygaster/squad-sdk';
-import { ensureCastingRegistryPair, preflightCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
-import { success, warn, info, dim, bold } from './output.js';
-import { fatal } from './errors.js';
+import { clearResolveSquadCache, isRetiredProfileTeamRoot } from '@bradygaster/squad-sdk/resolution';
+import {
+  backfillCastingRegistryFromTeam,
+  detectHistoricalCastingSchema,
+  ensureCastingRegistryPair,
+  normalizeCastingJsonLineEndings as normalizeCastingJsonFiles,
+  preflightCastingRegistryPair,
+  repairHandwrittenCastingRegistry,
+  type RepairResult,
+} from '@bradygaster/squad-sdk/casting';
+import { success, warn, info, dim, BOLD, RESET } from './output.js';
+import { fatal, fatalNoSquad } from './errors.js';
 import { detectSquadDir } from './detect-squad-dir.js';
 import { TEMPLATE_MANIFEST, getTemplatesDir } from './templates.js';
 import { runMigrations } from './migrations.js';
@@ -19,7 +28,26 @@ import { getPackageVersion, stampVersion, readInstalledVersion } from './version
 import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
 import { copyManagedFile, syncCopilotInstructionsFile, writeManagedText } from './managed-file.js';
 export { resolveSquadStateMcpSpec } from './mcp-spec.js';
-import { ensureSquadStateMcpInRoot, tombstoneStaleSquadStateInProjectMcp } from './mcp-root.js';
+import {
+  ensureSquadStateMcpInRoot,
+  reconcileSquadStateUserConfig,
+  tombstoneStaleSquadStateInProjectMcp,
+} from './mcp-root.js';
+import { applyClientProjectionsForUpgrade, reportClientResults, type ClientId } from './clients.js';
+import {
+  applyRetiredFiles,
+  applySquadOwnedFiles,
+  contentHash,
+  formatSquadOwnedPlan,
+  listFilesRecursive,
+  planRetiredFiles,
+  planSquadOwnedFiles,
+  SHIPPED_MANIFEST_RELATIVE_PATH,
+  writeShippedManifest,
+  type SquadOwnedCandidate,
+  type SquadOwnedPlan,
+} from './squad-owned-files.js';
+import { compareVersions } from '../upgrade.js';
 
 const storage = new FSStorageProvider();
 
@@ -155,6 +183,8 @@ export interface UpgradeOptions {
   insider?: boolean;
   /** Preview what upgrade would change without writing. */
   dryRun?: boolean;
+  /** Add these client hosts to the configured set; configured clients are always refreshed. */
+  clients?: ClientId[];
 }
 
 export interface UpdateInfo {
@@ -208,6 +238,15 @@ function readMcpConfigMode(config: Record<string, unknown>): McpConfigMode {
   return config['mcpConfigMode'] === 'agent-frontmatter' ? 'agent-frontmatter' : 'copilot-file';
 }
 
+/** Label for the project in upgrade output: configured name, else the repository directory name. */
+export function readProjectLabel(dest: string, config: Record<string, unknown>): string {
+  for (const key of ['projectName', 'name']) {
+    const value = config[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return path.basename(path.resolve(dest)) || dest;
+}
+
 function detectMcpConfigMode(config: Record<string, unknown>, agentDest: string): McpConfigMode {
   const configuredMode = readMcpConfigMode(config);
   if (configuredMode === 'agent-frontmatter') return configuredMode;
@@ -240,6 +279,63 @@ function detectIsGitHubForMcp(dest: string, config: Record<string, unknown>): bo
   return true;
 }
 
+/**
+ * Squad 1.x `init` pointed a project's `teamRoot` at the user-profile squad that 2.0 removed.
+ * Such a project would resolve in remote mode against a directory Squad no longer reads.
+ * Remove the key (nothing else in config.json changes); genuine dual-root targets stay.
+ */
+function stripRetiredProfileTeamRoot(squadDir: string, dest: string, dryRun: boolean): void {
+  const configPath = path.join(squadDir, 'config.json');
+  if (!storage.existsSync(configPath)) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(storage.readSync(configPath) ?? '');
+  } catch {
+    return;
+  }
+  // readSquadConfig() tolerates null/non-object config.json; so must this preflight.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+  const record = parsed as Record<string, unknown>;
+  const teamRoot = record['teamRoot'];
+  if (typeof teamRoot !== 'string' || teamRoot.length === 0 || teamRoot === '.') return;
+  const target = path.resolve(dest, teamRoot);
+  const comparable = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value;
+  if (comparable(target) === comparable(path.resolve(dest))) {
+    if (dryRun) {
+      info('Would normalize the absolute "teamRoot" setting to "." in .squad/config.json.');
+      return;
+    }
+    record['teamRoot'] = '.';
+    storage.writeSync(configPath, JSON.stringify(record, null, 2) + '\n');
+    clearResolveSquadCache();
+    info('Normalized the absolute "teamRoot" setting to "." in .squad/config.json.');
+    return;
+  }
+  if (!isRetiredProfileTeamRoot(target)) return;
+  if (dryRun) {
+    info('Would remove obsolete "teamRoot" setting from .squad/config.json.');
+    return;
+  }
+  delete record['teamRoot'];
+  storage.writeSync(configPath, JSON.stringify(record, null, 2) + '\n');
+  clearResolveSquadCache();
+  info('Removed obsolete "teamRoot" setting from .squad/config.json.');
+}
+
+/**
+ * Remove every machine-written stamp from a coordinator file so two copies that differ only
+ * by version/package-spec markers compare equal (an upgrade must not read its own stamps as
+ * a user customization).
+ */
+export function stripAgentStamps(s: string): string {
+  return s
+    .replace(/<!-- squad-cli v[\d.]+[-\w.]* -->\n?/g, '')
+    .replace(/<!-- version: [^>]+ -->/g, '<!-- version: X -->')
+    .replace(/- \*\*Version:\*\* \S+/g, '- **Version:** X')
+    .replace(/`Squad v[^`]+`/g, '`Squad vX`')
+    .replace(/@bradygaster\/squad-cli@[^\s"'\]]+/g, '@bradygaster/squad-cli@X');
+}
+
 function writeAgentTemplate(agentSrc: string, agentDest: string, cliVersion: string, mcpConfigMode: McpConfigMode, isGitHub: boolean, options?: { dryRun?: boolean; squadDir?: string }): void {
   let agentContent = storage.readSync(agentSrc) ?? '';
   if (mcpConfigMode === 'agent-frontmatter') {
@@ -249,11 +345,9 @@ function writeAgentTemplate(agentSrc: string, agentDest: string, cliVersion: str
   // Back up locally-customized squad.agent.md before overwriting (#1052)
   if (storage.existsSync(agentDest)) {
     const existing = storage.readSync(agentDest) ?? '';
-    // Strip the version stamp before comparing (version line changes every upgrade)
-    const stripVersion = (s: string) => s.replace(/<!-- squad-cli v[\d.]+[-\w.]* -->\n?/g, '');
-    // Strip the generated Team Capabilities block too (#1608) — it is machine
-    // written on every cast change and must not read as a user customization.
-    const normalize = (s: string) => stripTeamCapabilitiesBlock(stripVersion(s));
+    // Strip every stamp form before comparing (they change on every upgrade), and the
+    // generated Team Capabilities block (#1608) — machine written on every cast change.
+    const normalize = (s: string) => stripTeamCapabilitiesBlock(stripAgentStamps(s));
     const normalizedExisting = normalize(existing.replace(/\r\n/g, '\n'));
     const normalizedTemplate = normalize(agentContent.replace(/\r\n/g, '\n'));
 
@@ -263,11 +357,19 @@ function writeAgentTemplate(agentSrc: string, agentDest: string, cliVersion: str
         warn(`squad.agent.md has local customizations — would back up to ${path.basename(backupPath)}`);
         return;
       }
-      storage.writeSync(backupPath, existing);
+      // Keep an existing backup when it already holds this exact content.
+      if ((storage.existsSync(backupPath) ? storage.readSync(backupPath) : null) !== existing) {
+        storage.writeSync(backupPath, existing);
+      }
       warn(`squad.agent.md has local customizations — backed up to ${path.basename(backupPath)}`);
       info(`  To restore: copy ${path.basename(backupPath)} → ${path.basename(agentDest)}`);
     } else if (options?.dryRun) {
-      info('squad.agent.md is unmodified — would refresh with latest template');
+      const installed = readInstalledVersion(agentDest);
+      if (installed === cliVersion) {
+        info(`squad.agent.md is up to date (v${cliVersion}) — would re-render unchanged`);
+      } else {
+        info(`squad.agent.md is unmodified — would refresh with latest template (${installed ?? 'unknown'} → ${cliVersion})`);
+      }
       return;
     }
   } else if (options?.dryRun) {
@@ -477,33 +579,115 @@ function generateProjectWorkflowStub(workflowFile: string, projectType: string):
 }
 
 /**
- * Write workflow file: verbatim copy for npm, stub for others
+ * Content a workflow file should have in this project: the shipped template verbatim for
+ * npm projects, a project-type stub for the build/test-sensitive ones otherwise.
  */
-function writeWorkflowFile(file: string, srcPath: string, destPath: string, projectType: string): void {
-  const backupIfCustomized = (nextContent: string): void => {
-    if (!storage.existsSync(destPath)) return;
-
-    const existing = storage.readSync(destPath) ?? '';
-    const normalizedExisting = existing.replace(/\r\n/g, '\n');
-    const normalizedNext = nextContent.replace(/\r\n/g, '\n');
-
-    if (normalizedExisting !== normalizedNext && normalizedExisting.trim().length > 0) {
-      const backupPath = destPath + '.local-backup';
-      storage.writeSync(backupPath, existing);
-      warn(`${file} has local customizations — backed up to ${path.basename(backupPath)}`);
-    }
-  };
-
+function workflowContent(file: string, srcPath: string, projectType: string): string {
   if (projectType !== 'npm' && PROJECT_TYPE_SENSITIVE_WORKFLOWS.has(file)) {
     const stub = generateProjectWorkflowStub(file, projectType);
-    if (stub) {
-      backupIfCustomized(stub);
-      writeManagedText(destPath, stub);
-      return;
+    if (stub) return stub;
+  }
+  return storage.readSync(srcPath) ?? '';
+}
+
+/**
+ * Every squad-owned file an upgrade may write, in plan order:
+ *  1. manifest entries with `overwriteOnUpgrade` (templates, skills, flat casting JSON),
+ *  2. `.github/workflows/*.yml` (verbatim or project-type stub),
+ *  3. the full `.squad/templates/` mirror — including `skills/` and `workflows/`, which
+ *     previous releases never refreshed (#2047).
+ * `squad.agent.md` is excluded: it has its own stamp-aware writer.
+ */
+export function collectSquadOwnedCandidates(
+  dest: string,
+  squadDir: string,
+  templatesDir: string,
+  projectType: string,
+): SquadOwnedCandidate[] {
+  const candidates: SquadOwnedCandidate[] = [];
+
+  for (const entry of TEMPLATE_MANIFEST) {
+    if (!entry.overwriteOnUpgrade || entry.source === 'squad.agent.md.template') continue;
+    if (entry.source.startsWith('workflows/')) continue; // handled below with project-type stubs
+    candidates.push({
+      src: path.join(templatesDir, entry.source),
+      absPath: path.join(squadDir, entry.destination),
+    });
+  }
+
+  const workflowsSrc = path.join(templatesDir, 'workflows');
+  if (storage.existsSync(workflowsSrc)) {
+    for (const file of storage.listSync(workflowsSrc).filter(f => f.endsWith('.yml')).sort()) {
+      const srcPath = path.join(workflowsSrc, file);
+      candidates.push({
+        src: srcPath,
+        absPath: path.join(dest, '.github', 'workflows', file),
+        content: workflowContent(file, srcPath, projectType),
+      });
     }
   }
-  backupIfCustomized(storage.readSync(srcPath) ?? '');
-  copyManagedFile(srcPath, destPath);
+
+  const squadTemplatesDest = path.join(dest, '.squad', 'templates');
+  const manifestAbs = path.join(dest, ...SHIPPED_MANIFEST_RELATIVE_PATH.split('/'));
+  for (const src of listFilesRecursive(templatesDir)) {
+    const absPath = path.join(squadTemplatesDest, path.relative(templatesDir, src));
+    if (absPath === manifestAbs) continue;
+    candidates.push({ src, absPath });
+  }
+
+  return candidates;
+}
+
+/** Plan every squad-owned file for this project (pure; nothing is written). */
+export function planUpgradeFiles(dest: string, squadDir: string, templatesDir: string): SquadOwnedPlan {
+  return planSquadOwnedFiles(dest, collectSquadOwnedCandidates(dest, squadDir, templatesDir, detectProjectType(dest)));
+}
+
+/**
+ * Record what `squad init` just shipped so the first `squad upgrade` can tell user edits from
+ * template revisions. Best effort: init must not fail because the manifest could not be written.
+ */
+export function recordShippedFilesAfterInit(dest: string, squadDir: string, templatesDir: string, version: string): boolean {
+  try {
+    writeShippedManifest(dest, version, planUpgradeFiles(dest, squadDir, templatesDir));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Apply the squad-owned file plan (verified backups first), then record what shipped.
+ * Returns the repo-relative paths that were written.
+ */
+function applyUpgradeFiles(dest: string, plan: SquadOwnedPlan, cliVersion: string, filesUpdated: string[]): void {
+  // Retirement is planned from the PREVIOUS manifest, so it must run before the new one is written.
+  const retired = planRetiredFiles(dest, plan);
+  const result = applySquadOwnedFiles(plan, { warn });
+  for (const file of plan.preserved) {
+    warn(`${file.relPath} has local customizations — treated as user-owned and left unchanged`);
+  }
+  for (const rel of result.backedUp) info(`  To restore: copy ${path.basename(rel)}.local-backup → ${path.basename(rel)}`);
+  if (result.written.length > 0) {
+    success(`upgraded ${result.written.length} squad-owned file(s)${result.backedUp.length > 0 ? ` (${result.backedUp.length} file(s) backed up to .local-backup)` : ''}`);
+    filesUpdated.push(...result.written);
+  } else if (plan.preserved.length > 0) {
+    info(`No squad-owned files written; preserved ${plan.preserved.length} customized workflow(s).`);
+  } else {
+    info(`squad-owned files already up to date (${plan.files.length} checked)`);
+  }
+  if (result.aborted.length > 0) {
+    warn(`${result.aborted.length} file(s) were NOT overwritten because their backup could not be verified: ${result.aborted.join(', ')}`);
+  }
+  const retirement = applyRetiredFiles(retired);
+  if (retirement.removed.length > 0) {
+    success(`removed ${retirement.removed.length} retired squad-owned file(s) no longer shipped: ${retirement.removed.join(', ')}`);
+    filesUpdated.push(...retirement.removed.map(r => `${r} (removed)`));
+  }
+  for (const kept of retirement.kept) {
+    warn(`${kept} is no longer shipped by Squad but was modified locally — left in place; delete it yourself if unneeded`);
+  }
+  writeShippedManifest(dest, cliVersion, plan);
 }
 
 /* ── Infrastructure ensure functions ────────────────────────────── */
@@ -513,6 +697,7 @@ const GITATTRIBUTES_RULES = [
   '.squad/agents/*/history.md merge=union',
   '.squad/log/** merge=union',
   '.squad/orchestration-log/** merge=union',
+  '.squad/casting/*.json text eol=lf',
 ];
 
 const GITIGNORE_ENTRIES = [
@@ -521,6 +706,7 @@ const GITIGNORE_ENTRIES = [
   '.squad/decisions/inbox/',
   '.squad/sessions/',
   '.squad/.cache/',
+  '.squad/backend/',
   '.squad-workstream',
 ];
 
@@ -535,10 +721,29 @@ const ENSURE_DIRECTORIES = [
   '.github/skills',
 ];
 
+/** The line ending most of `text` uses; CRLF wins ties so a Windows file never gains bare LFs. */
+export function dominantEol(text: string): '\n' | '\r\n' {
+  const crlf = (text.match(/\r\n/g) ?? []).length;
+  const lf = (text.match(/(?<!\r)\n/g) ?? []).length;
+  return crlf > 0 && crlf >= lf ? '\r\n' : '\n';
+}
+
 /**
- * Ensure .gitattributes has required merge=union rules (idempotent)
+ * Append `lines` to a line-oriented file without rewriting any existing byte: the file's own
+ * dominant EOL is used for the new lines and a missing trailing newline is supplied first.
  */
-export function ensureGitattributes(dest: string): string[] {
+export function appendLinesPreservingEol(filePath: string, lines: readonly string[]): void {
+  const existing = storage.existsSync(filePath) ? (storage.readSync(filePath) ?? '') : '';
+  const eol = dominantEol(existing);
+  const bridge = existing.length > 0 && !/\r?\n$/.test(existing) ? eol : '';
+  storage.writeSync(filePath, existing + bridge + lines.join(eol) + eol);
+}
+
+/**
+ * Ensure .gitattributes has required merge=union rules (idempotent).
+ * Missing rules are appended in the file's own EOL style; existing lines are never rewritten.
+ */
+export function ensureGitattributes(dest: string, options: { dryRun?: boolean } = {}): string[] {
   const filePath = path.join(dest, '.gitattributes');
   let content = '';
   if (storage.existsSync(filePath)) {
@@ -550,19 +755,24 @@ export function ensureGitattributes(dest: string): string[] {
       added.push(rule);
     }
   }
-  if (added.length > 0) {
-    const suffix = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+  if (added.length > 0 && !options.dryRun) {
     try {
-      writeManagedText(filePath, content + suffix + added.join('\n') + '\n');
+      appendLinesPreservingEol(filePath, added);
     } catch (err: unknown) {
       if (err instanceof Error && 'code' in err && ['EPERM', 'EACCES'].includes((err as NodeJS.ErrnoException).code ?? '')) {
-        warn('Could not update .gitattributes (read-only). Add merge=union entries manually.');
+        warn('Could not update .gitattributes (read-only). Add the required Squad entries manually.');
         return [];
       }
       throw err;
     }
   }
   return added;
+}
+
+export function normalizeCastingJsonLineEndings(dest: string): string[] {
+  const castingDir = path.join(dest, '.squad', 'casting');
+  return normalizeCastingJsonFiles(castingDir)
+    .map(name => `.squad/casting/${name}`);
 }
 
 /**
@@ -584,23 +794,24 @@ function isAlreadyCoveredByParent(entry: string, lines: string[]): boolean {
 /**
  * Ensure .gitignore has required entries (idempotent).
  * Skips entries already covered by a parent path (e.g. `.squad/` covers `.squad/log/`).
+ * Missing entries are appended in the file's own EOL style; the file is never rewritten
+ * wholesale (a one-line addition must not produce a whole-file CRLF/LF diff, #2297).
  */
-export function ensureGitignore(dest: string): string[] {
+export function ensureGitignore(dest: string, options: { dryRun?: boolean } = {}): string[] {
   const filePath = path.join(dest, '.gitignore');
   let content = '';
   if (storage.existsSync(filePath)) {
     content = storage.readSync(filePath) ?? '';
   }
-  const existingLines = content.split('\n');
+  const existingLines = content.split(/\r?\n/);
   const added: string[] = [];
   for (const entry of GITIGNORE_ENTRIES) {
     if (content.includes(entry)) continue;
     if (isAlreadyCoveredByParent(entry, existingLines)) continue;
     added.push(entry);
   }
-  if (added.length > 0) {
-    const suffix = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-    writeManagedText(filePath, content + suffix + added.join('\n') + '\n');
+  if (added.length > 0 && !options.dryRun) {
+    appendLinesPreservingEol(filePath, added);
   }
   return added;
 }
@@ -649,7 +860,16 @@ export function ensureCastingDefaults(dest: string, templatesDir?: string): stri
   const created: string[] = [];
   try {
     storage.mkdirSync(castingDir, { recursive: true });
-    const pair = ensureCastingRegistryPair(
+    // LLM-handwritten registries (role keys, agents arrays, no schema) are normalized instead of crashing upgrade;
+    // the repair itself decides whether existing history.json content blocks it
+    const repair = repairHandwrittenCastingRegistry(castingDir);
+    if (repair.repaired) {
+      warn('Normalized a handwritten .squad/casting/registry.json');
+      created.push(...repair.files.map((f) => `.squad/casting/${f}`));
+    } else {
+      warnCastingRepairSkipped('Could not normalize handwritten .squad/casting/registry.json', repair);
+    }
+    const pair = withCastingRepairContext(repair, () => ensureCastingRegistryPair(
       castingDir,
       templateContent(
         'casting-registry.json',
@@ -660,9 +880,17 @@ export function ensureCastingDefaults(dest: string, templatesDir?: string): stri
         JSON.stringify({ universe_usage_history: [], assignment_cast_snapshots: {} }, null, 2) + '\n',
       ),
       'CLI upgrade',
-    );
+    ));
     if (pair.created) {
       created.push('.squad/casting/registry.json', '.squad/casting/history.json');
+    }
+    // team.md + charters written directly by a model on an older CLI leave the registry empty: backfill it from the roster
+    const backfill = backfillCastingRegistryFromTeam(castingDir, path.join(dest, '.squad', 'team.md'));
+    if (backfill.repaired) {
+      warn('Backfilled .squad/casting/registry.json from .squad/team.md');
+      created.push(...backfill.files.map((f) => `.squad/casting/${f}`).filter((f) => !created.includes(f)));
+    } else {
+      warnCastingRepairSkipped('Could not backfill .squad/casting/registry.json from .squad/team.md', backfill);
     }
 
     const policyPath = path.join(castingDir, 'policy.json');
@@ -687,25 +915,103 @@ export function ensureCastingDefaults(dest: string, templatesDir?: string): stri
 }
 
 /**
- * Warn when a built-in skill has been customized and is about to be overwritten.
- * Normalizes line endings before comparison to avoid false positives from CRLF differences.
+ * Generic pair-initialization / consistency failures carry no hint about *why* a handwritten
+ * registry could not be normalized. Legacy-migration errors (entries provenance, missing universe,
+ * …) are specific already and pass through untouched.
  */
-function warnIfSkillCustomized(srcPath: string, destPath: string, sourceName: string): void {
-  if (!storage.existsSync(destPath)) return;
-  const existing = (storage.readSync(destPath) ?? '').replace(/\r\n/g, '\n');
-  const template = (storage.readSync(srcPath) ?? '').replace(/\r\n/g, '\n');
-  if (existing && existing !== template) {
-    const skillName = sourceName.split('/')[1] ?? sourceName;
-    warn(`Skill '${skillName}' has been customized — overwriting with built-in version`);
+const GENERIC_CASTING_PAIR_ERROR = /Cannot (initialize|read a consistent) casting registry/;
+
+/**
+ * Run a managed-pair operation; when it fails with the generic pair error after the handwritten
+ * repair declined with a reason, rethrow with the reason, the offending entries and the fix.
+ */
+function withCastingRepairContext<T>(repair: RepairResult, run: () => T): T {
+  try {
+    return run();
+  } catch (err: unknown) {
+    if (!repair.repaired && repair.reason && err instanceof Error && GENERIC_CASTING_PAIR_ERROR.test(err.message)) {
+      fatal(formatCastingRepairBlocked(repair));
+    }
+    throw err;
   }
+}
+
+/** Actionable fail-closed message for a casting registry that is neither readable nor repairable. */
+export function formatCastingRepairBlocked(repair: RepairResult): string {
+  const lines = [
+    `.squad/casting/registry.json cannot be read or repaired: ${repair.reason ?? 'unknown reason'}`,
+  ];
+  for (const { name, reason } of repair.dropped ?? []) {
+    lines.push(`  - ${name}: ${reason}`);
+  }
+  lines.push(
+    'Fix .squad/casting/registry.json so every agent entry is an object with `name` and `role`',
+    '(e.g. "tester": { "name": "Quinn", "role": "Tester" }), or re-cast with `npx squad cast --name <Name> --role <Role>`,',
+    'then run `squad upgrade` again.',
+  );
+  return lines.join('\n');
+}
+
+/**
+ * Legacy `.copilot/skills/<name>/` entries Squad is allowed to touch: manifest skills (moved to
+ * `.github/skills/`) plus any skill that ships in `templates/skills/` whose legacy copy is
+ * byte-for-byte (EOL-insensitive) a copy Squad itself wrote — proven by matching either the
+ * current template or the `.squad/templates/skills/<name>/` snapshot init seeded. Anything
+ * else is user content and is never listed (#2232, #2047).
+ */
+export function findLegacyCopilotSkills(dest: string): string[] {
+  const legacyDir = path.join(dest, '.copilot', 'skills');
+  if (!storage.existsSync(legacyDir)) return [];
+  const manifestSkills = new Set(
+    TEMPLATE_MANIFEST
+      .filter(f => f.source.startsWith('skills/'))
+      .map(f => f.source.split('/')[1]) // 'skills/foo/SKILL.md' -> 'foo'
+      .filter((s): s is string => Boolean(s)),
+  );
+  let templatesDir: string | undefined;
+  try {
+    templatesDir = getTemplatesDir();
+  } catch {
+    templatesDir = undefined;
+  }
+
+  const result: string[] = [];
+  for (const entry of storage.listSync(legacyDir).sort()) {
+    const legacySkillDir = path.join(legacyDir, entry);
+    if (!storage.isDirectorySync(legacySkillDir)) continue;
+    if (manifestSkills.has(entry)) {
+      result.push(entry);
+      continue;
+    }
+    if (templatesDir && isSquadShippedSkillCopy(dest, templatesDir, entry, legacySkillDir)) {
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
+/** True when every file in the legacy skill dir equals the shipped template (current or snapshot). */
+function isSquadShippedSkillCopy(dest: string, templatesDir: string, name: string, legacySkillDir: string): boolean {
+  const sources = [
+    path.join(templatesDir, 'skills', name),
+    path.join(dest, '.squad', 'templates', 'skills', name),
+  ].filter(dir => storage.existsSync(dir));
+  if (sources.length === 0) return false;
+  const files = listFilesRecursive(legacySkillDir);
+  if (files.length === 0) return false;
+  return sources.some(sourceDir => files.every(file => {
+    const counterpart = path.join(sourceDir, path.relative(legacySkillDir, file));
+    if (!storage.existsSync(counterpart)) return false;
+    return contentHash(storage.readSync(file) ?? '') === contentHash(storage.readSync(counterpart) ?? '');
+  }));
 }
 
 /**
  * Migrate skills from the legacy `.copilot/skills/<name>/` location to the
- * canonical `.github/skills/<name>/`. Only migrates skills that appear in
- * `TEMPLATE_MANIFEST` (manifest-curated Squad skills) — does NOT touch
- * user-added skills in `.copilot/skills/`. After successful migration,
- * removes the now-empty `.copilot/skills/<name>/` directories.
+ * canonical `.github/skills/<name>/`. Manifest skills are moved; other skills are
+ * removed only when `findLegacyCopilotSkills` proved them to be unmodified Squad
+ * copies. User-added or edited skills in `.copilot/skills/` are never touched.
+ * After successful migration, removes the now-empty `.copilot/skills/` directory.
  *
  * Idempotent: when a skill already exists at the new location the legacy
  * copy is tombstoned without comparing content — this protects any
@@ -731,14 +1037,13 @@ function migrateLegacyCopilotSkills(dest: string): { migrated: string[]; tombsto
   const migrated: string[] = [];
   const tombstoned: string[] = [];
 
-  for (const entry of storage.listSync(legacyDir)) {
-    if (!manifestSkills.has(entry)) continue; // leave user-added skills alone
+  for (const entry of findLegacyCopilotSkills(dest)) {
     const legacySkillDir = path.join(legacyDir, entry);
     if (!storage.isDirectorySync(legacySkillDir)) continue;
 
     const newSkillDir = path.join(newDir, entry);
-    if (storage.existsSync(newSkillDir)) {
-      // New location already has it — drop the legacy copy without overwriting.
+    if (!manifestSkills.has(entry) || storage.existsSync(newSkillDir)) {
+      // Retired Squad copy, or the new location already has it — drop the legacy copy without overwriting.
       try {
         storage.deleteDirSync(legacySkillDir);
         tombstoned.push(path.posix.join('.copilot/skills', entry));
@@ -769,51 +1074,6 @@ function migrateLegacyCopilotSkills(dest: string): { migrated: string[]; tombsto
   }
 
   return { migrated, tombstoned };
-}
-
-/**
- * Sync manifest-declared skills to .github/skills/, respecting overwriteOnUpgrade.
- * Only skills listed in TEMPLATE_MANIFEST are installed — not the entire templates/skills/ dir.
- */
-function syncAllSkills(dest: string, templatesDir: string): number {
-  const skillEntries = TEMPLATE_MANIFEST.filter(f => f.source.startsWith('skills/'));
-  if (skillEntries.length === 0) return 0;
-
-  const squadDir = path.join(dest, '.squad');
-  let synced = 0;
-  for (const entry of skillEntries) {
-    const srcPath = path.join(templatesDir, entry.source);
-    const destPath = path.join(squadDir, entry.destination);
-
-    if (!storage.existsSync(srcPath)) continue;
-    if (!entry.overwriteOnUpgrade && storage.existsSync(destPath)) continue;
-
-    warnIfSkillCustomized(srcPath, destPath, entry.source);
-    storage.mkdirSync(path.dirname(destPath), { recursive: true });
-    copyManagedFile(srcPath, destPath);
-    synced++;
-  }
-  return synced;
-}
-
-/**
- * Copy full templates/ directory to .squad/templates/ for user access
- */
-function refreshSquadTemplatesDir(dest: string, templatesDir: string): void {
-  const squadTemplatesDest = path.join(dest, '.squad', 'templates');
-  storage.mkdirSync(squadTemplatesDest, { recursive: true });
-  // Copy everything except workflows and skills (those have dedicated handling)
-  const entries = storage.listSync(templatesDir);
-  for (const entry of entries) {
-    if (entry === 'workflows' || entry === 'skills') continue;
-    const srcPath = path.join(templatesDir, entry);
-    const destPath = path.join(squadTemplatesDest, entry);
-    if (storage.isDirectorySync(srcPath)) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      copyManagedFile(srcPath, destPath);
-    }
-  }
 }
 
 /**
@@ -862,7 +1122,65 @@ export async function ensureEsmImportsPatched(dest: string): Promise<boolean> {
 /**
  * Run all ensure* checks and skill/template sync — shared by both code paths
  */
-async function runEnsureChecks(dest: string, templatesDir: string, filesUpdated: string[]): Promise<void> {
+/**
+ * Scaffold/repair the casting registry pair before the coordinator file is rendered, so one
+ * upgrade produces the final file (F4: a 0.9.x project with an empty casting/ used to need two).
+ * Idempotent; the later ensure pass finds nothing left to create.
+ */
+function preflightCastingPair(dest: string, templatesDir: string, filesUpdated: string[]): void {
+  const created = ensureCastingDefaults(dest, templatesDir);
+  if (created.length > 0) {
+    success(`scaffolded ${created.length} default casting files`);
+    filesUpdated.push(...created);
+  }
+}
+
+/**
+ * Built-in agent housekeeping that must happen BEFORE the coordinator file is rendered:
+ * migrate `agents/Rai/` → `agents/rai/` and scaffold missing built-in charters. team.md is
+ * user-owned and is changed only by the explicit `squad roster` command.
+ */
+function prepareBuiltinAgents(dest: string, templatesDir: string, filesUpdated: string[]): void {
+  const raiMigration = migrateLegacyRaiAgent(dest);
+  if (raiMigration.migrated.length > 0) {
+    success(`migrated .squad/agents/Rai/ → .squad/agents/rai/${raiMigration.recordedInGit ? ' (recorded with git mv)' : ''}`);
+    filesUpdated.push(...raiMigration.migrated);
+  }
+  if (raiMigration.tombstoned.length > 0) {
+    success('removed stale .squad/agents/Rai/ (superseded by .squad/agents/rai/)');
+  }
+
+  const builtinAgents = ensureBuiltinAgents(dest, templatesDir);
+  if (builtinAgents.length > 0) {
+    const uniqueAgentNames = Array.from(new Set(builtinAgents.map(p => path.basename(path.dirname(p)))));
+    success(`scaffolded ${uniqueAgentNames.length} built-in agent(s): ${uniqueAgentNames.join(', ')}`);
+    filesUpdated.push(...builtinAgents);
+  }
+
+}
+
+/**
+ * Move manifest skills from `.copilot/skills/` to `.github/skills/` BEFORE the squad-owned
+ * plan is built, so a customized legacy copy becomes the "existing" file the plan compares
+ * (and backs up) instead of being tombstoned behind a freshly written template.
+ */
+function runLegacySkillMigration(dest: string, filesUpdated: string[]): void {
+  const skillMigration = migrateLegacyCopilotSkills(dest);
+  if (skillMigration.migrated.length > 0) {
+    success(`migrated ${skillMigration.migrated.length} skill(s) from .copilot/skills/ → .github/skills/`);
+    filesUpdated.push(...skillMigration.migrated);
+  }
+  if (skillMigration.tombstoned.length > 0) {
+    success(`removed ${skillMigration.tombstoned.length} stale .copilot/skills entries (now live at .github/skills/)`);
+  }
+}
+
+async function runEnsureChecks(
+  dest: string,
+  templatesDir: string,
+  filesUpdated: string[],
+  options: { skipCasting?: boolean } = {},
+): Promise<void> {
   const attrAdded = ensureGitattributes(dest);
   if (attrAdded.length > 0) {
     success(`ensured .gitattributes (${attrAdded.length} rules added)`);
@@ -881,10 +1199,17 @@ async function runEnsureChecks(dest: string, templatesDir: string, filesUpdated:
     filesUpdated.push(...dirsCreated);
   }
 
-  const castingFiles = ensureCastingDefaults(dest, templatesDir);
-  if (castingFiles.length > 0) {
-    success(`scaffolded ${castingFiles.length} default casting files`);
-    filesUpdated.push(...castingFiles);
+  if (!options.skipCasting) {
+    const castingFiles = ensureCastingDefaults(dest, templatesDir);
+    if (castingFiles.length > 0) {
+      success(`scaffolded ${castingFiles.length} default casting files`);
+      filesUpdated.push(...castingFiles);
+    }
+    const normalizedCasting = normalizeCastingJsonLineEndings(dest);
+    if (normalizedCasting.length > 0) {
+      success(`normalized ${normalizedCasting.length} casting JSON file(s) to LF`);
+      filesUpdated.push(...normalizedCasting);
+    }
   }
 
   const memoryFiles = ensureMemoryGovernanceUpgradeDefaults(dest);
@@ -893,46 +1218,11 @@ async function runEnsureChecks(dest: string, templatesDir: string, filesUpdated:
     filesUpdated.push(...memoryFiles);
   }
 
-  const raiMigration = migrateLegacyRaiAgent(dest);
-  if (raiMigration.migrated.length > 0) {
-    success('migrated .squad/agents/Rai/ → .squad/agents/rai/');
-    filesUpdated.push(...raiMigration.migrated);
-  }
-  if (raiMigration.tombstoned.length > 0) {
-    success('removed stale .squad/agents/Rai/ (superseded by .squad/agents/rai/)');
-  }
-
-  const builtinAgents = ensureBuiltinAgents(dest, templatesDir);
-  if (builtinAgents.length > 0) {
-    const uniqueAgentNames = Array.from(new Set(builtinAgents.map(p => path.basename(path.dirname(p)))));
-    success(`scaffolded ${uniqueAgentNames.length} built-in agent(s): ${uniqueAgentNames.join(', ')}`);
-    filesUpdated.push(...builtinAgents);
-  }
-
   const userOwned = ensureUserOwnedTemplates(dest, templatesDir);
   if (userOwned.length > 0) {
     success(`installed ${userOwned.length} missing user-owned template(s): ${userOwned.join(', ')}`);
     filesUpdated.push(...userOwned);
   }
-
-  const skillMigration = migrateLegacyCopilotSkills(dest);
-  if (skillMigration.migrated.length > 0) {
-    success(`migrated ${skillMigration.migrated.length} skill(s) from .copilot/skills/ → .github/skills/`);
-    filesUpdated.push(...skillMigration.migrated);
-  }
-  if (skillMigration.tombstoned.length > 0) {
-    success(`removed ${skillMigration.tombstoned.length} stale .copilot/skills entries (now live at .github/skills/)`);
-  }
-
-  const skillCount = syncAllSkills(dest, templatesDir);
-  if (skillCount > 0) {
-    success(`synced ${skillCount} skills to .github/skills/`);
-    filesUpdated.push(`skills (${skillCount})`);
-  }
-
-  refreshSquadTemplatesDir(dest, templatesDir);
-  success('refreshed .squad/templates/');
-  filesUpdated.push('.squad/templates/');
 
   // iter-8: write squad_state MCP entry to repo-root `.mcp.json`
   // (auto-loaded by Copilot CLI ≥1.0.59, which walks up from cwd to the
@@ -959,6 +1249,11 @@ async function runEnsureChecks(dest: string, templatesDir: string, filesUpdated:
     success(`removed stale squad_state from ${tomb.path} (now lives in .mcp.json)`);
     filesUpdated.push('.copilot/mcp-config.json (tombstoned)');
   }
+  const userConfig = reconcileSquadStateUserConfig(dest);
+  if (userConfig.action === 'removed') {
+    success(`removed duplicate ${(userConfig.keys ?? [userConfig.key]).join(', ')} from ${userConfig.path} (.mcp.json takes precedence)`);
+    info(`  Backup: ${userConfig.backupPath}`);
+  }
 
   // #1190: patch ESM imports in the repo-local node_modules — postinstall only
   // ever runs against the installed package's own directory tree.
@@ -970,14 +1265,14 @@ async function runEnsureChecks(dest: string, templatesDir: string, filesUpdated:
 
 /** Human-readable single-line description of an McpSpec for success() messages. */
 export function describeMcpSpec(spec: SquadStateMcpSpec): string {
-  // Standalone bundles spawn their own launcher by absolute path rather than
-  // going through npx, so there is no package spec in args to report.
   if (spec.source === 'standalone') {
-    return `${spec.command} (standalone bundle)`;
+    return `${spec.command} (machine-specific standalone bundle; exact-version fallback recorded)`;
   }
-  // Every other spec is `npx -y <pkg@version-or-tag> state-mcp`.
+  if (spec.source === 'local-entry') {
+    return `${spec.command} ${spec.args[0]} (machine-specific installed CLI; exact-version fallback recorded)`;
+  }
   const pkg = spec.args[1] ?? '<unknown>';
-  return spec.source === 'insider' ? `${pkg} (@insider fallback)` : pkg;
+  return pkg;
 }
 
 export function ensureMemoryGovernanceUpgradeDefaults(dest: string): string[] {
@@ -1035,8 +1330,14 @@ export function ensureMemoryGovernanceUpgradeDefaults(dest: string): string[] {
  * the same repo.
  *
  * Idempotent and duplicate-safe:
- *  - Only `Rai/` exists → rename it in place to `rai/` (single `renameSync`,
- *    same convention as `migrateDirectory`'s `.ai-team/` → `.squad/` rename).
+ *  - Only `Rai/` exists → rename it to `rai/` through a temporary name
+ *    (`Rai` → `.rai-tmp` → `rai`), because a direct case-only rename is a
+ *    no-op for git on case-insensitive filesystems (Windows, macOS) and the
+ *    index keeps tracking `agents/Rai/` forever (#2299). When the directory
+ *    is tracked, both steps go through `git mv` so the rename is recorded;
+ *    otherwise (or when git is unavailable) the filesystem is renamed directly.
+ *  - A leftover `.rai-tmp/` from an interrupted run is finished (→ `rai/`) or
+ *    dropped when `rai/` already exists.
  *  - Both `Rai/` and `rai/` exist (possible on a case-sensitive filesystem
  *    after a partial upgrade) → canonical `rai/` wins; the legacy `Rai/` is
  *    removed without overwriting `rai/`, so no in-place customization at the
@@ -1046,21 +1347,60 @@ export function ensureMemoryGovernanceUpgradeDefaults(dest: string): string[] {
  * @param dest Root directory containing .squad/
  * @returns Paths (relative to dest) affected by the migration
  */
-export function migrateLegacyRaiAgent(dest: string): { migrated: string[]; tombstoned: string[] } {
+export function migrateLegacyRaiAgent(dest: string): { migrated: string[]; tombstoned: string[]; recordedInGit: boolean } {
   const agentsDir = path.join(dest, '.squad', 'agents');
-  if (!storage.existsSync(agentsDir)) return { migrated: [], tombstoned: [] };
+  const none = { migrated: [], tombstoned: [], recordedInGit: false };
+  if (!storage.existsSync(agentsDir)) return none;
 
   const entries = storage.listSync(agentsDir);
   const legacyDir = path.join(agentsDir, 'Rai');
-  if (!entries.includes('Rai') || !storage.isDirectorySync(legacyDir)) {
-    return { migrated: [], tombstoned: [] };
-  }
-
+  const tempDir = path.join(agentsDir, '.rai-tmp');
   const canonicalDir = path.join(agentsDir, 'rai');
   const migrated: string[] = [];
   const tombstoned: string[] = [];
+  let recordedInGit = false;
 
-  if (entries.includes('rai')) {
+  const hasLegacy = entries.includes('Rai') && storage.isDirectorySync(legacyDir);
+  const hasTemp = entries.includes('.rai-tmp') && storage.isDirectorySync(tempDir);
+  const hasCanonical = entries.includes('rai');
+
+  const gitMove = (from: string, to: string): boolean => {
+    try {
+      const rel = (p: string) => path.relative(dest, p).split(path.sep).join('/');
+      // Only a tracked directory can be recorded; `ls-files` prints nothing for untracked paths.
+      const tracked = execFileSync('git', ['ls-files', '--', rel(from)], { cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      if (!tracked) return false;
+      execFileSync('git', ['mv', rel(from), rel(to)], { cwd: dest, stdio: ['pipe', 'pipe', 'pipe'] });
+      return storage.existsSync(to) && storage.listSync(agentsDir).includes(path.basename(to));
+    } catch {
+      return false;
+    }
+  };
+  const move = (from: string, to: string): void => {
+    if (gitMove(from, to)) {
+      recordedInGit = true;
+      return;
+    }
+    storage.renameSync(from, to);
+  };
+
+  // Finish or discard an interrupted two-step rename before looking at Rai/.
+  if (hasTemp) {
+    try {
+      if (hasCanonical) {
+        storage.deleteDirSync(tempDir);
+      } else {
+        move(tempDir, canonicalDir);
+        migrated.push(path.posix.join('.squad/agents', 'rai'));
+      }
+    } catch {
+      // best-effort; leave the temp dir if we can't move it
+    }
+  }
+
+  if (!hasLegacy) return { migrated, tombstoned, recordedInGit };
+
+  if (hasCanonical || (hasTemp && migrated.length > 0)) {
     // Both exist — canonical `rai/` wins, drop the legacy copy as-is.
     try {
       storage.deleteDirSync(legacyDir);
@@ -1068,16 +1408,17 @@ export function migrateLegacyRaiAgent(dest: string): { migrated: string[]; tombs
     } catch {
       // best-effort; leave the legacy dir if we can't remove it
     }
-    return { migrated, tombstoned };
+    return { migrated, tombstoned, recordedInGit };
   }
 
   try {
-    storage.renameSync(legacyDir, canonicalDir);
+    move(legacyDir, tempDir);
+    move(tempDir, canonicalDir);
     migrated.push(path.posix.join('.squad/agents', 'rai'));
   } catch {
-    // best-effort; leave the legacy dir if the rename fails (e.g. read-only fs)
+    // best-effort; leave whatever step completed — the next run finishes it
   }
-  return { migrated, tombstoned };
+  return { migrated, tombstoned, recordedInGit };
 }
 
 /**
@@ -1195,6 +1536,46 @@ export function ensureUserOwnedTemplates(dest: string, templatesDir: string): st
   return created;
 }
 
+/** Refresh configured (plus any newly requested) client projections. */
+async function refreshClients(dest: string, squadDir: string, options: UpgradeOptions, filesUpdated: string[]): Promise<void> {
+  try {
+    const synced = await applyClientProjectionsForUpgrade(dest, squadDir, {
+      clients: options.clients,
+      warn: (m) => warn(m.replace(/^⚠\s*/, '')),
+    });
+    if (synced.clients.length === 0) return;
+    reportClientResults(synced.results, (m) => (m.startsWith('⚠') ? warn(m.slice(2)) : success(m.slice(2))));
+    filesUpdated.push(`clients (${synced.clients.join(', ')})`);
+  } catch (err) {
+    warn(`Could not refresh client files: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Surface why a handwritten-registry repair or team.md backfill declined to act, including per-entry drops. */
+function warnCastingRepairSkipped(headline: string, result: RepairResult): void {
+  if (result.repaired || !result.reason) return;
+  warn(`${headline}: ${result.reason}`);
+  for (const { name, reason } of result.dropped ?? []) {
+    dim(`    - ${name}: ${reason}`);
+  }
+}
+
+function detectLegacyCastingFiles(castingDir: string): ReturnType<typeof detectHistoricalCastingSchema> {
+  try {
+    const registry = JSON.parse(storage.readSync(path.join(castingDir, 'registry.json')) ?? '{}') as unknown;
+    const history = JSON.parse(storage.readSync(path.join(castingDir, 'history.json')) ?? '{}') as unknown;
+    return detectHistoricalCastingSchema(registry, history);
+  } catch {
+    return undefined;
+  }
+}
+
+function reportCastingMigrationFailure(message: string | undefined): void {
+  if (!message) return;
+  warn(`Upgrade completed, but legacy casting still needs repair: ${message}`);
+  info('  The original registry.json and history.json were left unchanged. See "Incomplete legacy provenance" in the upgrading guide, then run `squad upgrade --force` again.');
+}
+
 /**
  * Run the upgrade command
  */
@@ -1213,11 +1594,12 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
 
   // Verify squad exists
   if (!storage.existsSync(squadDirInfo.path)) {
-    fatal('No squad found — run init first.');
+    fatalNoSquad();
   }
 
   const agentDest = path.join(dest, '.github', 'agents', 'squad.agent.md');
   const oldVersion = readInstalledVersion(agentDest) ?? '0.0.0';
+  stripRetiredProfileTeamRoot(squadDirInfo.path, dest, options.dryRun === true);
   const squadConfig = readSquadConfig(squadDirInfo.path);
   const mcpConfigMode = detectMcpConfigMode(squadConfig, agentDest);
   const isGitHubForMcp = detectIsGitHubForMcp(dest, squadConfig);
@@ -1227,34 +1609,90 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
 
   const projectType = detectProjectType(dest);
 
-  const castingMigrated = preflightCastingRegistryPair(
-    path.join(squadDirInfo.path, 'casting'),
-    options.dryRun ?? false,
-  );
+  // A handwritten registry (model wrote registry.json itself over the empty init pair) is repaired BEFORE the
+  // strict preflight, which would otherwise reject it and make the repair in ensureCastingDefaults unreachable.
+  // The repair reconciles a single Init Mode history snapshot; registries with real history keep failing closed.
+  const castingDir = path.join(squadDirInfo.path, 'casting');
+  const dryRun = options.dryRun ?? false;
+  const historicalSchema = detectLegacyCastingFiles(castingDir);
+  const repair: RepairResult = historicalSchema
+    ? { repaired: false, files: [] }
+    : repairHandwrittenCastingRegistry(castingDir, { dryRun });
+  const handwrittenRepaired = repair.repaired;
+  if (handwrittenRepaired) {
+    if (dryRun) {
+      info('Would normalize handwritten .squad/casting/registry.json to a managed registry/history pair.');
+    } else {
+      warn('Normalized a handwritten .squad/casting/registry.json');
+    }
+  } else {
+    warnCastingRepairSkipped('Could not normalize handwritten .squad/casting/registry.json', repair);
+  }
+  // Legacy registries still go through the strict preflight (and its specific errors); only the
+  // preflight's generic failure is enriched with the handwritten-repair reason and fix.
+  let castingMigrationFailure: string | undefined;
+  let castingMigrated = false;
+  try {
+    castingMigrated = handwrittenRepaired && dryRun
+      ? false
+      : withCastingRepairContext(repair, () => preflightCastingRegistryPair(castingDir, dryRun));
+  } catch (error) {
+    castingMigrationFailure = error instanceof Error ? error.message : String(error);
+    warn(`Could not migrate legacy casting; continuing with the rest of the upgrade: ${castingMigrationFailure}`);
+  }
   if (castingMigrated) {
-    info(options.dryRun
-      ? 'Would migrate legacy casting state to a managed registry/history pair.'
-      : 'Migrated legacy casting state to a managed registry/history pair.');
+    if (dryRun) {
+      info('Would migrate legacy casting state to a managed registry/history pair.');
+    } else {
+      warn('Migrated legacy casting state to a managed registry/history pair; byte-exact originals were preserved in its legacy archive.');
+    }
   }
 
-  // --dry-run: preview what upgrade would do without writing (#1052)
+  // --dry-run: preview what upgrade would do without writing (#1052, #2297)
   if (options.dryRun) {
-    info(`\n${bold('Dry run')} — previewing upgrade from ${oldVersion || 'unknown'} → ${cliVersion}\n`);
+    const projectLabel = readProjectLabel(dest, squadConfig);
+    info(`\n${BOLD}Dry run${RESET} — ${projectLabel}: previewing upgrade from ${oldVersion && oldVersion !== '0.0.0' ? oldVersion : 'unknown'} → ${cliVersion}\n`);
+    const backfill = backfillCastingRegistryFromTeam(castingDir, path.join(squadDirInfo.path, 'team.md'), { dryRun: true });
+    if (backfill.repaired) {
+      info('Would backfill .squad/casting/registry.json from .squad/team.md');
+    } else {
+      warnCastingRepairSkipped('Would not backfill .squad/casting/registry.json from .squad/team.md', backfill);
+    }
     const templatesDir = getTemplatesDir();
     const agentSrc = path.join(templatesDir, 'squad.agent.md.template');
     if (storage.existsSync(agentSrc)) {
       writeAgentTemplate(agentSrc, agentDest, cliVersion, mcpConfigMode, isGitHubForMcp, { dryRun: true, squadDir: squadDirInfo.path });
     }
-    const filesToUpgrade = TEMPLATE_MANIFEST.filter(f => f.overwriteOnUpgrade && f.source !== 'squad.agent.md.template');
-    if (filesToUpgrade.length > 0) {
-      info(`Would overwrite ${filesToUpgrade.length} squad-owned file(s):`);
-      for (const file of filesToUpgrade) {
-        const destPath = path.join(squadDirInfo.path, file.destination);
-        const exists = storage.existsSync(destPath);
-        console.log(`  ${exists ? 'overwrite' : 'create'}  ${file.destination}`);
+    const plan = planSquadOwnedFiles(dest, collectSquadOwnedCandidates(dest, squadDirInfo.path, templatesDir, projectType));
+    for (const line of formatSquadOwnedPlan(plan)) info(line);
+    const retired = planRetiredFiles(dest, plan);
+    for (const file of retired) {
+      info(file.customized
+        ? `  keep       ${file.relPath}  (retired by Squad but modified locally — would be left in place)`
+        : `  remove     ${file.relPath}  (retired — no longer shipped, unmodified)`);
+    }
+    const staleSkills = findLegacyCopilotSkills(dest);
+    if (staleSkills.length > 0) info(`Would move/remove ${staleSkills.length} legacy .copilot/skills entr${staleSkills.length === 1 ? 'y' : 'ies'}: ${staleSkills.join(', ')}`);
+    const attrs = ensureGitattributes(dest, { dryRun: true });
+    if (attrs.length > 0) info(`Would append ${attrs.length} rule(s) to .gitattributes (existing lines untouched).`);
+    const ignores = ensureGitignore(dest, { dryRun: true });
+    if (ignores.length > 0) info(`Would append ${ignores.length} entr${ignores.length === 1 ? 'y' : 'ies'} to .gitignore (existing lines untouched): ${ignores.join(', ')}`);
+    try {
+      const userConfig = reconcileSquadStateUserConfig(dest, { dryRun: true });
+      if (userConfig.action === 'would-remove') {
+        info(`Would remove duplicate ${(userConfig.keys ?? [userConfig.key]).join(', ')} from ${userConfig.path} after backing it up (.mcp.json takes precedence).`);
       }
+      const planned = await applyClientProjectionsForUpgrade(dest, squadDirInfo.path, {
+        clients: options.clients,
+        dryRun: true,
+        warn: (m) => warn(m.replace(/^⚠\s*/, '')),
+      });
+      if (planned.clients.length > 0) info(`Would project client host files for: ${planned.clients.join(', ')}`);
+    } catch (err) {
+      warn(`Could not plan client files: ${err instanceof Error ? err.message : String(err)}`);
     }
     console.log(`\nRun without --dry-run to apply.\n`);
+    reportCastingMigrationFailure(castingMigrationFailure);
     return { fromVersion: oldVersion, toVersion: cliVersion, filesUpdated: [], migrationsRun: [] };
   }
 
@@ -1264,21 +1702,20 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
     // Still run missing migrations
     const migrationsApplied = await runMigrations(squadDirInfo.path, oldVersion, cliVersion);
 
-    // Refresh squad-owned files even when version matches
     const templatesDir = getTemplatesDir();
-    const workflowsSrc = path.join(templatesDir, 'workflows');
-    const workflowsDest = path.join(dest, '.github', 'workflows');
 
-    if (storage.existsSync(workflowsSrc)) {
-      const wfFiles = storage.listSync(workflowsSrc).filter(f => f.endsWith('.yml'));
-      storage.mkdirSync(workflowsDest, { recursive: true });
+    // Legacy skill copies move first so the plan below compares (and backs up) the user's file.
+    runLegacySkillMigration(dest, filesUpdated);
 
-      for (const file of wfFiles) {
-        writeWorkflowFile(file, path.join(workflowsSrc, file), path.join(workflowsDest, file), projectType);
-      }
-      success(`upgraded squad workflows (${wfFiles.length} files)`);
-      filesUpdated.push(`workflows (${wfFiles.length} files)`);
-    }
+    // Refresh squad-owned files even when version matches (content-compared, backups verified)
+    const plan = planSquadOwnedFiles(dest, collectSquadOwnedCandidates(dest, squadDirInfo.path, templatesDir, projectType));
+    applyUpgradeFiles(dest, plan, cliVersion, filesUpdated);
+
+    // The casting pair must exist BEFORE the coordinator is written: syncTeamCapabilities reads it
+    // to render the <!-- squad:capabilities --> block, so a 0.9.x project (empty casting/) would
+    // otherwise get the block only on the SECOND upgrade (F4, upgrade matrix).
+    prepareBuiltinAgents(dest, templatesDir, filesUpdated);
+    if (!castingMigrationFailure) preflightCastingPair(dest, templatesDir, filesUpdated);
 
     // Refresh squad.agent.md
     const agentSrc = path.join(templatesDir, 'squad.agent.md.template');
@@ -1292,7 +1729,9 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
     }
 
     // Run infrastructure ensure checks even when already current
-    await runEnsureChecks(dest, templatesDir, filesUpdated);
+    await runEnsureChecks(dest, templatesDir, filesUpdated, { skipCasting: !!castingMigrationFailure });
+    await refreshClients(dest, squadDirInfo.path, options, filesUpdated);
+    reportCastingMigrationFailure(castingMigrationFailure);
 
     return {
       fromVersion: oldVersion,
@@ -1310,6 +1749,10 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
     fatal('squad.agent.md.template not found in templates — installation may be corrupted');
   }
 
+  // See preflightCastingPair: the capabilities block needs the casting pair first (F4).
+  prepareBuiltinAgents(dest, templatesDir, filesUpdated);
+  if (!castingMigrationFailure) preflightCastingPair(dest, templatesDir, filesUpdated);
+
   storage.mkdirSync(path.dirname(agentDest), { recursive: true });
   writeAgentTemplate(agentSrc, agentDest, cliVersion, mcpConfigMode, isGitHubForMcp, { squadDir: squadDirInfo.path });
 
@@ -1317,44 +1760,13 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
   success(`upgraded coordinator from ${fromLabel} to ${cliVersion}`);
   filesUpdated.push('squad.agent.md');
 
-  // Upgrade squad-owned files from template manifest
-  // Exclude squad.agent.md — already copied and version-stamped above
-  const filesToUpgrade = TEMPLATE_MANIFEST.filter(f => f.overwriteOnUpgrade && f.source !== 'squad.agent.md.template');
+  // Legacy skill copies move first so the plan below compares (and backs up) the user's file.
+  runLegacySkillMigration(dest, filesUpdated);
 
-  for (const file of filesToUpgrade) {
-    const srcPath = path.join(templatesDir, file.source);
-    const destPath = path.join(squadDirInfo.path, file.destination);
-
-    if (!storage.existsSync(srcPath)) continue;
-
-    if (file.source.startsWith('skills/')) {
-      warnIfSkillCustomized(srcPath, destPath, file.source);
-    }
-    storage.mkdirSync(path.dirname(destPath), { recursive: true });
-    copyManagedFile(srcPath, destPath);
-
-    filesUpdated.push(file.destination);
-  }
-
-  if (filesToUpgrade.length > 0) {
-    success(`upgraded ${filesToUpgrade.length} squad-owned files`);
-  }
-
-  // Upgrade workflows
-  const workflowsSrc = path.join(templatesDir, 'workflows');
-  const workflowsDest = path.join(dest, '.github', 'workflows');
-
-  if (storage.existsSync(workflowsSrc)) {
-    const wfFiles = storage.listSync(workflowsSrc).filter(f => f.endsWith('.yml'));
-    storage.mkdirSync(workflowsDest, { recursive: true });
-
-    for (const file of wfFiles) {
-      writeWorkflowFile(file, path.join(workflowsSrc, file), path.join(workflowsDest, file), projectType);
-    }
-
-    success(`upgraded squad workflows (${wfFiles.length} files)`);
-    filesUpdated.push(`workflows (${wfFiles.length} files)`);
-  }
+  // Upgrade every squad-owned file (manifest templates, skills, workflows, .squad/templates mirror):
+  // content-compared, customized files backed up and verified before being overwritten.
+  const plan = planSquadOwnedFiles(dest, collectSquadOwnedCandidates(dest, squadDirInfo.path, templatesDir, projectType));
+  applyUpgradeFiles(dest, plan, cliVersion, filesUpdated);
 
   // Run migrations
   const migrationsApplied = await runMigrations(squadDirInfo.path, oldVersion, cliVersion);
@@ -1377,7 +1789,8 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
   }
 
   // Run infrastructure ensure checks
-  await runEnsureChecks(dest, templatesDir, filesUpdated);
+  await runEnsureChecks(dest, templatesDir, filesUpdated, { skipCasting: !!castingMigrationFailure });
+  await refreshClients(dest, squadDirInfo.path, options, filesUpdated);
 
   console.log();
   info(`Upgrade complete: v${fromLabel} → v${cliVersion}`);
@@ -1387,6 +1800,7 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
     dim('Preserves user state: team.md, decisions/, agents/*/history.md');
   }
   console.log();
+  reportCastingMigrationFailure(castingMigrationFailure);
 
   return {
     fromVersion: fromLabel,
@@ -1400,16 +1814,86 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
 // Self-upgrade: upgrade the CLI package itself
 // ============================================================================
 
+export type SelfUpgradePackageManager = 'npm' | 'pnpm' | 'yarn';
+
+/** npm dist-tags the self-upgrade can target. `insider` is the canonical prerelease channel (preview is an alias). */
+export type SelfUpgradeTag = 'latest' | 'insider';
+
+/** Minimal shape of `child_process.execSync` used by the self-upgrade; injectable for tests. */
+export type SelfUpgradeExec = (command: string, options: { stdio: 'inherit' }) => unknown;
+
+/** Resolve the version an npm dist-tag currently points at; `null` when the registry cannot be reached. */
+export type SelfUpgradeTagResolver = (tag: SelfUpgradeTag) => Promise<string | null>;
+
 export interface SelfUpgradeOptions {
   insider?: boolean;
   force?: boolean;
+  /** Print the exact command and perform nothing (#2295). */
+  dryRun?: boolean;
+  /** Override the detected package manager (tests, or a future `--pm` flag). */
+  packageManager?: SelfUpgradePackageManager;
+  /** Override the shell-out; defaults to `child_process.execSync`. */
+  exec?: SelfUpgradeExec;
+  /** Running CLI version used for channel detection and the downgrade guard; defaults to the package version. */
+  currentVersion?: string;
+  /** Override the dist-tag → version lookup; defaults to the public npm registry. */
+  resolveTagVersion?: SelfUpgradeTagResolver;
+}
+
+export interface SelfUpgradeResult {
+  packageManager: SelfUpgradePackageManager;
+  tag: SelfUpgradeTag;
+  command: string;
+  currentVersion: string;
+  /** Version the tag resolved to, or null when the registry was unreachable. */
+  targetVersion: string | null;
+  /** False for --dry-run. */
+  performed: boolean;
+}
+
+/**
+ * Which dist-tag a running CLI should follow: a prerelease install (`2.0.0-preview.1`,
+ * `1.2.0-insider.3`) stays on `insider` (the canonical channel; `preview` is an alias of it),
+ * a stable install follows `latest`. Blindly using `latest` from a preview downgraded users (#2295).
+ */
+export function detectSelfUpgradeTag(currentVersion: string): SelfUpgradeTag {
+  const prerelease = currentVersion.split('-').slice(1).join('-').toLowerCase();
+  if (!prerelease) return 'latest';
+  if (prerelease.startsWith('insider') || prerelease.startsWith('preview')) return 'insider';
+  return 'latest';
+}
+
+/** The exact command `selfUpgradeCli` runs for a package manager and dist-tag. */
+export function selfUpgradeCommand(packageManager: SelfUpgradePackageManager, insiderOrTag: boolean | SelfUpgradeTag): string {
+  const tag: SelfUpgradeTag = typeof insiderOrTag === 'boolean' ? (insiderOrTag ? 'insider' : 'latest') : insiderOrTag;
+  const pkg = `@bradygaster/squad-cli@${tag}`;
+  switch (packageManager) {
+    case 'pnpm': return `pnpm add -g ${pkg}`;
+    case 'yarn': return `yarn global add ${pkg}`;
+    default: return `npm install -g ${pkg}`;
+  }
+}
+
+/** Default dist-tag lookup against the public npm registry (3s timeout, never throws). */
+export async function resolveSelfUpgradeTagVersion(tag: SelfUpgradeTag): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch('https://registry.npmjs.org/-/package/@bradygaster%2Fsquad-cli/dist-tags', { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const tags = await res.json() as Record<string, string>;
+    return typeof tags[tag] === 'string' ? tags[tag]! : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Detect the package manager that installed the CLI.
  * Returns 'npm', 'pnpm', 'yarn', or 'npm' as fallback.
  */
-function detectPackageManager(): 'npm' | 'pnpm' | 'yarn' {
+export function detectPackageManager(): SelfUpgradePackageManager {
   const execPath = process.env['npm_execpath'] ?? '';
   if (execPath.includes('pnpm')) return 'pnpm';
   if (execPath.includes('yarn')) return 'yarn';
@@ -1423,33 +1907,46 @@ function detectPackageManager(): 'npm' | 'pnpm' | 'yarn' {
 /**
  * Self-upgrade the Squad CLI package via the detected package manager.
  *
- * Detects whether the CLI was installed via npm, pnpm, or yarn and runs the
- * appropriate global install command. On EACCES errors, suggests `sudo` with
- * the detected installer name.
+ * - The dist-tag follows the running CLI's channel (`insider` for any prerelease,
+ *   `latest` for stable) unless `--insider` forces `insider`.
+ * - The tag is resolved against the registry first; a target older than the running
+ *   version is refused unless `--force` (a preview must never silently become `latest`).
+ * - `--dry-run` prints the exact command and performs nothing: no exec, no network side
+ *   effects beyond the read-only tag lookup.
+ * - On EACCES errors, suggests `sudo` with the detected installer name.
  */
-export async function selfUpgradeCli(options: SelfUpgradeOptions = {}): Promise<void> {
-  const { execSync } = await import('node:child_process');
-  const tag = options.insider ? 'insider' : 'latest';
-  const pkg = `@bradygaster/squad-cli@${tag}`;
-  const pm = detectPackageManager();
+export async function selfUpgradeCli(options: SelfUpgradeOptions = {}): Promise<SelfUpgradeResult> {
+  const pm = options.packageManager ?? detectPackageManager();
+  const currentVersion = options.currentVersion ?? getPackageVersion();
+  const tag: SelfUpgradeTag = options.insider ? 'insider' : detectSelfUpgradeTag(currentVersion);
+  const cmd = selfUpgradeCommand(pm, tag);
+  const resolve = options.resolveTagVersion ?? resolveSelfUpgradeTagVersion;
+  const targetVersion = await resolve(tag);
 
-  let cmd: string;
-  switch (pm) {
-    case 'pnpm':
-      cmd = `pnpm add -g ${pkg}`;
-      break;
-    case 'yarn':
-      cmd = `yarn global add ${pkg}`;
-      break;
-    default:
-      cmd = `npm install -g ${pkg}`;
-      break;
+  if (targetVersion && safeCompareVersions(targetVersion, currentVersion) < 0) {
+    const msg = `Refusing to downgrade: @${tag} currently resolves to ${targetVersion}, older than the installed ${currentVersion}. `
+      + `Pass --force to install it anyway${tag === 'latest' ? ', or --insider to stay on the prerelease channel' : ''}.`;
+    if (!options.force) {
+      throw Object.assign(new Error(msg), { code: 'EDOWNGRADE' });
+    }
+    warn(msg.replace('Refusing to downgrade', 'Downgrading on --force'));
   }
 
-  info(`Self-upgrading via ${pm}: ${cmd}`);
+  const target = targetVersion ? ` (${tag} → ${targetVersion})` : ` (${tag}; registry not reachable to confirm the target version)`;
+  const result: SelfUpgradeResult = { packageManager: pm, tag, command: cmd, currentVersion, targetVersion, performed: false };
+
+  if (options.dryRun) {
+    info(`${BOLD}Dry run${RESET} — would self-upgrade via ${pm}${target}:`);
+    info(`  ${cmd}`);
+    info('Nothing was installed. Run without --dry-run to apply.');
+    return result;
+  }
+
+  const exec: SelfUpgradeExec = options.exec ?? (await import('node:child_process')).execSync;
+  info(`Self-upgrading via ${pm}${target}: ${cmd}`);
 
   try {
-    execSync(cmd, { stdio: 'inherit' });
+    exec(cmd, { stdio: 'inherit' });
   } catch (err: unknown) {
     // UPGRADE-EPERM-FALSE-SUCCESS fix: do NOT swallow self-upgrade failures.
     // Previously this only printed a warning and returned, causing the caller
@@ -1476,5 +1973,15 @@ export async function selfUpgradeCli(options: SelfUpgradeOptions = {}): Promise<
     const failure = new Error(`Self-upgrade failed: ${hint}`);
     (failure as NodeJS.ErrnoException).code = code || undefined;
     throw failure;
+  }
+  return { ...result, performed: true };
+}
+
+/** `compareVersions` that treats unparsable versions as equal instead of throwing. */
+function safeCompareVersions(a: string, b: string): number {
+  try {
+    return compareVersions(a, b);
+  } catch {
+    return 0;
   }
 }

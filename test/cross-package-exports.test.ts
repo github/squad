@@ -73,13 +73,11 @@ describe('cross-package exports — CLI → SDK', () => {
       ], '@bradygaster/squad-sdk');
     });
 
-    it('exports init / personal-squad helpers', async () => {
+    it('exports init helpers', async () => {
       const sdk = await import('@bradygaster/squad-sdk');
       expectExports(sdk, [
         'initSquad',
         'cleanupOrphanInitPrompt',
-        'ensurePersonalSquadDir',
-        'resolvePersonalSquadDir',
       ], '@bradygaster/squad-sdk');
     });
 
@@ -88,20 +86,6 @@ describe('cross-package exports — CLI → SDK', () => {
       expectExports(sdk, [
         'resolveExternalStateDir',
         'deriveProjectKey',
-      ], '@bradygaster/squad-sdk');
-    });
-
-    it('exports consult-mode helpers', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
-      expectExports(sdk, [
-        'setupConsultMode',
-        'isConsultMode',
-        'PersonalSquadNotFoundError',
-        'detectLicense',
-        'loadStagedLearnings',
-        'logConsultation',
-        'mergeToPersonalSquad',
-        'getPersonalSquadRoot',
       ], '@bradygaster/squad-sdk');
     });
 
@@ -155,8 +139,6 @@ describe('cross-package exports — CLI → SDK', () => {
         'resolveSquad',
         'resolveSquadPaths',
         'resolveGlobalSquadPath',
-        'resolvePersonalSquadDir',
-        'ensurePersonalSquadDir',
       ], '@bradygaster/squad-sdk/resolution');
     });
   });
@@ -176,18 +158,6 @@ describe('cross-package exports — CLI → SDK', () => {
     it('exports RateLimitError', async () => {
       const mod = await import('@bradygaster/squad-sdk/adapter/errors');
       expectExports(mod, ['RateLimitError'], '@bradygaster/squad-sdk/adapter/errors');
-    });
-  });
-
-  // ─── Subpath: /agents/personal ─────────────────────────────────────────
-
-  describe('@bradygaster/squad-sdk/agents/personal', () => {
-    it('exports personal-agent helpers', async () => {
-      const mod = await import('@bradygaster/squad-sdk/agents/personal');
-      expectExports(mod, [
-        'resolvePersonalAgents',
-        'mergeSessionCast',
-      ], '@bradygaster/squad-sdk/agents/personal');
     });
   });
 
@@ -237,6 +207,36 @@ describe('cross-package exports — CLI → SDK', () => {
         'PredictiveCircuitBreaker',
         'getTrafficLight',
       ], '@bradygaster/squad-sdk/ralph/rate-limiting');
+    });
+  });
+
+  describe('@bradygaster/squad-sdk/ralph/claims', () => {
+    it('exports the work claim contract', async () => {
+      const mod = await import('@bradygaster/squad-sdk/ralph/claims');
+      expectExports(mod, [
+        'workKeyToString',
+        'resolveExecutorIdentity',
+        'NoopClaimProvider',
+        'InMemoryClaimProvider',
+        'InMemoryClaimStore',
+        'DEFAULT_CLAIM_TTL_MS',
+        'DEFAULT_CLAIM_SKEW_MARGIN_MS',
+      ], '@bradygaster/squad-sdk/ralph/claims');
+    });
+  });
+
+  describe('@bradygaster/squad-sdk/ralph/claims-git', () => {
+    it('exports the Git-ref claim provider', async () => {
+      const mod = await import('@bradygaster/squad-sdk/ralph/claims-git');
+      expectExports(mod, [
+        'GitRefClaimProvider',
+        'GitClaimUnavailableError',
+        'createExecFileGitTransport',
+        'claimRefForKey',
+        'decodeClaimRecord',
+        'DEFAULT_CLAIM_REF_PREFIX',
+        'FALLBACK_CLAIM_REF_PREFIX',
+      ], '@bradygaster/squad-sdk/ralph/claims-git');
     });
   });
 

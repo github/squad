@@ -1,6 +1,6 @@
 {
   "name": "@bradygaster/squad-sdk",
-  "version": "1.2.0-preview.1",
+  "version": "2.0.0-preview.3",
   "description": "Squad SDK — Programmable multi-agent runtime for GitHub Copilot",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,6 +18,10 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
+    "./clients": {
+      "types": "./dist/clients/index.d.ts",
+      "import": "./dist/clients/index.js"
+    },
     "./config": {
       "types": "./dist/config/index.d.ts",
       "import": "./dist/config/index.js"
@@ -34,10 +38,6 @@
       "types": "./dist/agents/index.d.ts",
       "import": "./dist/agents/index.js"
     },
-    "./agents/personal": {
-      "types": "./dist/agents/personal.d.ts",
-      "import": "./dist/agents/personal.js"
-    },
     "./adapter": {
       "types": "./dist/adapter/types.d.ts",
       "import": "./dist/adapter/types.js"
@@ -53,6 +53,10 @@
     "./hooks": {
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.js"
+    },
+    "./backend": {
+      "types": "./dist/backend/index.d.ts",
+      "import": "./dist/backend/index.js"
     },
     "./tools": {
       "types": "./dist/tools/index.d.ts",
@@ -89,6 +93,14 @@
     "./ralph/capabilities": {
       "types": "./dist/ralph/capabilities.d.ts",
       "import": "./dist/ralph/capabilities.js"
+    },
+    "./ralph/claims": {
+      "types": "./dist/ralph/claims.d.ts",
+      "import": "./dist/ralph/claims.js"
+    },
+    "./ralph/claims-git": {
+      "types": "./dist/ralph/claims-git.d.ts",
+      "import": "./dist/ralph/claims-git.js"
     },
     "./ralph/rate-limiting": {
       "types": "./dist/ralph/rate-limiting.d.ts",
@@ -237,7 +249,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^1.0.19",
+    "@github/copilot-sdk": ">=1.0.19 <1.0.29-0",
     "vscode-jsonrpc": "^9.0.3"
   },
   "optionalDependencies": {
@@ -268,13 +280,13 @@
     "sdk"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/bradygaster/squad#readme",
+  "homepage": "https://github.com/github/squad#readme",
   "bugs": {
-    "url": "https://github.com/bradygaster/squad/issues"
+    "url": "https://github.com/github/squad/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bradygaster/squad.git",
+    "url": "git+https://github.com/github/squad.git",
     "directory": "packages/squad-sdk"
   }
 }

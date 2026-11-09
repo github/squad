@@ -7,16 +7,29 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, rm, writeFile } from 'fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { randomBytes } from 'crypto';
-import { runDoctor, getDoctorMode, checkNodeVersion, checkGitSyncHooks } from '@bradygaster/squad-cli/commands/doctor';
+import {
+  runDoctor,
+  getDoctorMode,
+  checkNodeVersion,
+  checkGitSyncHooks,
+  checkSquadStateBridge,
+  checkHistoryArchiveIntegrity,
+} from '@bradygaster/squad-cli/commands/doctor';
 import type { DoctorCheck } from '@bradygaster/squad-cli/commands/doctor';
+import { clearResolveSquadCache } from '@bradygaster/squad-sdk/resolution';
 import { FSStorageProvider, OrphanBranchBackend } from '@bradygaster/squad-sdk';
+import { getPackageVersion } from '../../packages/squad-cli/src/cli/core/version.js';
+import { ensureCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
 
 const TEST_ROOT = join(process.cwd(), `.test-doctor-${randomBytes(4).toString('hex')}`);
+const TEST_PROFILE = join(process.cwd(), `.test-doctor-profile-${randomBytes(4).toString('hex')}`);
+const CLI_ENTRY = resolve(process.cwd(), 'packages/squad-cli/dist/cli-entry.js');
+let originalHomeEnv: { HOME: string | undefined; USERPROFILE: string | undefined };
 
 async function scaffold(root: string): Promise<void> {
   const sq = join(root, '.squad');
@@ -44,17 +57,44 @@ async function scaffold(root: string): Promise<void> {
   await writeFile(join(root, '.github', 'agents', 'squad.agent.md'), '# Squad Agent\n');
 }
 
+function initTestGit(root: string): void {
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['config', 'core.autocrlf', 'false'], { cwd: root });
+}
+
+function runDoctorCli(cwd: string) {
+  return spawnSync(process.execPath, [CLI_ENTRY, 'doctor'], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 30_000,
+    windowsHide: true,
+  });
+}
+
 describe('squad doctor', () => {
   beforeEach(async () => {
     if (existsSync(TEST_ROOT)) {
       await rm(TEST_ROOT, { recursive: true, force: true });
     }
     await mkdir(TEST_ROOT, { recursive: true });
+    await mkdir(TEST_PROFILE, { recursive: true });
+    originalHomeEnv = { HOME: process.env['HOME'], USERPROFILE: process.env['USERPROFILE'] };
+    process.env['HOME'] = TEST_PROFILE;
+    process.env['USERPROFILE'] = TEST_PROFILE;
+    clearResolveSquadCache();
   });
 
   afterEach(async () => {
+    if (originalHomeEnv.HOME === undefined) delete process.env['HOME'];
+    else process.env['HOME'] = originalHomeEnv.HOME;
+    if (originalHomeEnv.USERPROFILE === undefined) delete process.env['USERPROFILE'];
+    else process.env['USERPROFILE'] = originalHomeEnv.USERPROFILE;
+    clearResolveSquadCache();
     if (existsSync(TEST_ROOT)) {
       await rm(TEST_ROOT, { recursive: true, force: true });
+    }
+    if (existsSync(TEST_PROFILE)) {
+      await rm(TEST_PROFILE, { recursive: true, force: true });
     }
   });
 
@@ -73,6 +113,187 @@ describe('squad doctor', () => {
     // ESM checks return 'warn' (not fail) when node_modules absent from test dir
     expect(checks.some((c: DoctorCheck) => c.name === 'vscode-jsonrpc exports field')).toBe(true);
     expect(checks.some((c: DoctorCheck) => c.name === 'copilot-sdk session.js ESM patch')).toBe(true);
+  });
+
+  it('keeps warning-only doctor results successful', async () => {
+    const projectRoot = join(TEST_ROOT, 'warning-only-project');
+    await scaffold(projectRoot);
+    await mkdir(join(projectRoot, '.git'), { recursive: true });
+    const checks = await runDoctor(projectRoot);
+    expect(checks.some(check => check.status === 'warn')).toBe(true);
+    expect(checks.some(check => check.status === 'fail')).toBe(false);
+
+    const result = runDoctorCli(projectRoot);
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toMatch(/Summary:.*0 failed, [1-9]\d* warnings/);
+  }, 20_000);
+
+  it('returns a failing CLI exit code when doctor checks fail', async () => {
+    const projectRoot = join(TEST_ROOT, 'failing-project');
+    await scaffold(projectRoot);
+    await mkdir(join(projectRoot, '.git'), { recursive: true });
+    await rm(join(projectRoot, '.squad', 'routing.md'));
+
+    const result = runDoctorCli(projectRoot);
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr || result.stdout).toBe(1);
+    expect(result.stdout).toMatch(/Summary:.*[1-9]\d* failed/);
+  }, 20_000);
+
+  it('fails doctor and names the history when an archive pointer is dangling', async () => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    await writeFile(
+      join(TEST_ROOT, '.squad', 'agents', 'edie', 'history.md'),
+      '# History\n\nFull pre-summary history archived at .squad/agents/edie/history-archive-2026-10-25.md\n',
+    );
+
+    const checks = await runDoctor(TEST_ROOT);
+    const check = checks.find(result => result.name === 'history archive integrity');
+
+    expect(check).toMatchObject({ status: 'fail' });
+    expect(check?.message).toContain('agents/edie/history.md');
+    expect(check?.message).toContain('history-archive-2026-10-25.md');
+  }, 10_000);
+
+  it('fails when a referenced archive exists but is not tracked', async () => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    const history = join(TEST_ROOT, '.squad', 'agents', 'edie', 'history.md');
+    const archive = join(TEST_ROOT, '.squad', 'agents', 'edie', 'history-archive.md');
+    await writeFile(history, '# History\n\nPrior archive at `.squad/agents/edie/history-archive.md`\n');
+    await writeFile(archive, '# Archived history\n');
+    execFileSync('git', ['add', '--', '.squad/agents/edie/history.md'], { cwd: TEST_ROOT });
+
+    const check = checkHistoryArchiveIntegrity(join(TEST_ROOT, '.squad'));
+
+    expect(check.status).toBe('fail');
+    expect(check.message).toContain('history-archive.md exists but is not tracked');
+  });
+
+  it('warns when a tracked archive has unstaged changes', async () => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    const history = join(TEST_ROOT, '.squad', 'agents', 'edie', 'history.md');
+    const archive = join(TEST_ROOT, '.squad', 'agents', 'edie', 'history-archive.md');
+    await writeFile(history, '# History\n\nPrior archive at .squad/agents/edie/history-archive.md\n');
+    await writeFile(archive, '# Archived history\n');
+    execFileSync('git', ['add', '--', '.squad/agents/edie/history.md', '.squad/agents/edie/history-archive.md'], { cwd: TEST_ROOT });
+    await writeFile(archive, '# Incomplete archive\n');
+
+    const check = checkHistoryArchiveIntegrity(join(TEST_ROOT, '.squad'));
+
+    expect(check.status).toBe('warn');
+    expect(check.message).toContain('differs from its staged Git blob');
+  });
+
+  it.each(['orphan', 'two-layer'] as const)('skips Git archive checks for the %s backend', async (backend) => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    const squadDir = join(TEST_ROOT, '.squad');
+    await writeFile(join(squadDir, 'config.json'), JSON.stringify({ stateBackend: backend }));
+    await writeFile(
+      join(squadDir, 'agents', 'edie', 'history.md'),
+      '# History\n\nPrior archive at .squad/agents/edie/history-archive.md\n',
+    );
+
+    const check = checkHistoryArchiveIntegrity(squadDir, TEST_ROOT, squadDir);
+
+    expect(check).toMatchObject({ status: 'warn' });
+    expect(check.message).toContain(`'${backend}' state backend`);
+  });
+
+  it('skips Git archive checks when state is external to the worktree', async () => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    const externalStateDir = `${TEST_ROOT}-external`;
+    try {
+      await mkdir(join(externalStateDir, 'agents', 'edie'), { recursive: true });
+      await writeFile(
+        join(externalStateDir, 'agents', 'edie', 'history.md'),
+        '# History\n\nPrior archive at history-archive.md\n',
+      );
+
+      const check = checkHistoryArchiveIntegrity(externalStateDir, TEST_ROOT, join(TEST_ROOT, '.squad'));
+
+      expect(check).toMatchObject({ status: 'warn' });
+      expect(check.message).toContain('outside the Git worktree');
+    } finally {
+      await rm(externalStateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes for tracked archives matching their staged Git blob', async () => {
+    await scaffold(TEST_ROOT);
+    initTestGit(TEST_ROOT);
+    await writeFile(
+      join(TEST_ROOT, '.squad', 'agents', 'edie', 'history.md'),
+      '# History\n\nPrior archive at `.squad/agents/edie/history-archive.md`\n',
+    );
+    await writeFile(join(TEST_ROOT, '.squad', 'agents', 'edie', 'history-archive.md'), '# Archived history\n');
+    execFileSync('git', ['add', '--', '.squad/agents/edie/history.md', '.squad/agents/edie/history-archive.md'], { cwd: TEST_ROOT });
+
+    const check = checkHistoryArchiveIntegrity(join(TEST_ROOT, '.squad'));
+
+    expect(check).toMatchObject({ status: 'pass' });
+    expect(check.message).toContain('verified 1 tracked history archive reference');
+  });
+
+  it('performs a real initialize/tools/health handshake and accepts the running package version', async () => {
+    await scaffold(TEST_ROOT);
+    const version = getPackageVersion();
+    const teamDir = join(TEST_ROOT, '.squad');
+    const fixture = resolve('test', 'fixtures', 'fake-state-mcp.mjs');
+    await writeFile(join(TEST_ROOT, '.mcp.json'), JSON.stringify({
+      mcpServers: {
+        squad_state: {
+          command: process.execPath,
+          args: [fixture, version, teamDir],
+        },
+      },
+    }));
+
+    await expect(checkSquadStateBridge(TEST_ROOT)).resolves.toMatchObject({
+      status: 'pass',
+      message: expect.stringContaining(`${version}; 2 tools`),
+    });
+  });
+
+  it('fails a stale bridge version and gives the upgrade fix command', async () => {
+    await scaffold(TEST_ROOT);
+    const fixture = resolve('test', 'fixtures', 'fake-state-mcp.mjs');
+    await writeFile(join(TEST_ROOT, '.mcp.json'), JSON.stringify({
+      mcpServers: {
+        squad_state: {
+          command: process.execPath,
+          args: [fixture, '0.10.0', join(TEST_ROOT, '.squad')],
+        },
+      },
+    }));
+
+    const check = await checkSquadStateBridge(TEST_ROOT);
+    expect(check.status).toBe('fail');
+    expect(check.message).toContain('version mismatch');
+    expect(check.message).toContain("squad upgrade --force");
+  });
+
+  it('turns ETARGET into exact-version pin guidance', async () => {
+    await scaffold(TEST_ROOT);
+    const fixture = resolve('test', 'fixtures', 'fake-state-mcp.mjs');
+    await writeFile(join(TEST_ROOT, '.mcp.json'), JSON.stringify({
+      mcpServers: {
+        squad_state: {
+          command: process.execPath,
+          args: [fixture, 'unused', 'unused', 'etarget'],
+        },
+      },
+    }));
+
+    const check = await checkSquadStateBridge(TEST_ROOT);
+    expect(check.status).toBe('fail');
+    expect(check.message).toContain(`@bradygaster/squad-cli@${getPackageVersion()}`);
+    expect(check.message).toContain('dist-tag');
   });
 
   it('reports failures on an empty directory', async () => {
@@ -100,6 +321,50 @@ describe('squad doctor', () => {
     expect(checks.find(check => check.name === 'casting/registry.json exists'))
       .toMatchObject({ status: 'fail' });
   });
+
+  it('names the migratable Squad 0.9.x casting schema instead of reporting an invalid revision', async () => {
+    await scaffold(TEST_ROOT);
+    const castingDir = join(TEST_ROOT, '.squad', 'casting');
+    await writeFile(join(castingDir, 'registry.json'), JSON.stringify({
+      agents: [{
+        persistent_name: 'Dutch',
+        role: 'Leader',
+        universe: 'Predator',
+        created_at: '2026-03-20T10:15:00.000Z',
+        status: 'active',
+      }],
+    }));
+    await writeFile(join(castingDir, 'history.json'), JSON.stringify({
+      assignments: [{
+        assignment_id: 'rescue-team-001',
+        universe: 'Predator',
+        timestamp: '2026-03-20T10:30:00.000Z',
+        members: [{ name: 'Dutch', role: 'Leader' }],
+      }],
+    }));
+
+    const checks = await runDoctor(TEST_ROOT);
+    const casting = checks.find(check => check.name === 'casting/registry.json exists');
+    expect(casting).toMatchObject({ status: 'fail' });
+    expect(casting?.message).toMatch(/legacy casting schema agents\[\]\/assignments\[\].*Squad 0\.9\.x.*squad upgrade --force/);
+    expect(casting?.message).not.toContain('registry revision is invalid');
+  });
+
+  it('accepts manifest-backed casting files converted to CRLF by Git (#2266)', async () => {
+    await scaffold(TEST_ROOT);
+    const castingDir = join(TEST_ROOT, '.squad', 'casting');
+    const registryRaw = await readFile(join(castingDir, 'registry.json'), 'utf8');
+    const historyRaw = await readFile(join(castingDir, 'history.json'), 'utf8');
+    ensureCastingRegistryPair(castingDir, registryRaw, historyRaw, 'doctor CRLF test');
+    for (const name of ['registry.json', 'history.json', 'registry-history.commit.json']) {
+      const filePath = join(castingDir, name);
+      await writeFile(filePath, (await readFile(filePath, 'utf8')).replace(/\r?\n/g, '\r\n'));
+    }
+
+    const checks = await runDoctor(TEST_ROOT);
+    expect(checks.find(check => check.name === 'casting/registry.json exists'))
+      .toMatchObject({ status: 'pass' });
+  }, 15_000);
 
   it('detects remote mode from config.json with teamRoot', async () => {
     await scaffold(TEST_ROOT);

@@ -58,8 +58,10 @@ export {
   acquireCastingRegistryLock,
   acquireCastingRegistryLockAsync,
   commitCastingRegistryPair,
+  detectHistoricalCastingSchema,
   ensureCastingRegistryPair,
   ensureCastingRegistryPairLocked,
+  normalizeCastingJsonLineEndings,
   prepareCastingRegistryPairLocked,
   preflightCastingRegistryPair,
   readCastingRegistryPair,
@@ -69,11 +71,28 @@ export {
   _setCastingDurabilityHooksForTesting,
   type CastingDurabilityBoundary,
   type CastingDurabilityHooks,
+  type HistoricalCastingSchema,
   type EnsureCastingPairResult,
   type CastingPairSnapshot,
   type CastingRecoveryMetadata,
   type CastingRecoveryPathState,
 } from './durable-registry.js';
+
+export {
+  backfillCastingRegistryFromTeam,
+  hasExistingCastHistory,
+  normalizeHandwrittenCastingRegistry,
+  parseTeamRoster,
+  repairHandwrittenCastingRegistry,
+  resolveRosterAgentIds,
+  toAgentId,
+  type DroppedRecord,
+  type NormalizeHandwrittenResult,
+  type PreservedProvenanceRecord,
+  type RepairHandwrittenOptions,
+  type RepairResult,
+  type TeamRosterMember,
+} from './handwritten-registry.js';
 
 // --- Legacy Types (kept for backward compat) ---
 
