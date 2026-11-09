@@ -5,7 +5,7 @@ import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { RESULT_JOBS, RESULT_SCHEMA, WORKFLOW_PATH } from '../scripts/repo-health-report.mjs';
 import { CLAIM_FILE, CLAIM_SCHEMA } from '../scripts/workflow-run-pr-binding.mjs';
-import { SELF_CHECK_NAMES } from '../scripts/pr-readiness.mjs';
+import { SELF_CHECK_NAMES, WORKFLOW_RUN_WRITER_CHECK_NAMES } from '../scripts/pr-readiness.mjs';
 
 // The github org blocks `pull_request_target`: every such run ends in
 // startup_failure. PR automation that writes back is therefore split into an
@@ -413,6 +413,19 @@ describe('Squad PR Readiness keeps its Squad CI refresh and old inputs', () => {
     // workflow_run check runs land on the default-branch tip: the head commit of any PR from dev.
     for (const [id, writerJob] of Object.entries(readiness.jobs)) {
       expect(SELF_CHECK_NAMES, `squad-pr-readiness.yml job ${id}`).toContain(writerJob.name ?? id);
+    }
+  });
+
+  it('the other workflow_run writers keep names the CI check excludes (#2409 regression)', () => {
+    // Same reason: their check runs land on the dev tip, and cancel-in-progress
+    // leaves `cancelled` runs there from unrelated PRs.
+    for (const file of ['squad-impact.yml', 'squad-repo-health-report.yml', 'squad-heartbeat.yml']) {
+      const workflow = load(file);
+      expect(triggers(workflow), file).toContain('workflow_run');
+      for (const [id, job] of Object.entries(workflow.jobs)) {
+        expect(WORKFLOW_RUN_WRITER_CHECK_NAMES, `${file} job ${id}`).toContain(job.name ?? id);
+        expect(SELF_CHECK_NAMES, `${file} job ${id}`).toContain(job.name ?? id);
+      }
     }
   });
 });

@@ -38,7 +38,7 @@ Seven steps from zero to a validated, reviewable Squad bootstrap:
 set -euo pipefail
 
 # 1. Verify GitHub access and prove the exact supported gh-aw version
-gh auth status
+gh auth status --hostname github.com
 
 # gh-aw-exact-version-start
 required_gh_aw_version="v0.91.5"
@@ -107,7 +107,7 @@ fi
 # guidance) for the current supported revision. The identity check stops unless
 # that revision's workflows/squad-workflows.manifest.json declares
 # "package": "github/squad/workflows".
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -132,8 +132,8 @@ gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 
 # 5. On first install, review the safe-update report. Approve ONLY if it
-# contains exactly the two documented secrets (SQUAD_GITHUB_APP_PRIVATE_KEY,
-# SQUAD_GITHUB_TOKEN) and the one documented action
+# contains exactly the three documented secrets (GH_AW_GITHUB_READ_APP_PRIVATE_KEY,
+# SQUAD_GITHUB_APP_PRIVATE_KEY, SQUAD_GITHUB_TOKEN) and the one documented action
 # (github/squad/.github/actions/squad-init) and nothing else. STOP and
 # report any other entry instead of approving.
 gh aw compile --strict --approve   # first install only, when the safe-update warning appears
@@ -200,7 +200,7 @@ one immutable 40-character commit. The package owns the
 complete eight-workflow set, runtime guards, integrity manifest, and enlistment
 skill as one update unit. For an upgrade, resolve or select one reviewed commit
 and reinstall that same package as described in
-[Upgrading the workflows](#upgrading-the-workflows).
+[Upgrading the workflows](#upgrading).
 
 The bootstrap installation PR is an explicit human trust boundary. Because its
 base branch does not yet contain the Squad review guard and manifest, no job,
@@ -241,7 +241,9 @@ that update fails, stop before installation and ask an administrator to enable
 > Step 7 stages `.github/skills/` because `gh aw add` installs the Squad skill
 > alongside the workflows and may need to stage deletion of gh-aw's unowned
 > `.github/skills/agentic-workflows/SKILL.md`. It deliberately does not stage
-> `.github/aw/logs/`.
+> `.github/aw/logs/` or `.vscode/settings.json` (which `gh aw add` may create as
+> an optional local editor setting — delete it if unwanted or stage it
+> explicitly if your team wants to share it).
 > Downloaded workflow logs are local diagnostic output — see [ignoring downloaded
 > logs](#open-the-bootstrap-pull-request) before you commit.
 
@@ -578,7 +580,7 @@ existing bootstrap branch rather than failing.
 # SQUAD_SHA must be an explicit, maintainer-approved 40-character commit SHA.
 # Never resolve it from `dev`'s moving tip (`commits/dev`) — that would install
 # an unbounded, mutable revision instead of one reviewed, immutable commit.
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
@@ -695,15 +697,15 @@ source/lock pairs, and one coherent 40-character revision.
 
 On a clean repository, `gh aw add` reports these expected safe-update changes:
 
-- Restricted secrets: `SQUAD_GITHUB_APP_PRIVATE_KEY` and `SQUAD_GITHUB_TOKEN`
+- Restricted secrets: `GH_AW_GITHUB_READ_APP_PRIVATE_KEY`, `SQUAD_GITHUB_APP_PRIVATE_KEY`, and `SQUAD_GITHUB_TOKEN`
 - Action: `github/squad/.github/actions/squad-init`
 
 > **These are referenced names, not prerequisites.** `gh aw add` lists the secrets
 > the workflows *reference* so you can approve that surface — it is not asking you
-> to supply them. Both secrets are optional, they need not exist, and you do not
-> need to create either one to enlist a repository. Single-repo activation runs on
+> to supply them. All three secrets are optional, they need not exist, and you do not
+> need to create any of them to enlist a repository. Single-repo activation runs on
 > the built-in `github.token`. Configure these only for an explicit alternative
-> activation identity — see [activation credentials with a GitHub
+> activation identity or optional CAO evidence collection — see [activation credentials with a GitHub
 > App](#optional-activation-credentials-with-a-github-app) and [PAT
 > fallback](#optional-pat-fallback).
 
@@ -2620,7 +2622,7 @@ Pin upgrades to one immutable 40-character Squad commit SHA, then update the
 same native package as one unit:
 
 ```bash
-SQUAD_SHA="<40-character-commit-sha>"
+SQUAD_SHA="b37155bef49c8e2ff6a211dfe71bda53157bc92f" # or another maintainer-approved "<40-character-commit-sha>"
 [[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
   echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
   exit 1
