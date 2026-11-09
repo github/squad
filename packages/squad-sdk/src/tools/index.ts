@@ -313,7 +313,6 @@ export const MUTABLE_STATE_PATHS: ReadonlyArray<{ readonly root: string; readonl
   // Per-workstream decision inboxes (`.squad/workstreams/active/<slug>/decisions/inbox/`), the
   // convention squad_decide targets when a workstream is active (#2299).
   { root: 'workstreams', kind: 'dir', pattern: /^workstreams\/active\/[A-Za-z0-9._-]+\/decisions\/inbox\/[^/]+$/ },
-  { root: 'casting/policy.json', kind: 'file' },
   { root: 'agents', kind: 'dir', pattern: /^agents\/[a-zA-Z0-9_-]+\/history\.md$/ },
   { root: 'log', kind: 'dir' },
   { root: 'orchestration-log', kind: 'dir' },
@@ -377,7 +376,7 @@ function validateMutableStateToolKey(key: string, operation: 'write' | 'append' 
   }
   if (!isMutableStateKey(key)) {
     throw new Error(
-      'State mutations are limited to mutable runtime state (decisions, inbox, casting policy, logs, sessions, scratch files, agent history, and identity). The casting registry/history pair must only be changed through the atomic casting protocol. Static config such as config.json, team.md, routing.md, charters, templates, and skills must not be changed with state tools.',
+      'State mutations are limited to mutable runtime state (decisions, inbox, logs, sessions, scratch files, agent history, and identity). Casting is source-branch configuration; the casting registry/history pair must only be changed through the atomic casting protocol on disk. Static config such as casting policy, config.json, team.md, routing.md, charters, templates, and skills must not be changed with state tools.',
     );
   }
 }

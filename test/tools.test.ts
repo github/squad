@@ -330,7 +330,7 @@ describe('ToolRegistry', () => {
   // #2107: doctor reads this allowlist to find state stranded in a linked team repo.
   describe('isMutableStateKey (#2107)', () => {
     it.each([
-      'decisions.md', 'decisions/inbox/a.md', 'casting/policy.json', 'agents/edie/history.md',
+      'decisions.md', 'decisions/inbox/a.md', 'agents/edie/history.md',
       'log/a.md', 'orchestration-log/a.md', 'sessions/s.json', '.scratch/n.md', 'identity/now.md',
     ])('accepts %s', (key) => {
       expect(isMutableStateKey(key), `${key} must be writable by the state tools`).toBe(true);
@@ -338,7 +338,7 @@ describe('ToolRegistry', () => {
 
     it.each([
       'team.md', 'routing.md', 'config.json', 'decisions', 'decisions/a.md', 'decisions.md/x',
-      'casting/registry.json', 'casting/history.json', 'agents/edie/charter.md', 'agents/edie/history.md/x',
+      'casting/policy.json', 'casting/registry.json', 'casting/history.json', 'agents/edie/charter.md', 'agents/edie/history.md/x',
       'agents/a/b/history.md', 'log', 'logs/a.md', 'identity', 'skills/x/SKILL.md',
     ])('rejects %s', (key) => {
       expect(isMutableStateKey(key), `${key} must not be writable by the state tools`).toBe(false);
