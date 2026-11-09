@@ -20,7 +20,9 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const FIXTURE_PATH = path.join(REPO_ROOT, 'test/fixtures/premise-checking/scenarios.json');
 const BASELINE_REF = '7b731ec97f35346bdc4fa87c3edaf16b808fc0ae';
-const MODEL_ID = 'gpt-5.3-codex';
+export const DEFAULT_MODEL_ID = 'gpt-5.3-codex';
+const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+let MODEL_ID = DEFAULT_MODEL_ID;
 const PILOT_EPISODE_ID = 'revenue-midflight-agent';
 const ARM_IDS = Object.freeze(['baseline', 'truth-first', 'truth-first-notice']);
 const PAIRED_CALIBRATION_EPISODE_IDS = Object.freeze([
@@ -1232,7 +1234,55 @@ async function runTrajectory({ client, run, attempt, episode, bundle, outputDire
   return { record, manifest, stop: shouldStopCampaign(context, status) };
 }
 
-export function validatePilot(manifest, plan) {
+export const REVIEWER_CHECK_ARM = 'reviewer-accounting-check';
+export const REVIEWER_CHECK_DIRECTIVE = [
+  'Instrumentation check (not a measured arm):',
+  'Before you answer, dispatch the Fact Checker exactly once with the task tool.',
+  'Pass every evidence ID listed in the catalog as evidence_ids, then answer using its review.',
+].join('\n');
+
+/** Validate the one scripted run that must exercise the Fact Checker path end to end. */
+export function validateReviewerAccountingRecord(record, events, model = MODEL_ID) {
+  const issues = [];
+  if (record.status !== 'completed') issues.push('trajectory-not-completed');
+  if (record.factCheckerSessionIds.length !== 1) issues.push(`fact-checker-dispatches:${record.factCheckerSessionIds.length}`);
+  if (record.usageEvents.length === 0
+    || record.usageEvents.some(usage => usage.usageStatus === 'unknown'
+      || usage.inputTokens === null
+      || usage.outputTokens === null)) issues.push('usage-accounting-incomplete');
+  if (!record.usageEvents.some(usage => usage.role === 'fact-checker' && usage.usageStatus === 'observed')) {
+    issues.push('fact-checker-usage-not-observed');
+  }
+  if (record.factCheckerSessionIds.length > 0 && !hasEvidenceReviewTrace(record, events)) {
+    issues.push('fact-checker-evidence-review-trace-incomplete');
+  }
+  if (record.usageEvents.some(usage => usage.model !== model)) issues.push('model-drift-observed');
+  if (events.some(event => event.eventType === 'tool.execution_start' && !TOOL_NAMES.has(event.data?.toolName))) {
+    issues.push('unapproved-tool-execution-observed');
+  }
+  const reviewerUsage = record.usageEvents.filter(usage => usage.role === 'fact-checker');
+  return {
+    passed: issues.length === 0,
+    issues,
+    model,
+    reviewerCalls: reviewerUsage.length,
+    reviewerInputTokens: reviewerUsage.reduce((sum, usage) => sum + (usage.inputTokens ?? 0), 0),
+    reviewerOutputTokens: reviewerUsage.reduce((sum, usage) => sum + (usage.outputTokens ?? 0), 0),
+  };
+}
+
+/** Per-arm count of trajectories that dispatched the Fact Checker: a measurement, not a gate. */
+export function summarizeDispatch(records) {
+  const byArm = {};
+  for (const record of records) {
+    byArm[record.arm] ??= { trajectories: 0, dispatched: 0 };
+    byArm[record.arm].trajectories++;
+    if (record.factCheckerSessionIds.length > 0) byArm[record.arm].dispatched++;
+  }
+  return byArm;
+}
+
+export function validatePilot(manifest, plan, reviewerCheck = manifest.reviewerCheck ?? null) {
   const pilotPlan = plan.slice(0, ARM_IDS.length);
   const completed = manifest.completed.slice(0, ARM_IDS.length);
   const issues = [];
@@ -1288,7 +1338,13 @@ export function validatePilot(manifest, plan) {
   }
 
   const reviewerRuns = pilotRecords.filter(record => record.factCheckerSessionIds.length > 0);
-  if (reviewerRuns.length === 0) issues.push('no-independent-fact-checker-dispatch-observed');
+  if (reviewerRuns.length === 0) {
+    if (reviewerCheck?.passed === true && reviewerCheck.model === MODEL_ID) {
+      warnings.push('no-fact-checker-dispatch-in-pilot-reviewer-path-verified-by-scripted-check');
+    } else {
+      issues.push('no-independent-fact-checker-dispatch-observed');
+    }
+  }
   if (reviewerRuns.some(record => !record.usageEvents.some(usage => usage.role === 'fact-checker'))) {
     issues.push('fact-checker-session-has-no-usage-trace');
   }
@@ -1336,7 +1392,14 @@ export function validatePilot(manifest, plan) {
   if (pilotRecords.some(record => record.usageEvents.some(usage => (
     usage.limitObservations?.prompt === null || usage.limitObservations?.output === null
   )))) warnings.push('request-limit-telemetry-incomplete');
-  return { passed: issues.length === 0, issues, warnings, reviewerRuns: reviewerRuns.length };
+  return {
+    passed: issues.length === 0,
+    issues,
+    warnings,
+    reviewerRuns: reviewerRuns.length,
+    dispatchByArm: summarizeDispatch(pilotRecords),
+    reviewerCheck: reviewerCheck ? { passed: reviewerCheck.passed, model: reviewerCheck.model, path: reviewerCheck.path ?? null } : null,
+  };
 }
 
 function saveAdjudicationGuide(outputDirectory) {
@@ -1439,6 +1502,8 @@ function parseArguments(args) {
     baselineManifest: null,
     episodeIds: null,
     resume: false,
+    model: DEFAULT_MODEL_ID,
+    reviewerCheckDir: null,
     help: false,
   };
   for (let index = 0; index < args.length; index++) {
@@ -1474,8 +1539,16 @@ function parseArguments(args) {
       options.episodeIds = raw.split(',');
     }
     else if (arg === '--pilot') options.mode = 'pilot';
+    else if (arg === '--reviewer-check') options.mode = 'reviewer-check';
+    else if (arg === '--revalidate-pilot') options.mode = 'revalidate-pilot';
+    else if (arg === '--reviewer-check-dir') options.reviewerCheckDir = args[++index];
     else if (arg === '--continue') options.mode = 'continue';
     else if (arg === '--out-dir') options.outDir = args[++index];
+    else if (arg === '--model') {
+      const raw = args[++index];
+      if (!raw || !MODEL_ID_RE.test(raw)) throw new Error('--model must be a runtime catalog model ID.');
+      options.model = raw;
+    }
     else if (arg === '--help' || arg === '-h') options.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -1497,6 +1570,8 @@ function printHelp() {
     '  node scripts/premise-checking-ab.mjs --response-boundary-check --round 1 --resume --out-dir <existing-private-round-path>',
     '  node scripts/premise-checking-ab.mjs --response-boundary-check --round 2 --baseline-manifest <round-1-run-manifest> --out-dir <private-round-path>',
     '  node scripts/premise-checking-ab.mjs --pilot [--out-dir <private-path>]',
+    '  node scripts/premise-checking-ab.mjs --reviewer-check --out-dir <new-private-path> [--model <id>]',
+    '  node scripts/premise-checking-ab.mjs --revalidate-pilot --out-dir <pilot-path> --reviewer-check-dir <reviewer-check-path> [--model <id>]',
     '  node scripts/premise-checking-ab.mjs --continue --out-dir <same-private-path>',
     '',
     'The pilot runs the frozen A/B/C triplet for revenue-midflight-agent. --continue requires a passing pilot and SQUAD_TRUTH_FIRST_REVIEWED=1.',
@@ -1505,6 +1580,8 @@ function printHelp() {
     'Response-boundary optimization checks run six matched trajectories over three frozen cases per round; round 2 requires round-1 baseline manifest.',
     'Live runs require private environment settings for per-request caps, the soft token threshold, per-episode call bound, and timeout.',
     'Artifacts must be written outside the repository. No automated truth scoring is performed.',
+    'The reviewer check runs one scripted truth-first trajectory that is told to dispatch the Fact Checker, to verify reviewer accounting when the model rarely dispatches on its own. It is not a measured arm.',
+    `--model <id> selects the runtime catalog model for every session (default ${DEFAULT_MODEL_ID}); a resumed campaign must use the model its manifest recorded.`,
   ].join('\n'));
 }
 
@@ -1687,6 +1764,9 @@ async function runMode(options) {
     if (!existsSync(manifestPath)) throw new Error('No paired calibration manifest exists in this output directory.');
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (manifest.mode !== 'paired-calibration') throw new Error('The existing manifest is not a paired calibration.');
+    if ((manifest.model ?? DEFAULT_MODEL_ID) !== MODEL_ID) {
+      throw new Error(`This campaign ran on ${manifest.model ?? DEFAULT_MODEL_ID}; pass --model ${manifest.model ?? DEFAULT_MODEL_ID} to resume it.`);
+    }
     if (manifest.baselineRef !== BASELINE_REF || manifest.planPath !== planPath) {
       throw new Error('The paired calibration baseline or output path differs from the frozen run.');
     }
@@ -1720,6 +1800,9 @@ async function runMode(options) {
     if (!existsSync(manifestPath)) throw new Error('No pilot manifest exists in this output directory.');
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (!manifest.pilotValidation?.passed) throw new Error('Pilot instrumentation validation did not pass; do not continue.');
+    if ((manifest.model ?? DEFAULT_MODEL_ID) !== MODEL_ID) {
+      throw new Error(`This campaign ran on ${manifest.model ?? DEFAULT_MODEL_ID}; pass --model ${manifest.model ?? DEFAULT_MODEL_ID} to resume it.`);
+    }
     if ((manifest.attempts ?? []).some(attempt => attempt.status === 'started')) {
       throw new Error('An interrupted trajectory attempt exists; preserve its artifacts and do not rerun it.');
     }
@@ -1878,6 +1961,7 @@ async function runMode(options) {
       }
     }
     manifest.pairedValidation = {
+      dispatchByArm: summarizeDispatch(completedRecords),
       passed: issues.length === 0
         && manifest.completed.length === plan.length
         && manifest.completed.every(item => item.status === 'completed'),
@@ -2459,14 +2543,108 @@ async function runResponseBoundaryCheck(options) {
   process.stdout.write(`Private artifacts: ${outputDirectory}\n`);
 }
 
+function readReviewerCheck(directory) {
+  const file = path.join(path.resolve(directory), 'reviewer-check.json');
+  if (!existsSync(file)) throw new Error(`No reviewer check result exists at ${file}.`);
+  return { ...JSON.parse(readFileSync(file, 'utf8')), path: file };
+}
+
+async function runReviewerCheck(options) {
+  const fixture = loadFixture();
+  const limits = loadRunConfig();
+  const outputDirectory = resolveOutputDirectory(options.outDir);
+  if (existsSync(path.join(outputDirectory, 'reviewer-check.json'))) {
+    throw new Error('A reviewer check already exists in this output directory; use a new one.');
+  }
+  const episode = fixture.episodes.find(item => item.id === PILOT_EPISODE_ID);
+  if (!episode?.evidence?.length) throw new Error('The pilot episode must carry evidence for the reviewer check.');
+  const base = loadPromptBundle('truth-first');
+  const systemPrompt = `${base.systemPrompt}\n\n${REVIEWER_CHECK_DIRECTIVE}`;
+  const bundle = { ...base, systemPrompt, systemPromptHash: sha256(systemPrompt) };
+  const run = {
+    index: 1,
+    episodeId: episode.id,
+    family: episode.family,
+    placement: episode.placement,
+    origin: episode.origin,
+    control: Boolean(episode.control),
+    arm: REVIEWER_CHECK_ARM,
+  };
+  const blindId = randomBytes(12).toString('hex');
+  const attempt = { attemptId: randomUUID(), blindId, status: 'started', startedAt: new Date().toISOString() };
+  const manifest = { mode: REVIEWER_CHECK_ARM, model: MODEL_ID, completed: [], attempts: [attempt], budgetChargedTokens: 0 };
+  const model = await queryAvailableModel();
+  ensureCapabilityFits(model, limits);
+  const client = new CopilotClient({
+    mode: 'empty',
+    baseDirectory: process.env['COPILOT_HOME'] || path.join(homedir(), '.copilot'),
+    workingDirectory: outputDirectory,
+    logLevel: 'error',
+    useLoggedInUser: true,
+  });
+  let record;
+  try {
+    await client.start();
+    ({ record } = await runTrajectory({ client, run, attempt, episode, bundle, outputDirectory, limits, manifest }));
+  } finally {
+    const errors = await client.stop();
+    if (errors.length > 0) throw new Error(`Copilot runtime cleanup failed: ${errors.map(item => item.message).join('; ')}`);
+  }
+  const events = readFileSync(record.eventsPath, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+  const result = {
+    ...validateReviewerAccountingRecord(record, events),
+    checkedAt: new Date().toISOString(),
+    episodeId: episode.id,
+    directiveHash: sha256(REVIEWER_CHECK_DIRECTIVE),
+    systemPromptHash: bundle.systemPromptHash,
+    runPath: path.join(path.dirname(record.eventsPath), 'run.json'),
+  };
+  writePrivateJson(path.join(outputDirectory, 'reviewer-check.json'), result);
+  process.stdout.write(`Reviewer accounting check ${result.passed ? 'passed' : 'failed'}${result.issues.length ? `: ${result.issues.join(', ')}` : ''}.\n`);
+  if (!result.passed) process.exitCode = 2;
+}
+
+function revalidatePilot(options) {
+  if (!options.outDir || !options.reviewerCheckDir) {
+    throw new Error('--revalidate-pilot requires --out-dir and --reviewer-check-dir.');
+  }
+  const outputDirectory = path.resolve(options.outDir);
+  const manifestPath = path.join(outputDirectory, 'run-manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if ((manifest.model ?? DEFAULT_MODEL_ID) !== MODEL_ID) {
+    throw new Error(`This pilot ran on ${manifest.model ?? DEFAULT_MODEL_ID}; pass --model ${manifest.model ?? DEFAULT_MODEL_ID}.`);
+  }
+  const savedPlan = JSON.parse(readFileSync(path.join(outputDirectory, 'plan.json'), 'utf8'));
+  const plan = savedPlan.plan ?? savedPlan.runs ?? savedPlan.firstTriplet;
+  if (!Array.isArray(plan)) throw new Error('The saved pilot plan has no run list.');
+  const reviewerCheck = readReviewerCheck(options.reviewerCheckDir);
+  manifest.reviewerCheck = { passed: reviewerCheck.passed, model: reviewerCheck.model, path: reviewerCheck.path };
+  manifest.pilotValidationHistory ??= [];
+  if (manifest.pilotValidation) manifest.pilotValidationHistory.push(manifest.pilotValidation);
+  manifest.pilotValidation = validatePilot(manifest, plan, manifest.reviewerCheck);
+  saveManifest(outputDirectory, manifest);
+  const validation = manifest.pilotValidation;
+  process.stdout.write(`Pilot instrumentation ${validation.passed ? 'passed' : 'failed'}${validation.issues.length ? `: ${validation.issues.join(', ')}` : ''}${validation.warnings.length ? `; warnings: ${validation.warnings.join(', ')}` : ''}.\n`);
+  if (!validation.passed) process.exitCode = 2;
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
+  MODEL_ID = options.model;
   if (options.help) {
     printHelp();
     return;
   }
   if (options.mode === 'response-boundary-check') {
     await runResponseBoundaryCheck(options);
+    return;
+  }
+  if (options.mode === 'reviewer-check') {
+    await runReviewerCheck(options);
+    return;
+  }
+  if (options.mode === 'revalidate-pilot') {
+    revalidatePilot(options);
     return;
   }
   if (options.mode === 'plan') {
