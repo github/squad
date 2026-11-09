@@ -156,19 +156,18 @@ node .github/workflows/shared/squad-install-verifier.mjs \
 git diff --cached --stat
 unexpected_deletions="$(
   git diff --cached --diff-filter=D --name-only |
-    grep -vxF -e '.github/skills/agentic-workflows/SKILL.md' \
-      -e '.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json' |
+    grep -vxF -e '.github/skills/agentic-workflows/SKILL.md' |
     while IFS= read -r path; do
-      # Also allowed: an ownership record whose package is a case variant, such as GitHub/Squad/workflows.
+      # Also allowed: any Squad ownership record except the one gh-aw writes for github/squad/workflows.
       if [[ "${path}" =~ ^\.github/aw/packages/[^/]+\.json$ ]] &&
+        [ "${path}" != '.github/aw/packages/github-squad-workflows-23a7638f599e.json' ] &&
         git show "HEAD:${path}" | node -e '
           const accepted = ["github/squad/workflows", "bradygaster/squad/workflows"];
           let text = "";
           process.stdin.on("data", chunk => { text += chunk; }).on("end", () => {
             let name;
             try { name = JSON.parse(text).package; } catch {}
-            process.exit(typeof name === "string" && !accepted.includes(name)
-              && accepted.includes(name.toLowerCase()) ? 0 : 1);
+            process.exit(typeof name === "string" && accepted.includes(name.toLowerCase()) ? 0 : 1);
           });'; then
         continue
       fi
@@ -814,19 +813,18 @@ node .github/workflows/shared/squad-install-verifier.mjs \
 git diff --cached --stat
 unexpected_deletions="$(
   git diff --cached --diff-filter=D --name-only |
-    grep -vxF -e '.github/skills/agentic-workflows/SKILL.md' \
-      -e '.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json' |
+    grep -vxF -e '.github/skills/agentic-workflows/SKILL.md' |
     while IFS= read -r path; do
-      # Also allowed: an ownership record whose package is a case variant, such as GitHub/Squad/workflows.
+      # Also allowed: any Squad ownership record except the one gh-aw writes for github/squad/workflows.
       if [[ "${path}" =~ ^\.github/aw/packages/[^/]+\.json$ ]] &&
+        [ "${path}" != '.github/aw/packages/github-squad-workflows-23a7638f599e.json' ] &&
         git show "HEAD:${path}" | node -e '
           const accepted = ["github/squad/workflows", "bradygaster/squad/workflows"];
           let text = "";
           process.stdin.on("data", chunk => { text += chunk; }).on("end", () => {
             let name;
             try { name = JSON.parse(text).package; } catch {}
-            process.exit(typeof name === "string" && !accepted.includes(name)
-              && accepted.includes(name.toLowerCase()) ? 0 : 1);
+            process.exit(typeof name === "string" && accepted.includes(name.toLowerCase()) ? 0 : 1);
           });'; then
         continue
       fi
@@ -856,13 +854,15 @@ the complete generated diff in the bootstrap PR, address Copilot review
 feedback, and wait for required checks. Merge only after human approval.
 
 The only permitted staged deletions are the exact router deletion above, for an
-upgrade from a repository that previously committed it, the superseded
+upgrade from a repository that previously committed it, and a
+`.github/aw/packages/*.json` ownership record whose `package` is
+`github/squad/workflows` or `bradygaster/squad/workflows` in any letter case,
+other than `.github/aw/packages/github-squad-workflows-23a7638f599e.json`, the
+record gh-aw writes for `github/squad/workflows`. Those are the records the
+verifier tells you to delete, such as the superseded
 `.github/aw/packages/bradygaster-squad-workflows-3632054824e8.json` ownership
-record, for an installation moving off the legacy `bradygaster/squad/workflows`
-identity (see Upgrading), and a `.github/aw/packages/*.json` ownership record
-whose `package` is a case variant of `github/squad/workflows` or
-`bradygaster/squad/workflows`, such as one left by an install typed as
-`GitHub/Squad/workflows`. Any other deletion is a hard stop.
+record for an installation moving off the legacy `bradygaster/squad/workflows`
+identity (see Upgrading). Any other deletion is a hard stop.
 
 Consumer ignore rules such as `packages/` can silently omit the required
 `.github/aw/packages/` ownership JSON from directory staging. The staged verifier

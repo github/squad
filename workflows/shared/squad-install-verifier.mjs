@@ -139,6 +139,11 @@ function isCaseVariantPackageName(packageName) {
     && ACCEPTED_PACKAGE_NAMES.some(accepted => accepted.toLowerCase() === packageName.toLowerCase());
 }
 
+// Any record findOwnershipRecord counts: an accepted identity in any letter case.
+function isSquadPackageName(packageName) {
+  return ACCEPTED_PACKAGE_NAMES.includes(packageName) || isCaseVariantPackageName(packageName);
+}
+
 // Mirrors gh-aw v0.91.5 stablePackageID: lowercase slug plus the first 12 hex digits of
 // SHA-256 over the package identity exactly as installed.
 export function packageOwnershipDestination(packageName) {
@@ -771,7 +776,8 @@ function findOwnershipRecord(root) {
   if (!existsSync(packageDir)) throw new Error('Package ownership metadata is missing.');
   const matches = [];
   const caseVariants = [];
-  for (const name of readdirSync(packageDir)) {
+  // Sorted, so the records and the cleanup advice below read the same on every platform.
+  for (const name of readdirSync(packageDir).sort()) {
     if (!name.endsWith('.json')) continue;
     const relativePath = `.github/aw/packages/${name}`;
     let record;
@@ -787,31 +793,28 @@ function findOwnershipRecord(root) {
     }
   }
   const describeRecords = records => records.map(({ path, record }) => `${path} (${record.package})`).join(', ');
-  if (matches.length > 1) {
+  // A successful `gh aw add PACKAGE_NAME@<sha> --force` writes OWNERSHIP_DESTINATION, so every other
+  // Squad record is stale: superseded, duplicated at another path, or a case variant.
+  const cleanup = records => {
+    const stale = records.map(({ path }) => path).filter(path => path !== OWNERSHIP_DESTINATION);
+    return stale.length === 0
+      ? `Reinstall as ${PACKAGE_NAME}.`
+      : `After reinstalling as ${PACKAGE_NAME}, delete ${stale.join(', ')}.`;
+  };
+  const caseHint = 'gh-aw records the package identity exactly as typed and Squad matches it case-sensitively.';
+  if (matches.length > 0 && matches.length + caseVariants.length > 1) {
+    const variants = caseVariants.length === 0 ? ''
+      : ` and case-variant ${caseVariants.length === 1 ? 'record' : 'records'} ${describeRecords(caseVariants)}`;
     throw new Error(
-      `Expected exactly one Squad package ownership record; found ${matches.length}: `
-      + `${describeRecords(matches)}. `
-      + `After reinstalling as ${PACKAGE_NAME}, delete ${LEGACY_OWNERSHIP_DESTINATIONS.join(', ')}.`,
+      `Expected exactly one Squad package ownership record; found ${matches.length + caseVariants.length}: `
+      + `${describeRecords(matches)}${variants}, so more than one record claims the installed files. `
+      + `${caseVariants.length === 0 ? '' : `${caseHint} `}${cleanup([...matches, ...caseVariants])}`,
     );
   }
-  if (matches.length === 1 && caseVariants.length > 0) {
-    // gh-aw keys records by the identity exactly as typed, so a case-only reinstall keeps the old record.
-    // Always move to PACKAGE_NAME; a legacy exact record is then superseded as well.
-    const [match] = matches;
-    const stale = [...(match.record.package === PACKAGE_NAME ? [] : [match]), ...caseVariants];
-    throw new Error(
-      `Expected exactly one Squad package ownership record; found ${describeRecords(matches)} and case-variant `
-      + `${caseVariants.length === 1 ? 'record' : 'records'} ${describeRecords(caseVariants)}, `
-      + 'so more than one record claims the installed files. gh-aw records the package identity exactly as typed '
-      + `and Squad matches it case-sensitively. After reinstalling as ${PACKAGE_NAME}, delete `
-      + `${stale.map(({ path }) => path).join(', ')}.`,
-    );
-  }
-  if (matches.length !== 1) {
+  if (matches.length === 0) {
     // Identity matching stays exact; this only explains a case-only mismatch.
-    const hint = caseVariants.length === 0 ? '' : ` Found ${describeRecords(caseVariants)}: gh-aw records the `
-      + 'package identity exactly as typed and Squad matches it case-sensitively. '
-      + `Reinstall as ${PACKAGE_NAME}, then delete that record.`;
+    const hint = caseVariants.length === 0 ? ''
+      : ` Found ${describeRecords(caseVariants)}: ${caseHint} ${cleanup(caseVariants)}`;
     throw new Error(
       `Expected exactly one ${ACCEPTED_PACKAGE_NAMES.join(' or ')} ownership record; found 0.${hint}`,
     );
@@ -1168,7 +1171,7 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
           + 'delete it and stage the deletion before commit/push.');
     }
     // A record deleted only from the working tree still reaches a clean checkout, where
-    // findOwnershipRecord rejects a case variant beside the verified record.
+    // findOwnershipRecord rejects any other Squad record beside the verified one.
     for (const [path, [, type, object]] of staged) {
       if (type !== 'blob' || required.has(path) || !/^\.github\/aw\/packages\/[^/]+\.json$/.test(path)) continue;
       const bytes = spawnChecked('git', ['cat-file', 'blob', object], root).stdout;
@@ -1178,10 +1181,10 @@ export function verifyStagedInstall(root, { expectedRevision = '', stageOwnershi
       } catch {
         continue;
       }
-      if (isCaseVariantPackageName(packageName)) {
+      if (isSquadPackageName(packageName)) {
         throw new Error(
-          `Case-variant Squad package ownership record remains in staged tree: ${path} (${packageName}); `
-          + 'delete it and stage the deletion before commit/push.',
+          `${isCaseVariantPackageName(packageName) ? 'Case-variant' : 'Stale'} Squad package ownership record `
+          + `remains in staged tree: ${path} (${packageName}); delete it and stage the deletion before commit/push.`,
         );
       }
     }

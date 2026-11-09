@@ -353,45 +353,51 @@ describe('gh-aw: verified ownership staging under consumer ignore rules', () => 
     expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(LEGACY_OWNERSHIP);
   }, 120_000);
 
-  it('rejects a case-variant ownership record deleted only from the working tree until its deletion is staged', () => {
+  it.each([
+    ['case-variant', 'GitHub/Squad/workflows', '.github/aw/packages/github-squad-workflows-9361b4232957.json',
+      'Case-variant'],
+    ['legacy-identity duplicate', LEGACY_PACKAGE_NAME, '.github/aw/packages/squad-workflows-copy.json', 'Stale'],
+  ] as const)('rejects a %s ownership record deleted only from the working tree until its deletion is staged', (
+    label, packageName, path, kind,
+  ) => {
     const root = consumer();
-    // `gh aw add GitHub/Squad/workflows@SHA` names its record by the identity exactly as typed.
-    const variantName = 'GitHub/Squad/workflows';
-    const variant = `.github/aw/packages/github-squad-workflows-${
-      createHash('sha256').update(variantName).digest('hex').slice(0, 12)}.json`;
-    expect(variant).toBe('.github/aw/packages/github-squad-workflows-9361b4232957.json');
-    write(root, variant, readFileSync(join(root, OWNERSHIP_DESTINATION), 'utf8')
-      .replaceAll(`"package": "${PACKAGE_NAME}"`, `"package": "${variantName}"`));
-    git(root, 'add', '--force', '--', variant, OWNERSHIP_DESTINATION);
+    if (kind === 'Case-variant') {
+      // `gh aw add GitHub/Squad/workflows@SHA` names its record by the identity exactly as typed.
+      expect(path).toBe(`.github/aw/packages/github-squad-workflows-${
+        createHash('sha256').update(packageName).digest('hex').slice(0, 12)}.json`);
+    }
+    write(root, path, readFileSync(join(root, OWNERSHIP_DESTINATION), 'utf8')
+      .replaceAll(`"package": "${PACKAGE_NAME}"`, `"package": "${packageName}"`));
+    git(root, 'add', '--force', '--', path, OWNERSHIP_DESTINATION);
     git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
-      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'canonical and case-variant records');
-    expect(verifyInstall(root).failures.join('\n'), `${OWNERSHIP_DESTINATION} beside committed ${variant}`)
-      .toContain(`case-variant record ${variant} (${variantName})`);
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', `canonical and ${label} records`);
+    expect(verifyInstall(root).failures.join('\n'), `${OWNERSHIP_DESTINATION} beside committed ${path} (${packageName})`)
+      .toContain(`After reinstalling as ${PACKAGE_NAME}, delete ${path}.`);
 
-    rmSync(join(root, variant));
-    expect(verifyInstall(root).failures, `working tree without ${variant}`).toEqual([]);
+    rmSync(join(root, path));
+    expect(verifyInstall(root).failures, `working tree without ${path}`).toEqual([]);
     const args = [verifier, '--verify-staged-install', '--stage-ownership', '--source-revision', revision];
-    const state = `${variant} (${variantName}) deleted only from the working tree, still in the index`;
+    const state = `${path} (${packageName}) deleted only from the working tree, still in the index`;
     const rejected = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
     expect(rejected.status, `--verify-staged-install with ${state}:\n${rejected.stderr}`).toBe(1);
     expect(rejected.stderr, `--verify-staged-install with ${state}`).toContain(
-      `Case-variant Squad package ownership record remains in staged tree: ${variant} (${variantName}); `
+      `${kind} Squad package ownership record remains in staged tree: ${path} (${packageName}); `
       + 'delete it and stage the deletion before commit/push.',
     );
 
     git(root, 'add', '--', '.github/aw/');
-    expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(variant);
+    expect(git(root, 'diff', '--cached', '--diff-filter=D', '--name-only').trim()).toBe(path);
     const accepted = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8' });
-    expect(accepted.status, `--verify-staged-install after staging the deletion of ${variant}:\n${accepted.stderr}`)
+    expect(accepted.status, `--verify-staged-install after staging the deletion of ${path}:\n${accepted.stderr}`)
       .toBe(0);
 
     // The committed result is what a clean checkout verifies.
     git(root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
-      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'delete the case-variant record');
+      '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', `delete the ${label} record`);
     const clone = mkdtempSync(join(tmpdir(), 'squad-install-staging-clone-'));
     roots.push(clone);
     execFileSync('git', ['-c', 'core.autocrlf=false', 'clone', '--quiet', root, clone]);
-    expect(existsSync(join(clone, variant)), `clean checkout must not contain ${variant}`).toBe(false);
+    expect(existsSync(join(clone, path)), `clean checkout must not contain ${path}`).toBe(false);
     expect(verifyInstall(clone, { expectedRevision: revision }).failures, `clean checkout of ${root}`).toEqual([]);
   }, 120_000);
 

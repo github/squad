@@ -56,27 +56,26 @@ const [LEGACY_OWNERSHIP] = LEGACY_OWNERSHIP_DESTINATIONS;
 const SQUAD_INIT_ACTION = `${PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
 const LEGACY_SQUAD_INIT_ACTION = `${LEGACY_PACKAGE_NAME.replace(/\/workflows$/, '')}/.github/actions/squad-init`;
 const DELETION_ALLOWLIST = [
-  `    grep -vxF -e '${UNOWNED_MUTABLE_ROUTER_SKILL}' \\`,
-  `      -e '${LEGACY_OWNERSHIP}' |`,
+  `    grep -vxF -e '${UNOWNED_MUTABLE_ROUTER_SKILL}' |`,
   '    while IFS= read -r path; do',
 ].join('\n');
 const DELETION_FILTER_END = '    done || true\n';
 
-function extractDeletionGate(content: string): string {
+function extractDeletionGate(content: string, source: string): string {
   const start = content.indexOf('unexpected_deletions="$(');
   const end = content.indexOf('\n}', content.indexOf('test -z "${unexpected_deletions}"', start));
-  expect(start, 'staged-deletion gate must exist').toBeGreaterThan(-1);
-  expect(end, 'staged-deletion gate must end with its STOP block').toBeGreaterThan(start);
+  expect(start, `${source}: staged-deletion gate must exist`).toBeGreaterThan(-1);
+  expect(end, `${source}: staged-deletion gate must end with its STOP block`).toBeGreaterThan(start);
   return content.slice(start, end + 2);
 }
 
-/** The gate's filter: the exact allowlist, then the loop that admits only case-variant ownership records. */
-function extractDeletionFilter(content: string): string {
-  const gate = extractDeletionGate(content);
+/** The gate's filter: the exact allowlist, then the loop that admits only stale Squad ownership records. */
+function extractDeletionFilter(content: string, source: string): string {
+  const gate = extractDeletionGate(content, source);
   const start = gate.indexOf(DELETION_ALLOWLIST);
   const end = gate.indexOf(DELETION_FILTER_END, start);
-  expect(start, 'the staged-deletion filter must start with the exact allowlist').toBeGreaterThan(-1);
-  expect(end, 'the staged-deletion filter must end its case-variant loop').toBeGreaterThan(start);
+  expect(start, `${source}: the staged-deletion filter must start with the exact allowlist`).toBeGreaterThan(-1);
+  expect(end, `${source}: the staged-deletion filter must end its ownership-record loop`).toBeGreaterThan(start);
   return gate.slice(start, end + DELETION_FILTER_END.length);
 }
 
@@ -119,6 +118,8 @@ const CASE_VARIANT_PACKAGE = 'GitHub/Squad/workflows';
 const CASE_VARIANT_OWNERSHIP = typedOwnershipRecord(CASE_VARIANT_PACKAGE);
 const LEGACY_CASE_VARIANT_PACKAGE = 'Bradygaster/Squad/workflows';
 const LEGACY_CASE_VARIANT_OWNERSHIP = typedOwnershipRecord(LEGACY_CASE_VARIANT_PACKAGE);
+// An exact-identity record at a path gh-aw does not write, such as a manual copy.
+const NON_NATIVE_OWNERSHIP = '.github/aw/packages/squad-workflows-copy.json';
 const ownershipBlob = (packageName: string) => `${JSON.stringify({ schemaVersion: 1, package: packageName })}\n`;
 
 const IDENTITY_GATE_START = '# squad-package-identity-start';
@@ -701,15 +702,19 @@ describe('no install-time fallback to the legacy package identity', () => {
   });
 
   it('keeps the legacy-to-canonical move and the verifier\'s transitional acceptance of the legacy identity', () => {
+    const skillFilter = extractDeletionFilter(readLF(CANONICAL), CANONICAL);
     for (const path of [CANONICAL, GUIDE]) {
       const text = readLF(path);
       expect(fencedBlocks(text).some(block => block.includes(`${INSTALL_COMMAND} --force`)
         && block.includes(`\nrm -f ${LEGACY_OWNERSHIP}\n`)), `${path} must keep the upgrade's legacy-record cleanup`)
         .toBe(true);
-      expect(text, `${path} must keep the staged-deletion allowance for ${LEGACY_OWNERSHIP}`)
-        .toContain(`-e '${LEGACY_OWNERSHIP}'`);
+      expect(text, `${path} must stage deletions through the skill's ownership-record filter`).toContain(skillFilter);
       expect(text, `${path} must keep the migration warning allowlist`).toContain(`- ${LEGACY_SQUAD_INIT_ACTION}\n`);
     }
+    const legacyDeletion = runDeletionGate(extractDeletionGate(readLF(CANONICAL), CANONICAL), [LEGACY_OWNERSHIP],
+      { [LEGACY_OWNERSHIP]: ownershipBlob(LEGACY_PACKAGE_NAME) });
+    expect(legacyDeletion.status, `${CANONICAL} staged-deletion gate must allow deleting ${LEGACY_OWNERSHIP} `
+      + `(${LEGACY_PACKAGE_NAME}): ${legacyDeletion.stderr}`).toBe(0);
     expect(LEGACY_PACKAGE_NAMES, `${VERIFIER} must keep accepting existing legacy installations`)
       .toEqual(['bradygaster/squad/workflows']);
     expect(readLF(VERIFIER)).toContain('Object.freeze([PACKAGE_NAME, ...LEGACY_PACKAGE_NAMES])');
@@ -900,28 +905,33 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('not part of the Squad package');
       expect(content).toContain('Do not adopt or vendor the rest');
       expect(content).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
-      expect(content, `${CANONICAL} must use the exact staged-deletion allowlist, then its case-variant loop`)
+      expect(content, `${CANONICAL} must use the exact staged-deletion allowlist, then its ownership-record loop`)
         .toContain(DELETION_ALLOWLIST);
     });
 
+    // The legacy record is allowed by its HEAD content, not its path, so these cases supply that content.
     it.each([
-      ['no deletions', [], 0],
-      ['the mutable router', [UNOWNED_MUTABLE_ROUTER_SKILL], 0],
-      ['the superseded legacy ownership record', [LEGACY_OWNERSHIP], 0],
-      ['the router and the legacy record together', [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP], 0],
-      ['the canonical ownership record', [OWNERSHIP_DESTINATION], 1],
-      ['an installed workflow', ['.github/workflows/squad.md'], 1],
-      ['a legacy-record prefix match', [`${LEGACY_OWNERSHIP}.bak`], 1],
-    ] as const)('the staged-deletion gate handles %s', (label, deletions, status) => {
-      const result = runDeletionGate(extractDeletionGate(content), deletions);
-      expect(result.status, `${label} (${deletions.join(', ')}): ${result.stderr}`).toBe(status);
+      ['no deletions', [], {}, 0],
+      ['the mutable router', [UNOWNED_MUTABLE_ROUTER_SKILL], {}, 0],
+      ['the superseded legacy ownership record', [LEGACY_OWNERSHIP],
+        { [LEGACY_OWNERSHIP]: ownershipBlob(LEGACY_PACKAGE_NAME) }, 0],
+      ['the router and the legacy record together', [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP],
+        { [LEGACY_OWNERSHIP]: ownershipBlob(LEGACY_PACKAGE_NAME) }, 0],
+      ['the legacy record without a readable HEAD blob', [LEGACY_OWNERSHIP], {}, 1],
+      ['the canonical ownership record', [OWNERSHIP_DESTINATION], {}, 1],
+      ['an installed workflow', ['.github/workflows/squad.md'], {}, 1],
+      ['a legacy-record prefix match', [`${LEGACY_OWNERSHIP}.bak`], {}, 1],
+    ] as const)('the staged-deletion gate handles %s', (label, deletions, head, status) => {
+      const result = runDeletionGate(extractDeletionGate(content, CANONICAL), deletions, head);
+      const input = `${CANONICAL} staged-deletion gate with ${label} (${deletions.join(', ')}; HEAD ${JSON.stringify(head)})`;
+      expect(result.status, `${input}: ${result.stderr}`).toBe(status);
       if (status === 1) {
-        expect(result.stderr).toContain(`STOP: unexpected staged deletions:\n${deletions.join('\n')}`);
+        expect(result.stderr, input).toContain(`STOP: unexpected staged deletions:\n${deletions.join('\n')}`);
       }
     });
 
-    // gh-aw keys records by the identity as typed, so `gh aw add GitHub/Squad/workflows@SHA` leaves a
-    // record that the verifier requires to be deleted, and the gate must let exactly that deletion through.
+    // After a canonical reinstall the verifier says to delete every Squad ownership record except the one
+    // gh-aw writes for github/squad/workflows, so the gate must let exactly those deletions through.
     it.each([
       [`the ${CASE_VARIANT_PACKAGE} record`, [CASE_VARIANT_OWNERSHIP],
         { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, []],
@@ -929,11 +939,20 @@ describe('gh-aw-enlistment skill', () => {
         { [LEGACY_CASE_VARIANT_OWNERSHIP]: ownershipBlob(LEGACY_CASE_VARIANT_PACKAGE) }, []],
       ['the router, the legacy record and a case-variant record together',
         [UNOWNED_MUTABLE_ROUTER_SKILL, LEGACY_OWNERSHIP, CASE_VARIANT_OWNERSHIP],
-        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, []],
+        {
+          [LEGACY_OWNERSHIP]: ownershipBlob(LEGACY_PACKAGE_NAME),
+          [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE),
+        }, []],
+      [`a non-native ${PACKAGE_NAME} duplicate`, [NON_NATIVE_OWNERSHIP],
+        { [NON_NATIVE_OWNERSHIP]: ownershipBlob(PACKAGE_NAME) }, []],
+      [`a non-native ${LEGACY_PACKAGE_NAME} duplicate`, [NON_NATIVE_OWNERSHIP],
+        { [NON_NATIVE_OWNERSHIP]: ownershipBlob(LEGACY_PACKAGE_NAME) }, []],
       [`an exact ${PACKAGE_NAME} record at a case-variant path`, [CASE_VARIANT_OWNERSHIP],
-        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(PACKAGE_NAME) }, [CASE_VARIANT_OWNERSHIP]],
+        { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(PACKAGE_NAME) }, []],
       ['the canonical ownership record', [OWNERSHIP_DESTINATION],
         { [OWNERSHIP_DESTINATION]: ownershipBlob(PACKAGE_NAME) }, [OWNERSHIP_DESTINATION]],
+      [`the canonical ownership record path holding a ${CASE_VARIANT_PACKAGE} record`, [OWNERSHIP_DESTINATION],
+        { [OWNERSHIP_DESTINATION]: ownershipBlob(CASE_VARIANT_PACKAGE) }, [OWNERSHIP_DESTINATION]],
       ['another package\'s ownership record', ['.github/aw/packages/acme-tools-0123456789ab.json'],
         { '.github/aw/packages/acme-tools-0123456789ab.json': ownershipBlob('acme/tools') },
         ['.github/aw/packages/acme-tools-0123456789ab.json']],
@@ -952,15 +971,25 @@ describe('gh-aw-enlistment skill', () => {
         { [`${CASE_VARIANT_OWNERSHIP}.bak`]: ownershipBlob(CASE_VARIANT_PACKAGE) }, [`${CASE_VARIANT_OWNERSHIP}.bak`]],
       ['a case-variant record beside an installed workflow', [CASE_VARIANT_OWNERSHIP, '.github/workflows/squad.md'],
         { [CASE_VARIANT_OWNERSHIP]: ownershipBlob(CASE_VARIANT_PACKAGE) }, ['.github/workflows/squad.md']],
-    ] as const)('the staged-deletion gate permits only case-variant ownership records: %s', (
+    ] as const)('the staged-deletion gate permits only stale Squad ownership records: %s', (
       label, deletions, head, stopped,
     ) => {
-      const result = runDeletionGate(extractDeletionGate(content), deletions, head);
+      const result = runDeletionGate(extractDeletionGate(content, CANONICAL), deletions, head);
       const input = `${CANONICAL} staged-deletion gate with ${label} (${deletions.join(', ')}; HEAD ${JSON.stringify(head)})`;
       expect(result.status, `${input}: ${result.stderr}`).toBe(stopped.length === 0 ? 0 : 1);
       if (stopped.length > 0) {
         expect(result.stderr, input).toContain(`STOP: unexpected staged deletions:\n${stopped.join('\n')}\n`);
       }
+    });
+
+    it('lists the permitted staged deletions exactly as the gate enforces them', () => {
+      expect(content.replace(/\s+/g, ' '), `${CANONICAL} step 7 must describe the gate's ownership-record rule`)
+        .toContain(
+          'and a `.github/aw/packages/*.json` ownership record whose `package` is '
+          + `\`${PACKAGE_NAME}\` or \`${LEGACY_PACKAGE_NAME}\` in any letter case, other than `
+          + `\`${OWNERSHIP_DESTINATION}\`, the record gh-aw writes for \`${PACKAGE_NAME}\`. Those are the records `
+          + 'the verifier tells you to delete',
+        );
     });
 
     it('documents the legacy-identity migration that the verifier enforces', () => {
@@ -1279,12 +1308,13 @@ describe('gh-aw-enlistment skill', () => {
         'The only permitted staged deletions are the exact router deletion above',
       );
       expect(flatGuide).toContain(`the superseded \`${LEGACY_OWNERSHIP}\` ownership record`);
-      expect(flatGuide, 'the guide must name the case-variant ownership-record deletion the verifier requires')
-        .toContain(`and a \`.github/aw/packages/*.json\` ownership record whose \`package\` is a case variant of `
-          + `\`${PACKAGE_NAME}\` or \`${LEGACY_PACKAGE_NAME}\`, such as one left by an install typed as `
-          + `\`${CASE_VARIANT_PACKAGE}\`. Any other deletion is a hard stop.`);
+      expect(flatGuide, `${GUIDE} must name every ownership-record deletion the verifier can require`)
+        .toContain('and a `.github/aw/packages/*.json` ownership record whose `package` is '
+          + `\`${PACKAGE_NAME}\` or \`${LEGACY_PACKAGE_NAME}\` in any letter case, other than `
+          + `\`${OWNERSHIP_DESTINATION}\`, the record gh-aw writes for \`${PACKAGE_NAME}\`. Those are the records `
+          + 'the verifier tells you to delete');
       expect(flatGuide).toContain('Any other deletion is a hard stop.');
-      expect(guide.split(extractDeletionFilter(readLF(CANONICAL))).length - 1,
+      expect(guide.split(extractDeletionFilter(readLF(CANONICAL), CANONICAL)).length - 1,
         `both ${GUIDE} staging gates must use the ${CANONICAL} deletion filter`).toBe(2);
       expect(guide).toContain('.github/skills/gh-aw-enlistment/SKILL.md');
       expect(agentGuide).toContain('rm -f .github/skills/agentic-workflows/SKILL.md');
