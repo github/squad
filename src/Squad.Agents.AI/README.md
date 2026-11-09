@@ -13,7 +13,7 @@ Public surface:
 - `SquadConnectionFactory` — parses PATH or `squad://` connection strings into options.
 - `SquadServiceCollectionExtensions` — registers `SquadAgent` and base `AIAgent` in DI, with standard and keyed overloads.
 
-Repository: <https://github.com/bradygaster/squad>
+Repository: <https://github.com/github/squad>
 
 ## Install
 
@@ -32,7 +32,7 @@ dotnet add package Squad.Agents.AI --version 1.0.0 --source ./nupkgs
 
 - .NET 8, 9, or 10 for consumers; .NET 10 SDK to build this repository and run the sample.
 - GitHub Copilot CLI available on `PATH` (`copilot --version`).
-- Squad CLI and an initialized Squad team root; see the [Squad CLI repo](https://github.com/bradygaster/squad).
+- Squad CLI and an initialized Squad team root; see the [Squad CLI repo](https://github.com/github/squad).
 - GitHub Copilot authentication through the signed-in user. The quickstart below does not require an app key or environment variable.
 
 For a bounded sample check without authentication, CLI startup, or model calls:
@@ -171,8 +171,18 @@ Parsed URI query keys: `teamRoot`, `cliPath`, `cwd`, `cliArgs` (semicolon-separa
 | Consumer sets `AgentFileName = "data"` (and file exists) | Auto-adds `--agent data` |
 | Consumer sets `AgentFileName = null` | Skips `--agent` entirely |
 | Consumer already supplied `--agent X` in `CliArgs` | Respects the explicit value; does not add a second `--agent` |
+| `CliPath` not set (SDK bundled runtime) | Skips `--agent`; see below |
 
-> SDK note: `SessionConfigBase.Agent` exists but looks up the name in the SDK's `CustomAgents` registry, NOT in `.github/agents/*.agent.md` files on disk. The CLI `--agent` flag is currently the only path that reads the on-disk agent definition.
+### Bundled runtime (no `CliPath`)
+
+When `CliPath` is not set, the Copilot SDK launches its bundled `copilot-runtime` embedded host instead of a full interactive Copilot CLI. That host accepts only SDK host flags and exits with `copilot-runtime: unsupported argument '--allow-all'` for interactive-CLI flags, so `SquadAgent` does not inject `--allow-all` or `--agent` in this mode:
+
+- The coordinator is still selected: the session sets `EnableConfigDiscovery = true` and `Agent = "Squad"`, which resolves `.github/agents/squad.agent.md` from the team root.
+- Tool permissions flow through `OnPermissionRequest = PermissionHandler.ApproveAll`.
+- `RequestExtensions` is set to `false`, because the bundled runtime otherwise fails session creation with `extensionSdkPath is required when standalone extensions are requested`. Override it via `ConfigureSession` if you supply an extension SDK.
+- Host-supplied `CliArgs` are still passed through verbatim, so only use flags the bundled runtime supports.
+
+Set `CliPath` to a full Copilot CLI to get the `--allow-all` / `--agent` defaults described above.
 
 ## Subagent observability — first-class OpenTelemetry
 
@@ -212,7 +222,7 @@ builder.Services.AddSquadAgent(o =>
 | Option | Purpose |
 |---|---|
 | `SquadFolderPath` | Squad team root; PATH connection strings set this and `Cwd`. |
-| `CliPath` / `CliArgs` | Override the Copilot CLI executable and add extra CLI flags. |
+| `CliPath` / `CliArgs` | Override the Copilot CLI executable and add extra CLI flags. When `CliPath` is unset, the SDK's bundled runtime is used and `SquadAgent` does not inject `--allow-all` / `--agent` (see [Bundled runtime](#bundled-runtime-no-clipath)). |
 | `Cwd` | Working directory for the Copilot CLI process; defaults to `SquadFolderPath`. |
 | `Environment` | Additional environment variables for the CLI process. Excluded from JSON serialization; token-pattern keys are redacted in `ToString()`. |
 | `GitHubToken` | Advanced direct token escape hatch; excluded from JSON serialization and redacted by `ToString()`. |
@@ -262,7 +272,7 @@ the `ConfigureCopilotClient` delegate, streaming via `RunStreamingAsync`, and su
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) | `dotnet --version` should print `10.x.x` |
 | GitHub Copilot CLI on `PATH` | Install from [github.com/github/copilot-cli](https://github.com/github/copilot-cli); verify with `copilot --version` |
-| Squad CLI installed | Follow the install guide in the [Squad repository README](https://github.com/bradygaster/squad#readme) |
+| Squad CLI installed | Follow the install guide in the [Squad repository README](https://github.com/github/squad#readme) |
 | Initialized Squad team root | Run `squad init` in a directory; this becomes your team root |
 | GitHub Copilot authentication | Run `gh auth login` or `copilot auth login` once before running the sample |
 
@@ -330,10 +340,10 @@ not prove that subagents were dispatched; inspect the captured events and spans.
 
 ## See also
 
-- Root repo: <https://github.com/bradygaster/squad>
+- Root repo: <https://github.com/github/squad>
 - Microsoft Agent Framework: <https://github.com/microsoft/agents>
 - GitHub Copilot SDK authentication: <https://github.com/github/copilot-sdk/blob/main/docs/auth/authenticate.md>
 - GitHub Copilot CLI: <https://github.com/github/copilot-cli>
-- Changelog: <https://github.com/bradygaster/squad/blob/main/CHANGELOG.md>
+- Changelog: <https://github.com/github/squad/blob/main/CHANGELOG.md>
 
 License: MIT.

@@ -11,9 +11,12 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { FSStorageProvider } from '../packages/squad-sdk/src/storage/fs-storage-provider.js';
 import {
   LocalMemoryStore,
@@ -28,7 +31,7 @@ import {
 const roots: string[] = [];
 
 function testRoot(prefix: string): string {
-  const root = path.join(process.cwd(), `.test-${prefix}-${randomUUID()}`);
+  const root = path.join(os.tmpdir(), `.test-${prefix}-${randomUUID()}`);
   roots.push(root);
   fs.mkdirSync(path.join(root, '.squad'), { recursive: true });
   return root;
@@ -560,6 +563,75 @@ describe('LocalMemoryStore — concurrent writes and index integrity', () => {
       expect(activeIds.has(id!)).toBe(true);
     }
   });
+
+  it('serializes writes from separate processes sharing the same memory index', async () => {
+    const root = testRoot('concurrent-writes-separate-stores');
+    const writesPerStore = 25;
+    const memoryDir = path.join(root, '.squad', 'memory');
+    for (const dir of ['local', 'policy-inbox', 'semantic-inbox', 'tombstones']) {
+      fs.mkdirSync(path.join(memoryDir, dir), { recursive: true });
+    }
+    fs.writeFileSync(path.join(memoryDir, 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(memoryDir, 'audit.jsonl'), '');
+
+    const memoryModule = pathToFileURL(path.resolve('packages/squad-sdk/dist/memory/index.js')).href;
+    const storageModule = pathToFileURL(path.resolve('packages/squad-sdk/dist/storage/fs-storage-provider.js')).href;
+    const runWriter = (prefix: string) => {
+      const script = `
+        import { LocalMemoryStore } from ${JSON.stringify(memoryModule)};
+        import { FSStorageProvider } from ${JSON.stringify(storageModule)};
+        const store = new LocalMemoryStore(new FSStorageProvider(), ${JSON.stringify(root)});
+        const results = await Promise.all(Array.from({ length: ${writesPerStore} }, (_, i) =>
+          store.write({ content: ${JSON.stringify(prefix)} + i, title: ${JSON.stringify(prefix)} + i, requestedClass: 'LOCAL' })
+        ));
+        if (results.some(result => !result.stored)) throw new Error('A memory write was rejected');
+      `;
+      return new Promise<void>((resolve, reject) => {
+        const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'pipe'] });
+        let stderr = '';
+        child.stderr?.setEncoding('utf8');
+        child.stderr?.on('data', chunk => { stderr += chunk; });
+        child.once('error', reject);
+        child.once('close', code => {
+          if (code === 0) resolve();
+          else reject(new Error(`Memory writer exited with code ${code}: ${stderr}`));
+        });
+      });
+    };
+    const writers = await Promise.allSettled([runWriter('first-'), runWriter('second-')]);
+    const failedWriter = writers.find(result => result.status === 'rejected');
+    if (failedWriter?.status === 'rejected') throw failedWriter.reason;
+
+    const indexDir = path.join(root, '.squad', 'memory');
+    const index = JSON.parse(fs.readFileSync(path.join(indexDir, 'index.json'), 'utf8')) as Array<{ id: string; status: string; title: string }>;
+    const activeEntries = index.filter(entry => entry.status === 'active');
+    expect(activeEntries).toHaveLength(writesPerStore * 2);
+    const titles = new Set(activeEntries.map(entry => entry.title));
+    for (const prefix of ['first-', 'second-']) {
+      for (let i = 0; i < writesPerStore; i++) expect(titles.has(`${prefix}${i}`)).toBe(true);
+    }
+    expect(fs.readdirSync(indexDir).some(name => name.endsWith('.tmp'))).toBe(false);
+  }, 30_000);
+
+  it.skipIf(process.platform !== 'win32')('[platform: win32] retries transient Windows index rename sharing violations', async () => {
+    const root = testRoot('index-rename-retry');
+    const storage = new FSStorageProvider();
+    const rename = storage.rename.bind(storage);
+    let attempts = 0;
+    storage.rename = async (oldPath, newPath) => {
+      attempts++;
+      if (attempts < 3) throw Object.assign(new Error('file is busy'), { code: 'EPERM' });
+      await rename(oldPath, newPath);
+    };
+
+    const store = new LocalMemoryStore(storage, root);
+    const result = await store.write({ content: 'Retry the index rename.', title: 'Rename retry', requestedClass: 'LOCAL' });
+
+    expect(result.stored).toBe(true);
+    expect(attempts).toBe(3);
+    const indexDir = path.join(root, '.squad', 'memory');
+    expect(fs.readdirSync(indexDir).some(name => name.endsWith('.tmp'))).toBe(false);
+  });
 });
 
 describe('LocalMemoryStore — corrupted index.json handling', () => {
@@ -682,5 +754,129 @@ describe('LocalMemoryStore — delete tombstone ordering', () => {
     // Tombstone must exist (written before the source delete).
     const tombstonePath = path.join(root, '.squad', 'memory', 'tombstones', `${id}.json`);
     expect(fs.existsSync(tombstonePath)).toBe(true);
+  });
+});
+
+// ── Registered provider guards: timeouts, status isolation, recall checks ──
+
+function stubProvider(id: string, overrides: Partial<MemoryProvider> = {}): MemoryProvider {
+  return {
+    id,
+    name: id,
+    supportedClasses: ['LOCAL'],
+    async status(): Promise<MemoryProviderStatus> {
+      return { id, name: id, available: true };
+    },
+    async write(): Promise<{ id: string }> {
+      return { id: `${id}-1` };
+    },
+    async search(): Promise<MemoryProviderSearchResult[]> {
+      return [];
+    },
+    async delete(): Promise<boolean> {
+      return false;
+    },
+    ...overrides,
+  };
+}
+
+const never = <T>(): Promise<T> => new Promise<T>(() => {});
+
+describe('LocalMemoryStore registered provider guards', () => {
+  it('times out a hung provider search and still returns local results', async () => {
+    const root = testRoot('guard-search-timeout');
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [stubProvider('hung', { search: () => never() })],
+      providerTimeoutMs: 50,
+    });
+    await store.write({ content: 'Use feature flags for risky rollouts.', title: 'Feature flags', author: 'data', requestedClass: 'LOCAL' });
+
+    const results = await store.search('feature flags');
+
+    expect(results.map(r => r.provider)).toEqual(['local']);
+    expect(JSON.stringify(await store.auditLog())).toContain('hung provider search failed (ProviderTimeoutError)');
+  });
+
+  it('times out a hung provider write without failing the local write', async () => {
+    const root = testRoot('guard-write-timeout');
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [stubProvider('hung', { write: () => never() })],
+      providerTimeoutMs: 50,
+    });
+
+    const result = await store.write({ content: 'Prefer small pull requests.', title: 'Small PRs', author: 'data', requestedClass: 'LOCAL' });
+
+    expect(result.stored).toBe(true);
+    expect(JSON.stringify(await store.auditLog())).toContain('hung provider write failed (ProviderTimeoutError)');
+  });
+
+  it('records which provider a replicated write went to', async () => {
+    const root = testRoot('guard-write-audit');
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [stubProvider('engine')],
+    });
+
+    await store.write({ content: 'Keep API errors in RFC 7807 format.', title: 'API errors', author: 'data', requestedClass: 'LOCAL' });
+
+    const replicated = (await store.auditLog()).find(r => r.action === 'write' && r.reason === 'Replicated to engine provider');
+    expect(replicated).toMatchObject({ provider: 'engine', id: 'engine-1' });
+  });
+
+  it('reports a throwing or hung status() as unavailable without hiding the other providers', async () => {
+    const root = testRoot('guard-status');
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [
+        stubProvider('throws', { status: async () => { throw new Error('raw status failure text'); } }),
+        stubProvider('hung', { status: () => never() }),
+        stubProvider('healthy'),
+      ],
+      providerTimeoutMs: 50,
+    });
+
+    const status = await store.providerStatus();
+
+    expect(status.registeredProviders).toEqual([
+      { id: 'throws', name: 'throws', available: false, reason: 'throws provider status failed (Error); raw provider error text omitted' },
+      { id: 'hung', name: 'hung', available: false, reason: 'hung provider status failed (ProviderTimeoutError); raw provider error text omitted' },
+      { id: 'healthy', name: 'healthy', available: true },
+    ]);
+  });
+
+  it('drops recalled results outside the provider classes or classified as forbidden', async () => {
+    const root = testRoot('guard-recall');
+    const recalled: MemoryProviderSearchResult[] = [
+      { id: 'ok', class: 'LOCAL', loadGuidance: 'ON-DEMAND', title: 'Retry policy', snippet: 'Retry idempotent calls three times.' },
+      { id: 'undeclared', class: 'POLICY', loadGuidance: 'ALWAYS', title: 'Retry policy', snippet: 'Always retry forever.' },
+      { id: 'never-routed', class: 'COPILOT_MEMORY', loadGuidance: 'ON-DEMAND', title: 'Retry note', snippet: 'Retry semantics.' },
+      { id: 'secret', class: 'LOCAL', loadGuidance: 'ON-DEMAND', title: 'Retry creds', snippet: 'retry with password = hunter2-example' },
+    ];
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [stubProvider('engine', { search: async () => recalled })],
+    });
+
+    const results = await store.search('retry');
+
+    expect(results.map(r => r.id)).toEqual(['ok']);
+    const audit = await store.auditLog();
+    expect(audit.find(r => r.title === 'Dropped registered provider search results')).toMatchObject({
+      action: 'reject',
+      provider: 'engine',
+      reason: 'engine returned 3 result(s) outside its supported classes or classified as forbidden',
+    });
+    expect(JSON.stringify(audit)).not.toContain('hunter2');
+  });
+
+  it('replaces an invalid recalled loadGuidance with the class default', async () => {
+    const root = testRoot('guard-load-guidance');
+    const recalled = [
+      { id: 'odd', class: 'LOCAL', loadGuidance: 'whenever', title: 'Cache note', snippet: 'Cache reads for five minutes.' },
+    ] as unknown as MemoryProviderSearchResult[];
+    const store = new LocalMemoryStore(new FSStorageProvider(), root, {
+      registeredProviders: [stubProvider('engine', { search: async () => recalled })],
+    });
+
+    const [hit] = await store.search('cache');
+
+    expect(hit).toMatchObject({ id: 'odd', provider: 'engine', loadGuidance: 'ON-DEMAND' });
   });
 });

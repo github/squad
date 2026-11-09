@@ -2,6 +2,46 @@
 
 <!-- cspell:words ambiently -->
 
+## 2.0.0-preview.3
+
+### Minor Changes
+
+- Export the ADR-002 work-claim contract (`WorkClaimProvider`, fenced handles, canonical work keys, executor identity, and in-memory/no-op providers) plus `GitRefClaimProvider`, which coordinates distributed leases with compare-and-swap git refs and never touches the worktree or index. `getPodId()` now accepts an optional `env` argument.
+
+- Treat governed memory class names case-insensitively, reject unknown classes, and export `MEMORY_CLASSES`, `parseMemoryClass`, and `UnknownMemoryClassError`. The `memory.promote` tool now requires `targetClass` and refuses `FORBIDDEN` and `TRANSIENT` targets.
+
+### Patch Changes
+
+- Migrate evidence-backed Squad 0.9.x casting arrays without guessing identities or assignments, preserve byte-exact originals and assignment semantics, tolerate CRLF manifests, and keep unresolved casting isolated so other upgrade work can continue.
+
+- Carry an optional Squad shell session id in usage records so CLI cost reporting can group one shell run without breaking older ledgers.
+
+- Make governed memory search degrade to local results when an optional host-injected adapter is absent or fails, and guard registered provider calls with timeouts, status isolation, and governance checks on recalled data.
+
+- Let the Claude coordinator inherit all MCP tools present in the session, correct MCP configuration guidance, mark the old cross-machine task-file skill as an unimplemented proposal, and tell claimed-work agents to operate only on their fenced assignment.
+
+- Validate lease timing and claim records, cap claim output, use a fixed non-personal commit identity, pseudonymize hostname-derived machine ids, and expose whole-process-group fencing for lost claims.
+
+## 2.0.0-preview.2
+
+### Minor Changes
+
+- Recognize optional charter `Examples` without a noncanonical-section warning and preserve them through structured edits.
+
+### Patch Changes
+
+- Generate resolvable versioned state bridge declarations, probe them in `squad doctor`, report bridge identity in health output, and terminate stdio servers when their host transport closes.
+
+- `squad health` no longer reports markdown table headers, separator rows or `{placeholder}` cells as unknown routing agents, accepts built-in support agents (Scribe, Ralph, Rai, Fact Checker) as routing targets, parses legacy charters with a UTF-8 BOM or a one-line `**Role:** … | **Expertise:** …` identity, reports charters without an identity block as a warning with a hint instead of a failure, and reports optional Rai/Fact Checker charters absent from `team.md` as INFO (`available but not configured`). `squad upgrade` never modifies `team.md`; opt in explicitly with `squad roster add <rai|fact-checker|all>` (#2298, #2234, #1785).
+
+- Accept documented legacy routing table headers, column orders, and the historical flattened long-table layout. `squad health` validates every parsed target against the team or casting registry, fails for missing targets and zero rules, and reports duplicate or conflicting work types as deterministic warnings.
+
+- 2.0 preview command and migration fixes: `squad client list|add` lists configured host projections; the `agents/Rai` → `agents/rai` migration uses a two-step rename and `git mv` so the case change is recorded on Windows and macOS (templates now reference `agents/rai/`); the `undefined — previewing upgrade` header shows the project name; `squad update-check` flags caches older than 24h and shows the cache date; `squad_decide` writes to the active workstream inbox when one is resolvable and never truncates the summary slug below 60 characters; `squad doctor` reports `Mode: local` for a `teamRoot` that points at the same project and no longer triggers Node's DEP0190 warning (#2299, #2174).
+
+- Allow backend root aliases only for list-shaped operations and reject file or destructive operations before they can access or erase the entire state tree.
+
+- Skill frontmatter parser now supports YAML block-sequence arrays (for example, `triggers:` followed by `- item` lines) and strips surrounding quotes from scalar and inline-array values, so declared triggers are no longer dropped or quote-polluted.
+
 ## 2.0.0-preview.1
 
 ### Major Changes

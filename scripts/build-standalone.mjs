@@ -21,24 +21,30 @@
  * Usage:
  *   node scripts/build-standalone.mjs                        # host platform
  *   node scripts/build-standalone.mjs --platform linux --arch x64
- *   node scripts/build-standalone.mjs --node-version 22.20.0
+ *   node scripts/build-standalone.mjs --node-version 22.23.4
  *   node scripts/build-standalone.mjs --skip-runtime          # app tree only
  *   node scripts/build-standalone.mjs --include-optional      # fat bundle
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync,
-  renameSync, rmSync, writeFileSync, chmodSync,
+  rmSync, writeFileSync, chmodSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertNodeSecurityFloor,
+  loadNodeSecurityFloor,
+} from './release/node-security-floor.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Node.js runtime vendored into the bundle. Must satisfy squad's engines field (>=22.5.0). */
-const DEFAULT_NODE_VERSION = '22.20.0';
+const NODE_SECURITY_POLICY = loadNodeSecurityFloor();
+const DEFAULT_NODE_VERSION = NODE_SECURITY_POLICY.standaloneDefault;
 
 /** Platform/arch pairs we publish, matching the GitHub Copilot CLI release matrix. */
 const SUPPORTED = [
@@ -181,14 +187,99 @@ function nodeArtifactName(platform, arch, version) {
   return { base: `node-v${version}-${slug}`, file: `node-v${version}-${slug}.${ext}`, ext };
 }
 
+function sha256(filePath) {
+  return createHash('sha256').update(readFileSync(filePath)).digest('hex');
+}
+
+function resolveGpgv() {
+  const candidates = process.platform === 'win32'
+    ? [
+        path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'usr', 'bin', 'gpgv.exe'),
+        path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'GnuPG', 'bin', 'gpgv.exe'),
+      ]
+    : ['gpgv'];
+  for (const candidate of candidates) {
+    if (path.isAbsolute(candidate) && !existsSync(candidate)) continue;
+    try {
+      run(candidate, ['--version'], REPO_ROOT);
+      return candidate;
+    } catch {
+      // Try the next trusted verifier location.
+    }
+  }
+  throw new Error('gpgv is required to authenticate Node.js SHASUMS256.txt signatures');
+}
+
+function gpgvPath(filePath, gpgv) {
+  if (process.platform !== 'win32' || !/\\Git\\usr\\bin\\gpgv\.exe$/i.test(gpgv)) {
+    return filePath;
+  }
+  const match = path.resolve(filePath).match(/^([A-Za-z]):\\(.*)$/);
+  return match ? `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, '/')}` : filePath;
+}
+
+function authenticatedNodeChecksums(version, stagingDir) {
+  const authenticatedPath = path.join(stagingDir, `SHASUMS256-${version}.authenticated.txt`);
+  if (existsSync(authenticatedPath)) return authenticatedPath;
+
+  const baseUrl = `https://nodejs.org/dist/v${version}`;
+  const checksumsPath = path.join(stagingDir, `SHASUMS256-${version}.txt`);
+  const signaturePath = path.join(stagingDir, `SHASUMS256-${version}.txt.sig`);
+  const armoredPath = path.join(stagingDir, `SHASUMS256-${version}.txt.asc`);
+  const keyringPath = path.join(stagingDir, 'nodejs-release-keyring.kbx');
+  const keyPolicy = NODE_SECURITY_POLICY.releaseKeys;
+  const keyringUrl = `https://raw.githubusercontent.com/nodejs/release-keys/${keyPolicy.commit}/${keyPolicy.path}`;
+
+  run('curl', ['-fsSL', '-o', keyringPath, keyringUrl], stagingDir);
+  const keyringSha = sha256(keyringPath);
+  if (keyringSha !== keyPolicy.sha256) {
+    throw new Error(`Node.js release keyring checksum mismatch: expected ${keyPolicy.sha256}, got ${keyringSha}`);
+  }
+  run('curl', ['-fsSL', '-o', checksumsPath, `${baseUrl}/SHASUMS256.txt`], stagingDir);
+  run('curl', ['-fsSL', '-o', signaturePath, `${baseUrl}/SHASUMS256.txt.sig`], stagingDir);
+  run('curl', ['-fsSL', '-o', armoredPath, `${baseUrl}/SHASUMS256.txt.asc`], stagingDir);
+
+  const gpgv = resolveGpgv();
+  const keyringArg = gpgvPath(keyringPath, gpgv);
+  run(gpgv, [
+    '--keyring',
+    keyringArg,
+    gpgvPath(signaturePath, gpgv),
+    gpgvPath(checksumsPath, gpgv),
+  ], stagingDir);
+  const published = readFileSync(checksumsPath);
+  run(gpgv, ['--keyring', keyringArg, gpgvPath(armoredPath, gpgv)], stagingDir);
+  writeFileSync(authenticatedPath, published);
+  step(`Authenticated Node ${version} SHASUMS256.txt with signed .sig and .asc manifests`);
+  return authenticatedPath;
+}
+
+function downloadVerifiedNodeArtifact(version, file, archivePath, stagingDir) {
+  const checksumsPath = authenticatedNodeChecksums(version, stagingDir);
+  const checksumLine = readFileSync(checksumsPath, 'utf8')
+    .split(/\r?\n/)
+    .find((line) => line.endsWith(`  ${file}`));
+  const expected = checksumLine?.match(/^([0-9a-f]{64})  /)?.[1];
+  if (!expected) {
+    throw new Error(`Official SHASUMS256.txt has no checksum for ${file}`);
+  }
+
+  run('curl', ['-fsSL', '-o', archivePath, `https://nodejs.org/dist/v${version}/${file}`], stagingDir);
+  const actual = sha256(archivePath);
+  if (actual !== expected) {
+    rmSync(archivePath, { force: true });
+    throw new Error(`Checksum mismatch for ${file}: expected ${expected}, got ${actual}`);
+  }
+  step(`Verified ${file} against Node.js SHASUMS256.txt`);
+}
+
 /** Download the official Node.js build for the target and vendor just the runtime. */
 function vendorRuntime(bundleDir, platform, arch, version, stagingDir) {
   const { base, file, ext } = nodeArtifactName(platform, arch, version);
-  const url = `https://nodejs.org/dist/v${version}/${file}`;
   const archivePath = path.join(stagingDir, file);
 
   step(`Downloading Node ${version} for ${platform}-${arch}`);
-  run('curl', ['-fsSL', '-o', archivePath, url], stagingDir);
+  downloadVerifiedNodeArtifact(version, file, archivePath, stagingDir);
 
   step('Extracting runtime');
   const member = platform === 'win32'
@@ -240,6 +331,11 @@ const { pathToFileURL } = require('node:url');
 
 const ENTRY = ${JSON.stringify(CLI_ENTRY)};
 
+if (process.argv[2] === '--standalone-runtime-version') {
+  console.log(process.version);
+  process.exit(0);
+}
+
 // winget installs portables by symlinking the exe into a links directory, and
 // process.execPath may report that link rather than the bundle. Try the exe's
 // own directory first, then its resolved real path.
@@ -280,8 +376,18 @@ import(pathToFileURL(path.join(root, ENTRY)).href).catch((error) => {
  */
 function extractArchiveMember(archivePath, member, ext, stagingDir) {
   try {
-    if (ext === 'zip' && process.platform !== 'win32') {
-      run('unzip', ['-o', '-q', archivePath, member, '-d', stagingDir], stagingDir);
+    if (ext === 'zip') {
+      if (process.platform === 'win32') {
+        const quote = value => `'${value.replace(/'/g, "''")}'`;
+        run('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `Expand-Archive -LiteralPath ${quote(archivePath)} -DestinationPath ${quote(stagingDir)} -Force`,
+        ], stagingDir);
+      } else {
+        run('unzip', ['-o', '-q', archivePath, member, '-d', stagingDir], stagingDir);
+      }
     } else {
       run('tar', ['-xf', archivePath, '-C', stagingDir, member], stagingDir);
     }
@@ -309,7 +415,7 @@ function resolveBlobBuilder(version, stagingDir) {
   const archivePath = path.join(stagingDir, `host-${file}`);
 
   step(`Fetching Node ${version} for the host to generate the SEA blob`);
-  run('curl', ['-fsSL', '-o', archivePath, `https://nodejs.org/dist/v${version}/${file}`], stagingDir);
+  downloadVerifiedNodeArtifact(version, file, archivePath, stagingDir);
 
   const member = hostPlatform === 'win32' ? `${base}/node.exe` : `${base}/bin/node`;
   extractArchiveMember(archivePath, member, ext, stagingDir);
@@ -454,6 +560,7 @@ function directorySize(dir) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  assertNodeSecurityFloor(args.nodeVersion, NODE_SECURITY_POLICY);
   const target = `${args.platform}-${args.arch}`;
   const version = JSON.parse(
     readFileSync(path.join(REPO_ROOT, 'packages', 'squad-cli', 'package.json'), 'utf-8'),

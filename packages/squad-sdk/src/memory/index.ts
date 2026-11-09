@@ -1,6 +1,17 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
+import { createFileStateStore } from '../backend/local-backend.js';
+import { StateKeyConflictError } from '../storage/storage-error.js';
 import type { StorageProvider } from '../storage/storage-provider.js';
+
+async function ensureMemoryIndex(storage: StorageProvider, indexPath: string): Promise<void> {
+  try {
+    await storage.createIfAbsent(indexPath, '[]\n');
+  } catch (error) {
+    if (!(error instanceof StateKeyConflictError)) throw error;
+  }
+}
 
 export type MemoryClass =
   | 'TRANSIENT'
@@ -9,6 +20,39 @@ export type MemoryClass =
   | 'POLICY'
   | 'COPILOT_MEMORY'
   | 'FORBIDDEN';
+
+/** Every memory class, in its canonical upper-case spelling. */
+export const MEMORY_CLASSES: ReadonlyArray<MemoryClass> = [
+  'TRANSIENT',
+  'LOCAL',
+  'DECISION',
+  'POLICY',
+  'COPILOT_MEMORY',
+  'FORBIDDEN',
+];
+
+/** Thrown by {@link parseMemoryClass} for a value that names no memory class. */
+export class UnknownMemoryClassError extends Error {
+  override readonly name = 'UnknownMemoryClassError';
+}
+
+/**
+ * Parse a caller-supplied memory class. Case and surrounding whitespace are
+ * ignored, so `decision`, `Decision` and ` DECISION ` all mean `DECISION`.
+ * A missing or blank value returns undefined (let Squad classify the content).
+ * Any other value that is not a known class throws, so a typo is never stored
+ * under a made-up class.
+ */
+export function parseMemoryClass(value: unknown): MemoryClass | undefined {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  if (text === '') return undefined;
+  const memoryClass = MEMORY_CLASSES.find(candidate => candidate === text.toUpperCase());
+  if (!memoryClass) {
+    throw new UnknownMemoryClassError(`Unknown memory class ${JSON.stringify(value)}. Use one of: ${MEMORY_CLASSES.join(', ')}.`);
+  }
+  return memoryClass;
+}
 
 export type MemoryLoadGuidance = 'ALWAYS' | 'ON-DEMAND' | 'ARCHIVE' | 'NEVER';
 
@@ -129,7 +173,11 @@ export interface MemoryProviderStatus {
  *
  * Implementations receive only pre-classified, non-forbidden, non-transient
  * memory. The {@link LocalMemoryStore} enforces governance before routing
- * to any registered provider.
+ * to any registered provider, and again on the way back: search results whose
+ * class is not one the provider could have been sent (a LOCAL, DECISION or
+ * POLICY class it declares in `supportedClasses`), or whose title or snippet
+ * classifies as FORBIDDEN, are dropped. Every call is bounded by
+ * {@link LocalMemoryStoreOptions.providerTimeoutMs}.
  */
 export interface MemoryProvider {
   readonly id: string;
@@ -322,6 +370,13 @@ export interface LocalMemoryStoreOptions {
    * reaches these providers. Results are merged with local search results.
    */
   registeredProviders?: MemoryProvider[];
+  /**
+   * Per-call timeout for registered providers (`write`, `search`, `status`),
+   * in milliseconds. Default 5000. A call that times out is audited as a
+   * provider error and skipped; it is not cancelled, so a slow write may
+   * still land in the provider later.
+   */
+  providerTimeoutMs?: number;
 }
 
 interface MemoryIndexEntry {
@@ -408,9 +463,35 @@ function evictOldest<T extends { createdAt: number }>(entries: Map<string, T>, m
   }
 }
 
-function safeProviderErrorReason(provider: MemoryProvider, operation: 'write' | 'search', error: unknown): string {
+function safeProviderErrorReason(provider: Pick<MemoryProvider, 'name'>, operation: 'write' | 'search' | 'status', error: unknown): string {
   const errorName = error instanceof Error ? error.name : 'UnknownError';
   return `${provider.name} provider ${operation} failed (${errorName}); raw provider error text omitted`;
+}
+
+/** Classes LocalMemoryStore.write() routes to registered providers, so the only ones they may return. */
+const PROVIDER_ROUTABLE_CLASSES: ReadonlyArray<MemoryClass> = ['LOCAL', 'DECISION', 'POLICY'];
+
+const DEFAULT_PROVIDER_TIMEOUT_MS = 5000;
+
+class ProviderTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Provider call exceeded ${timeoutMs} ms`);
+    this.name = 'ProviderTimeoutError';
+  }
+}
+
+async function withProviderTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ProviderTimeoutError(timeoutMs)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function firstLine(value: string): string {
@@ -452,6 +533,14 @@ function normalizeLoadGuidance(value: string | undefined, fallback: MemoryLoadGu
 export const REAL_COPILOT_UNAVAILABLE_REASON =
   'Real Copilot Memory API unavailable: no concrete callable API was found in installed @github/copilot SDK/tooling. Squad will not fake provider=copilot; use hostInjectedCopilotAdapter only when a host supplies a client.';
 
+const HOST_INJECTED_CLIENT_MISSING_REASON =
+  'hostInjectedCopilotAdapter is enabled, but no host-injected Copilot memory client was supplied. This is not real provider=copilot persistence.';
+
+type MemoryIndexLockStore = { lockAsync?: (key: string) => Promise<() => void> };
+type MemoryIndexLockProvider = {
+  createLockStore?: (lockAnchor: string) => MemoryIndexLockStore | Promise<MemoryIndexLockStore>;
+};
+
 function isRealCopilotProviderSelected(config: MemoryGovernanceConfig): boolean {
   return config.defaultProvider === 'copilot';
 }
@@ -481,9 +570,7 @@ export class HostInjectedCopilotMemoryAdapter {
 
   private requireClient(): CopilotMemoryProviderClient {
     if (!this.client) {
-      throw new Error(
-        'hostInjectedCopilotAdapter is enabled, but no host-injected Copilot memory client was supplied. This is not real provider=copilot persistence.',
-      );
+      throw new Error(HOST_INJECTED_CLIENT_MISSING_REASON);
     }
     return this.client;
   }
@@ -525,9 +612,11 @@ export async function ensureMemoryGovernanceDefaults(
   }
 
   const indexPath = path.join(memoryDir, 'index.json');
-  if (!await storage.exists(indexPath)) {
-    await storage.write(indexPath, '[]\n');
+  try {
+    await storage.createIfAbsent(indexPath, '[]\n');
     created.push(path.join('.squad', 'memory', 'index.json'));
+  } catch (error) {
+    if (!(error instanceof StateKeyConflictError)) throw error;
   }
 
   const auditPath = path.join(memoryDir, 'audit.jsonl');
@@ -543,12 +632,7 @@ export class LocalMemoryStore {
   private readonly squadDir: string;
   private readonly copilotProvider: HostInjectedCopilotMemoryAdapter;
   private readonly registeredProviders: MemoryProvider[];
-  /**
-   * Async mutex tail for index read-modify-write operations.
-   * Each caller enqueues behind the current tail so concurrent writes
-   * are serialized without OS-level file locking.
-   */
-  private indexLockTail: Promise<unknown> = Promise.resolve();
+  private readonly providerTimeoutMs: number;
 
   constructor(
     private readonly storage: StorageProvider,
@@ -560,28 +644,38 @@ export class LocalMemoryStore {
       options.hostInjectedCopilotAdapterClient ?? options.copilotMemoryClient,
     );
     this.registeredProviders = options.registeredProviders ?? [];
+    const timeoutMs = options.providerTimeoutMs;
+    this.providerTimeoutMs = typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : DEFAULT_PROVIDER_TIMEOUT_MS;
   }
 
   /**
    * Serialize all index read-modify-write operations.
    *
    * All callers that do readIndex() → mutate → writeIndex() must go through
-   * this method so concurrent writes within the same store instance cannot
-   * interleave and lose entries. The critical section is purely async
-   * (no thread blocking), so this is safe in Node.js single-thread land.
+   * this method so concurrent writers cannot interleave and lose entries.
+   * Backend adapters coordinate on the shared state ref; filesystem storage
+   * keeps its lock under the resolved .squad directory.
    */
   private async withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
-    let unlock!: () => void;
-    // Append a new "release" promise to the tail of the lock chain.
-    // The next caller will wait for this release before proceeding.
-    const release = new Promise<void>(resolve => { unlock = resolve; });
-    const prev = this.indexLockTail;
-    this.indexLockTail = release;
-    await prev;
+    const lockProvider = this.storage as StorageProvider & MemoryIndexLockProvider;
+    let fileLock = await lockProvider.createLockStore?.(this.squadDir);
+    if (!fileLock) {
+      const resolvedSquadDir = path.resolve(this.squadDir);
+      let lockRoot = resolvedSquadDir;
+      try {
+        lockRoot = await realpath(resolvedSquadDir);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      fileLock = createFileStateStore(lockRoot);
+    }
+    const releaseFileLock = await fileLock.lockAsync!('backend/locks/memory-index');
     try {
       return await fn();
     } finally {
-      unlock();
+      releaseFileLock();
     }
   }
 
@@ -605,7 +699,9 @@ export class LocalMemoryStore {
     }
 
     if (!classification) {
-      let memoryClass = request.requestedClass;
+      // requestedClass can come from an agent over MCP, which does not enforce
+      // the tool schema's enum. Normalize it before any class gate runs.
+      let memoryClass = parseMemoryClass(request.requestedClass);
       if (!memoryClass) {
         if (/\b(CI|PR|build)\s+(status|failed|passed|output|log)\b/i.test(content)) {
           memoryClass = 'TRANSIENT';
@@ -835,7 +931,7 @@ export class LocalMemoryStore {
     for (const provider of this.registeredProviders) {
       if (!provider.supportedClasses.includes(classification.class)) continue;
       try {
-        const providerResult = await provider.write(providerWriteRequest);
+        const providerResult = await withProviderTimeout(provider.write(providerWriteRequest), this.providerTimeoutMs);
         await this.audit({
           action: 'write',
           id: providerResult.id,
@@ -844,6 +940,7 @@ export class LocalMemoryStore {
           path: providerResult.path ?? `${provider.id}:${providerResult.id}`,
           reason: `Replicated to ${provider.name} provider`,
           actor: request.author,
+          provider: provider.id,
         });
       } catch (error) {
         await this.audit({
@@ -909,43 +1006,88 @@ export class LocalMemoryStore {
         provider: 'local',
       });
     }
+    // The host-injected adapter is optional semantic memory. Like registeredProviders
+    // below, a missing or failing client must not take down local governed search:
+    // skip the adapter, audit a content-free provider-error, and keep local results.
     if (isHostInjectedCopilotAdapterConfigured(config)) {
-      const activeCopilotIds = new Set(index
-        .filter(item => item.status === 'active' && item.class === 'COPILOT_MEMORY')
-        .map(item => item.id));
-      const externalResults = await this.copilotProvider.search(query);
-      for (const result of externalResults) {
-        if (!activeCopilotIds.has(result.id)) continue;
-        results.push({
-          id: result.id,
+      if (!this.copilotProvider.isAvailable()) {
+        await this.audit({
+          action: 'provider-error',
           class: 'COPILOT_MEMORY',
-          loadGuidance: 'ON-DEMAND',
-          title: result.title,
-          path: result.path ?? `host-injected-copilot-adapter:${result.id}`,
-          snippet: result.snippet.slice(0, 240),
+          title: 'Host-injected Copilot adapter search skipped',
+          reason: HOST_INJECTED_CLIENT_MISSING_REASON,
           provider: 'hostInjectedCopilotAdapter',
         });
+      } else {
+        const activeCopilotIds = new Set(index
+          .filter(item => item.status === 'active' && item.class === 'COPILOT_MEMORY')
+          .map(item => item.id));
+        try {
+          const externalResults = await this.copilotProvider.search(query);
+          for (const result of externalResults) {
+            if (!activeCopilotIds.has(result.id)) continue;
+            results.push({
+              id: result.id,
+              class: 'COPILOT_MEMORY',
+              loadGuidance: 'ON-DEMAND',
+              title: result.title,
+              path: result.path ?? `host-injected-copilot-adapter:${result.id}`,
+              snippet: result.snippet.slice(0, 240),
+              provider: 'hostInjectedCopilotAdapter',
+            });
+          }
+        } catch (error) {
+          await this.audit({
+            action: 'provider-error',
+            class: 'COPILOT_MEMORY',
+            title: 'Host-injected Copilot adapter search failed',
+            reason: safeProviderErrorReason({ name: 'hostInjectedCopilotAdapter' }, 'search', error),
+            provider: 'hostInjectedCopilotAdapter',
+          });
+        }
       }
     }
 
     // Query registered external providers. Governance filtering already
-    // passed. Deduplicates results by id (local takes precedence).
+    // passed for the query; recalled items are checked again on the way back,
+    // because a provider (or a store someone else can write to) is not trusted:
+    // only classes this provider could have been sent, and nothing FORBIDDEN.
+    // Deduplicates results by id (local takes precedence).
     const seenIds = new Set(results.map(r => r.id));
     for (const provider of this.registeredProviders) {
       try {
-        const providerResults = await provider.search(query);
+        const allowedClasses = provider.supportedClasses.filter(c => PROVIDER_ROUTABLE_CLASSES.includes(c));
+        const providerResults = await withProviderTimeout(provider.search(query), this.providerTimeoutMs);
+        let dropped = 0;
         for (const result of providerResults) {
+          if (!allowedClasses.includes(result.class)) {
+            dropped++;
+            continue;
+          }
+          const recheck = await this.classify({ content: `${result.title}\n${result.snippet}` });
+          if (recheck.class === 'FORBIDDEN') {
+            dropped++;
+            continue;
+          }
           if (seenIds.has(result.id)) continue;
           seenIds.add(result.id);
           results.push({
             id: result.id,
             class: result.class,
-            loadGuidance: result.loadGuidance,
+            loadGuidance: normalizeLoadGuidance(result.loadGuidance, loadGuidanceFor(result.class)),
             title: result.title,
             path: result.path ?? `${provider.id}:${result.id}`,
             snippet: result.snippet.slice(0, 240),
             provider: provider.id,
             score: result.score,
+          });
+        }
+        if (dropped > 0) {
+          await this.audit({
+            action: 'reject',
+            title: 'Dropped registered provider search results',
+            reason: `${provider.name} returned ${dropped} result(s) outside its supported classes or classified as forbidden`,
+            provider: provider.id,
           });
         }
       } catch (error) {
@@ -1109,8 +1251,15 @@ export class LocalMemoryStore {
   }> {
     await this.ensureInitialized();
     const config = await this.readConfig();
+    // One provider whose status() throws or hangs must not hide the others.
     const providerStatuses: MemoryProviderStatus[] = await Promise.all(
-      this.registeredProviders.map(p => p.status()),
+      this.registeredProviders.map(async p => {
+        try {
+          return await withProviderTimeout(p.status(), this.providerTimeoutMs);
+        } catch (error) {
+          return { id: p.id, name: p.name, available: false, reason: safeProviderErrorReason(p, 'status', error) };
+        }
+      }),
     );
     return {
       defaultProvider: config.defaultProvider,
@@ -1197,9 +1346,7 @@ export class LocalMemoryStore {
       await this.storage.write(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n');
     }
     const indexPath = path.join(memoryDir, 'index.json');
-    if (!await this.storage.exists(indexPath)) {
-      await this.storage.write(indexPath, '[]\n');
-    }
+    await ensureMemoryIndex(this.storage, indexPath);
     const auditPath = path.join(memoryDir, 'audit.jsonl');
     if (!await this.storage.exists(auditPath)) {
       await this.storage.write(auditPath, '');
@@ -1283,11 +1430,28 @@ export class LocalMemoryStore {
 
   private async writeIndex(index: MemoryIndexEntry[]): Promise<void> {
     const indexPath = path.join(this.squadDir, 'memory', 'index.json');
-    const tmpPath = `${indexPath}.tmp`;
-    // Write to a temp file first, then atomically rename into place.
-    // This prevents a crash mid-write from leaving a partial/corrupt index.
+    const tmpPath = `${indexPath}.${process.pid}.${randomUUID()}.tmp`;
     await this.storage.write(tmpPath, JSON.stringify(index, null, 2) + '\n');
-    await this.storage.rename(tmpPath, indexPath);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await this.storage.rename(tmpPath, indexPath);
+          return;
+        } catch (error) {
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String(error.code)
+            : undefined;
+          const retryable = process.platform === 'win32'
+            && ['EACCES', 'EBUSY', 'EPERM'].includes(code ?? '')
+            && attempt < 4;
+          if (!retryable) throw error;
+          await new Promise(resolve => setTimeout(resolve, 10 * 2 ** attempt));
+        }
+      }
+    } catch (error) {
+      try { await this.storage.delete(tmpPath); } catch { /* preserve the rename error */ }
+      throw error;
+    }
   }
 
   private async audit(record: Omit<MemoryAuditRecord, 'timestamp'>): Promise<void> {

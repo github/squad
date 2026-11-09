@@ -1,5 +1,47 @@
 # @bradygaster/squad-cli
 
+## 2.0.0-preview.3
+
+### Minor Changes
+
+- Add opt-in multi-machine work claims to `squad watch`. `--claims git-ref` uses fenced, renewable git-ref leases; the default remains `none`. Claimed-work prompts, stale-before-dispatch renewal, bounded runs, privacy-preserving telemetry, hybrid-mode de-duplication, and process-group fencing keep the opt-in path safe and observable.
+
+- Default-path compatibility for `squad watch`, whatever claim provider is configured: a malformed, empty, or unreadable `.squad/config.json` now stops watch instead of falling back to defaults (only an absent file selects defaults); `watch.claims` is a reserved key and an invalid value stops watch; `execute` applies `needs:*` capability routing; and one watch round never dispatches the same issue twice across `execute` and `fleet-dispatch`.
+
+### Patch Changes
+
+- Migrate evidence-backed Squad 0.9.x casting arrays without guessing identities or assignments. Preserve byte-exact originals and assignment semantics, keep dry-run write-free and repeated upgrades idempotent, and leave malformed or ambiguous casting unchanged with an accurate repair-needed report while bridge rewriting and other upgrade steps continue. Rewrite a `teamRoot` in `.squad/config.json` that points at the project itself (for example, an absolute path) to `"."`; `--dry-run` only reports it.
+
+- Accept CRLF casting manifests and normalize managed casting JSON to LF during upgrade.
+
+- Make `squad cost` report the newest Squad shell session rather than using Scribe log timestamps, while retaining the legacy-ledger fallback.
+
+- `squad memory` now resolves the same backend-aware store as `squad_state`; memory class names are case-insensitive and unknown or forbidden promotion targets fail closed. The `memory.promote` tool now requires `targetClass` and refuses `FORBIDDEN` and `TRANSIENT` targets. `squad memory` commands, including `classify`, now fail outside a squad instead of creating a stray `.squad/`; like `squad_state`, they do not yet support a linked project on the `orphan` or `two-layer` backend (#2320).
+
+- `squad doctor` detects missing, untracked, or modified history archives, and `squad nap` refuses to trim tracked history when its new archive could not be committed.
+
+- Point MCP guidance and `state-mcp --help` at configuration files supported hosts actually read, keep Copilot tool permissions independent from MCP injection, and mark the old cross-machine task-file skill as an unimplemented proposal.
+
+- Standalone preview.3 archives vendor Node.js 22.23.4. Preview.1 and preview.2 standalone archives used Node.js 22.20.0 and should be downloaded again. npm installs use the operator's Node runtime and require a patched host release.
+
+## 2.0.0-preview.2
+
+### Patch Changes
+
+- Refuse to overwrite external state owned by a different project.
+
+- Generate resolvable versioned state bridge declarations, probe them in `squad doctor`, report bridge identity in health output, and terminate stdio servers when their host transport closes.
+
+- `squad health` no longer reports markdown table headers, separator rows or `{placeholder}` cells as unknown routing agents, accepts built-in support agents (Scribe, Ralph, Rai, Fact Checker) as routing targets, parses legacy charters with a UTF-8 BOM or a one-line `**Role:** … | **Expertise:** …` identity, reports charters without an identity block as a warning with a hint instead of a failure, and reports optional Rai/Fact Checker charters absent from `team.md` as INFO (`available but not configured`). `squad upgrade` never modifies `team.md`; opt in explicitly with `squad roster add <rai|fact-checker|all>` (#2298, #2234, #1785).
+
+- Accept documented legacy routing table headers, column orders, and the historical flattened long-table layout. `squad health` validates every parsed target against the team or casting registry, fails for missing targets and zero rules, and reports duplicate or conflicting work types as deterministic warnings.
+
+- 2.0 preview command and migration fixes: `squad client list|add` lists configured host projections; the `agents/Rai` → `agents/rai` migration uses a two-step rename and `git mv` so the case change is recorded on Windows and macOS (templates now reference `agents/rai/`); the `undefined — previewing upgrade` header shows the project name; `squad update-check` flags caches older than 24h and shows the cache date; `squad_decide` writes to the active workstream inbox when one is resolvable and never truncates the summary slug below 60 characters; `squad doctor` reports `Mode: local` for a `teamRoot` that points at the same project and no longer triggers Node's DEP0190 warning (#2299, #2174).
+
+- `squad upgrade --self` now honors `--dry-run` (prints the exact install command, runs nothing), follows the installed channel (a `preview`/`insider` build upgrades via the `insider` dist-tag, stable via `latest`) unless `--insider` overrides, and refuses to install a version older than the running CLI unless `--force` is given (#2295).
+
+- `squad upgrade` is now idempotent and content-aware: every squad-owned file (templates, `.github/skills`, `squad-*.yml` workflows, the `.squad/templates/` mirror including its `skills/` and `workflows/` snapshots) is compared EOL-insensitively, `--dry-run` reports only files that would actually change (nothing right after an upgrade, even on CRLF checkouts), customized files are written to `<file>.local-backup` and verified before being overwritten, `.gitignore`/`.gitattributes` entries are appended in the file's own line-ending style instead of rewriting the file, files Squad previously shipped but no longer does are removed when unmodified, provably unmodified stale `.copilot/skills` copies are cleaned up, and `--help` states exactly what is overwritten and what is backed up (#2297, #2266, #2047, #2232).
+
 ## 2.0.0-preview.1
 
 ### Major Changes

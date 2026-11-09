@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { clearResolveSquadCache } from '@bradygaster/squad-sdk';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { createStateMcpSession } from '../../packages/squad-cli/src/cli/commands/state-mcp.js';
-import { clearResolveSquadCache } from '../../packages/squad-sdk/src/resolution.js';
 
 const TMP = join(process.cwd(), `.test-state-mcp-${randomBytes(4).toString('hex')}`);
+const COLD_GIT_BACKEND_TIMEOUT_MS = 15_000;
 
 type JsonRpcMessage = {
   jsonrpc: '2.0';
@@ -82,6 +83,70 @@ describe('state-mcp bridge', () => {
     expect(tools.find(tool => tool.name === 'squad_state_write')?.inputSchema.required).toEqual(['key', 'content']);
     expect(tools.find(tool => tool.name === 'squad_state_create_if_absent')?.inputSchema.required)
       .toEqual(['key', 'content']);
+  });
+
+  it('health includes the squad-state version and resolved team directory without removing legacy lines', {
+    // This includes a real cold git-backed two-layer initialization. Keep the
+    // budget explicit and bounded above the observed five-second Windows start.
+    timeout: COLD_GIT_BACKEND_TIMEOUT_MS,
+  }, async () => {
+    initSquad('two-layer');
+    const messages: JsonRpcMessage[] = [];
+    const session = createStateMcpSession(TMP, message => messages.push(message as JsonRpcMessage));
+    const version = JSON.parse(
+      readFileSync(join(process.cwd(), 'packages/squad-cli/package.json'), 'utf8'),
+    ).version as string;
+    const sdkVersion = JSON.parse(
+      readFileSync(join(process.cwd(), 'packages/squad-sdk/package.json'), 'utf8'),
+    ).version as string;
+
+    await session.handleRequest({
+      jsonrpc: '2.0',
+      id: 'health',
+      method: 'tools/call',
+      params: { name: 'squad_state_health', arguments: {} },
+    });
+
+    const content = resultAsRecord(messages[0]!)['content'] as Array<{ text: string }>;
+    expect(content[0]!.text).toContain(`squad-state ${version}`);
+    expect(content[0]!.text).toContain('State backend: two-layer');
+    expect(content[0]!.text).toContain('State backend storage: StateBackendStorageAdapter');
+    expect(content[0]!.text).toContain(`Team squad dir: ${join(TMP, '.squad')}`);
+    const metadataLine = content[0]!.text
+      .split('\n')
+      .find((line) => line.startsWith('Health metadata: '));
+    expect(metadataLine).toBeDefined();
+    expect(JSON.parse(metadataLine!.slice('Health metadata: '.length))).toEqual({
+      schema: 'squad-state-health/v1',
+      cliVersion: version,
+      sdkVersion,
+      stateBackend: 'two-layer',
+      resolvedTeamDir: TMP,
+      bridgeVersion: version,
+      launchMode: 'stdio',
+    });
+  });
+
+  it('lists the adapter-backed state root through every supported relative root alias', { timeout: 60_000 }, async () => {
+    initSquad('two-layer');
+    const messages: JsonRpcMessage[] = [];
+    const session = createStateMcpSession(TMP, message => messages.push(message as JsonRpcMessage));
+
+    for (const dir of [undefined, '', '.', './', '.\\']) {
+      const index = messages.length;
+      await session.handleRequest({
+        jsonrpc: '2.0',
+        id: `list-${String(dir)}`,
+        method: 'tools/call',
+        params: {
+          name: 'squad_state_list',
+          arguments: dir === undefined ? {} : { dir },
+        },
+      });
+      const result = resultAsRecord(messages[index]!);
+      expect(result['isError'], `dir=${String(dir)}`).not.toBe(true);
+      expect(result['content'], `dir=${String(dir)}`).toBeDefined();
+    }
   });
 
   it.each(['orphan', 'two-layer'] as const)(
@@ -187,13 +252,13 @@ describe('state-mcp bridge', () => {
   );
 
   it.each(['orphan', 'two-layer'] as const)(
-    'writes casting policy but rejects individual casting pair writes through the %s backend',
+    'rejects source-branch casting configuration writes through the %s backend',
     async (stateBackend) => {
       initSquad(stateBackend);
       const messages: JsonRpcMessage[] = [];
       const session = createStateMcpSession(TMP, message => messages.push(message as JsonRpcMessage));
       const castingState = [
-        ['casting/policy.json', '{"mode":"auto"}\n', false],
+        ['casting/policy.json', '{"mode":"auto"}\n', true],
         ['casting/registry.json', '{"agents":{}}\n', true],
         ['casting/history.json', '{"events":[]}\n', true],
       ] as const;

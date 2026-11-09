@@ -13,9 +13,11 @@ import path from 'node:path';
 
 const REPO_ROOT = process.cwd();
 const BUILD_SCRIPT = path.join(REPO_ROOT, 'scripts', 'build-standalone.mjs');
+const VALIDATE_SCRIPT = path.join(REPO_ROOT, 'scripts', 'release', 'validate-standalone-bundle.mjs');
 const INSTALL_SCRIPT = path.join(REPO_ROOT, 'scripts', 'install.sh');
 
 const build = readFileSync(BUILD_SCRIPT, 'utf-8');
+const validate = readFileSync(VALIDATE_SCRIPT, 'utf-8');
 const install = readFileSync(INSTALL_SCRIPT, 'utf-8');
 
 describe('build-standalone.mjs — runtime extraction', () => {
@@ -33,14 +35,32 @@ describe('build-standalone.mjs — runtime extraction', () => {
 
   it('uses unzip for zip archives on non-Windows hosts', () => {
     // GNU tar (Linux) cannot read zip archives while bsdtar (Windows, macOS)
-    // can. The release workflow builds every target on ubuntu-latest, so
-    // without this every win32 bundle would fail to unpack its runtime.
-    expect(build).toMatch(/ext === 'zip' && process\.platform !== 'win32'/);
+    // can. Keep cross-build support for local and recovery builds even though
+    // the release workflow now executes each target on its native runner.
+    expect(build).toMatch(/if \(ext === 'zip'\)/);
+    expect(build).toMatch(/if \(process\.platform === 'win32'\)/);
     expect(build).toMatch(/run\('unzip'/);
+  });
+
+  it('uses Expand-Archive for zip archives on Windows hosts', () => {
+    expect(build).toContain('Expand-Archive -LiteralPath');
+    expect(build).toContain("run('powershell.exe'");
   });
 
   it('surfaces the underlying tar error instead of a bare exit code', () => {
     expect(build).toMatch(/Failed to extract .* from/);
+  });
+
+  it('authenticates the checksum manifest before trusting artifact hashes', () => {
+    expect(build).toContain('SHASUMS256.txt.sig');
+    expect(build).toContain('SHASUMS256.txt.asc');
+    expect(build).toContain('nodejs-release-keyring.kbx');
+    expect(build).toContain('gpgv is required');
+    expect(build).toContain("gpgvPath(signaturePath, gpgv)");
+    expect(build).toContain("gpgvPath(checksumsPath, gpgv)");
+    expect(build.indexOf('authenticatedNodeChecksums(version')).toBeLessThan(
+      build.indexOf('const checksumLine'),
+    );
   });
 
   it('marks the vendored posix node binary executable', () => {
@@ -92,6 +112,25 @@ describe('build-standalone.mjs — Windows squad.exe', () => {
   it('sets SQUAD_STANDALONE_HOME from the SEA launcher too', () => {
     expect(build).toMatch(/process\.env\.SQUAD_STANDALONE_HOME = root/);
   });
+
+  it('reports the process.version embedded in the SEA for native validation', () => {
+    expect(build).toContain("--standalone-runtime-version");
+    expect(build).toContain('console.log(process.version)');
+  });
+});
+
+describe('standalone validation — doctor exit status', () => {
+  it('runs the packaged Windows executable through PowerShell and propagates LASTEXITCODE', () => {
+    expect(validate).toContain("spawnSync('powershell.exe'");
+    expect(validate).toContain('runtimeCommand');
+    expect(validate).toContain('process.platform === \'win32\' ? runtimeCommand : launcher');
+    expect(validate).toContain("exit $LASTEXITCODE");
+    expect(validate).toMatch(/verifyDoctorFailure\(doctorTarget, smokeRoot\)/);
+    expect(validate).toMatch(/verifyDoctorFailure\(launcher, smokeRoot\)/);
+    expect(validate).toMatch(/verifyDoctorFailure\(path\.join\(bundleDir, 'squad\.ps1'\), smokeRoot\)/);
+    expect(validate).toContain('new Set(Object.values(doctorExitCodes))');
+    expect(validate).toMatch(/Summary:\.\*\[1-9\]\\d\* failed/);
+  });
 });
 
 describe('build-standalone.mjs — launchers', () => {
@@ -104,6 +143,12 @@ describe('build-standalone.mjs — launchers', () => {
     expect(posix).toBe(true);
     expect(build).toContain('set "SQUAD_STANDALONE_HOME=%~dp0"');
     expect(build).toContain('$env:SQUAD_STANDALONE_HOME = $root');
+  });
+
+  it('preserves the CLI exit status in every generated launcher', () => {
+    expect(build).toContain('exit /b %ERRORLEVEL%');
+    expect(build).toContain('exit $LASTEXITCODE');
+    expect(build).toContain('exec "$node_bin" "$root/${CLI_ENTRY}" "$@"');
   });
 
   it('resolves symlinks in the posix launcher so PATH installs work', () => {
@@ -139,9 +184,16 @@ describe('install.sh', () => {
 
   it('supports VERSION, PREFIX and REPO overrides', () => {
     // REPO is what lets an air-gapped org point at an internal mirror.
-    expect(install).toMatch(/REPO="\$\{REPO:-bradygaster\/squad\}"/);
+    expect(install).toMatch(/REPO="\$\{REPO:-github\/squad\}"/);
     expect(install).toMatch(/VERSION="\$\{VERSION:-latest\}"/);
     expect(install).toMatch(/PREFIX="\/usr\/local"/);
+  });
+
+  it('documents and defaults to the canonical github/squad repository', () => {
+    // Includes the header's curl one-liner, which users copy verbatim.
+    expect(install).toContain('raw.githubusercontent.com/github/squad/dev/scripts/install.sh');
+    const stale = install.split('\n').filter((line) => line.includes('bradygaster/squad'));
+    expect(stale, 'install.sh lines still naming the pre-move bradygaster/squad repo').toEqual([]);
   });
 
   it('maps uname output to the published asset names', () => {

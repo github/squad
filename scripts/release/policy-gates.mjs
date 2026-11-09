@@ -11,20 +11,30 @@
  *                         dependency floor is '>=<version>' for prereleases and has no
  *                         prerelease suffix for stable versions (package.json AND lockfile)
  *   prerelease-guard      every workspace version is X.Y.Z, X.Y.Z-preview.N or X.Y.Z-insider.N
+ *   node-security-floor   standalone defaults meet the published minimum for their Node major
  *   publish-policy        every `npm ... publish` is workspace-scoped or one of the two exact
  *                         verified tarball paths used by squad-npm-publish.yml
  *   publish-allowlist     the publishable workspaces are exactly @bradygaster/squad-sdk and
  *                         @bradygaster/squad-cli; the root stays private
  *   changelog-heading     CHANGELOG.md has `## [<version>]`; whatsnew has `## v<version>`
- *   changeset-drain       (release mode) no pending .changeset fragments remain
+ *   changeset-drain       release mode: no pending .changeset fragments remain;
+ *                         ci mode (pull_request): pending fragments are allowed and must be
+ *                         well-formed (allowlisted package, patch|minor|major, non-empty summary)
  *
  *   node scripts/release/policy-gates.mjs                 # PR/CI mode
  *   node scripts/release/policy-gates.mjs --mode=release  # also requires changesets drained
  *   node scripts/release/policy-gates.mjs --json
+ *
+ * The mode is chosen by the caller from the triggering event: squad-release-verify.yml passes
+ * `--mode=ci` on `pull_request` and `--mode=release` when called from the release workflow.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertNodeSecurityFloor,
+  loadNodeSecurityFloor,
+} from './node-security-floor.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -38,6 +48,21 @@ const WORKSPACE_FLAG = /(?:^|\s)(?:-w|--workspace)(?:=|\s|$)/;
 const VERIFIED_TARBALL = /npm\s+publish\s+"\$PACKS_DIR\/bradygaster-squad-(?:sdk|cli)-\$\{VERSION\}\.tgz"(?:\s|$)/;
 
 const readJson = (root, rel) => JSON.parse(readFileSync(path.join(root, rel), 'utf8'));
+
+function workflowInputDefault(text, trigger, input) {
+  const lines = text.split(/\r?\n/);
+  const triggerStart = lines.findIndex((line) => line === `  ${trigger}:`);
+  if (triggerStart < 0) return undefined;
+  const triggerEndOffset = lines.slice(triggerStart + 1).findIndex((line) => /^  \S/.test(line));
+  const triggerEnd = triggerEndOffset < 0 ? lines.length : triggerStart + 1 + triggerEndOffset;
+  const section = lines.slice(triggerStart, triggerEnd);
+  const inputStart = section.findIndex((line) => line === `      ${input}:`);
+  if (inputStart < 0) return undefined;
+  const inputEndOffset = section.slice(inputStart + 1).findIndex((line) => /^      \S/.test(line));
+  const inputEnd = inputEndOffset < 0 ? section.length : inputStart + 1 + inputEndOffset;
+  const defaultLine = section.slice(inputStart, inputEnd).find((line) => /^\s{8}default:/.test(line));
+  return defaultLine?.replace(/^\s{8}default:\s*/, '').replace(/^(['"])(.*)\1$/, '$2');
+}
 
 export function publishPolicyViolations(root = ROOT) {
   const dir = path.join(root, '.github', 'workflows');
@@ -102,6 +127,42 @@ export function runPolicyGates({ root = ROOT, mode = 'ci' } = {}) {
     gate('prerelease-guard', bad.length === 0, bad.length ? `unsanctioned prerelease versions: ${bad.join(', ')}` : `all workspace versions match ${SANCTIONED_VERSION}`);
   }
 
+  // node-security-floor
+  {
+    const problems = [];
+    try {
+      const policy = loadNodeSecurityFloor(path.join(root, 'scripts', 'release', 'node-security-floor.json'));
+      const workflowPath = path.join(root, '.github', 'workflows', 'squad-standalone-release.yml');
+      const workflow = readFileSync(workflowPath, 'utf8');
+      const callDefault = workflowInputDefault(workflow, 'workflow_call', 'node_version');
+      const dispatchDefault = workflowInputDefault(workflow, 'workflow_dispatch', 'node_version');
+      const envDefault = workflow.match(/^\s{2}NODE_VERSION:\s*(.+)$/m)?.[1];
+      const expectedEnv = `\${{ inputs.node_version || '${policy.standaloneDefault}' }}`;
+
+      for (const [where, value] of [
+        ['workflow_call node_version default', callDefault],
+        ['workflow_dispatch node_version default', dispatchDefault],
+      ]) {
+        if (value !== policy.standaloneDefault) {
+          problems.push(`${where} is '${value}', expected '${policy.standaloneDefault}'`);
+        }
+      }
+      if (envDefault !== expectedEnv) {
+        problems.push(`workflow NODE_VERSION is '${envDefault}', expected '${expectedEnv}'`);
+      }
+      assertNodeSecurityFloor(policy.standaloneDefault, policy);
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+    gate(
+      'node-security-floor',
+      problems.length === 0,
+      problems.length
+        ? problems.join('; ')
+        : 'standalone defaults and policy meet the published Node security floor',
+    );
+  }
+
   // publish-policy
   {
     const v = publishPolicyViolations(root);
@@ -137,13 +198,58 @@ export function runPolicyGates({ root = ROOT, mode = 'ci' } = {}) {
     gate('changelog-heading', problems.length === 0, problems.length ? problems.join('; ') : `CHANGELOG.md has '## [${version}]' and whatsnew has '## v${version}'`);
   }
 
-  // changeset-drain (release mode only)
-  if (mode === 'release') {
-    const pending = readdirSync(path.join(root, '.changeset')).filter((f) => f.endsWith('.md') && f !== 'README.md');
-    gate('changeset-drain', pending.length === 0, pending.length ? `pending changesets: ${pending.join(', ')}` : 'no pending changeset fragments');
+  // changeset-drain: enforced on the release path; on a pull request pending fragments are
+  // expected (that is how changes are declared) and only need to be well-formed.
+  {
+    const pending = listPendingChangesets(root);
+    if (mode === 'release') {
+      gate('changeset-drain', pending.length === 0, pending.length ? `pending changesets: ${pending.join(', ')}` : 'no pending changeset fragments');
+    } else {
+      const problems = pending.flatMap((f) => validateChangeset(root, f).map((p) => `${f}: ${p}`));
+      gate(
+        'changeset-drain',
+        problems.length === 0,
+        problems.length
+          ? `malformed changesets: ${problems.join('; ')}`
+          : `${pending.length} pending changeset${pending.length === 1 ? '' : 's'} allowed in ${mode} mode (drain is enforced on the release path)`,
+      );
+    }
   }
 
   return { version, mode, gates };
+}
+
+/** Pending `.changeset/*.md` fragments (README excluded), sorted for stable output. */
+export function listPendingChangesets(root = ROOT) {
+  const dir = path.join(root, '.changeset');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.endsWith('.md') && f !== 'README.md').sort();
+}
+
+const CHANGESET_BUMPS = new Set(['patch', 'minor', 'major']);
+
+/**
+ * Structural validation of one changeset fragment: a YAML-ish frontmatter block whose keys are
+ * allowlisted package names mapping to patch|minor|major, followed by a non-empty summary.
+ * @returns {string[]} problems (empty when well-formed)
+ */
+export function validateChangeset(root, file) {
+  const text = readFileSync(path.join(root, '.changeset', file), 'utf8').replace(/^\uFEFF/, '');
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!m) return ['missing frontmatter block (--- ... ---)'];
+  const problems = [];
+  const entries = m[1].split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (entries.length === 0) problems.push('frontmatter declares no package');
+  for (const line of entries) {
+    const kv = line.match(/^\s*(?:"([^"]+)"|'([^']+)'|([^\s:]+))\s*:\s*(\S+)\s*$/);
+    if (!kv) { problems.push(`unparseable frontmatter line '${line.trim()}'`); continue; }
+    const name = kv[1] ?? kv[2] ?? kv[3];
+    const bump = kv[4];
+    if (!PUBLISH_ALLOWLIST.includes(name)) problems.push(`package '${name}' is not publishable (${PUBLISH_ALLOWLIST.join(', ')})`);
+    if (!CHANGESET_BUMPS.has(bump)) problems.push(`bump '${bump}' for ${name} is not patch|minor|major`);
+  }
+  if (m[2].trim().length === 0) problems.push('empty summary');
+  return problems;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

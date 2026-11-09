@@ -34,10 +34,13 @@ import { createPlatformAdapter } from '@bradygaster/squad-sdk/platform';
 import type { PlatformAdapter, WorkItem, PullRequest as SdkPullRequest } from '@bradygaster/squad-sdk/platform';
 
 import type { WatchConfig } from './config.js';
+import { parseWatchDuration, watchBoundReason } from './bounds.js';
 import type { WatchCapability, WatchContext, WatchPhase, CapabilityResult } from './types.js';
 import { CapabilityRegistry } from './registry.js';
 import { createDefaultRegistry } from './capabilities/index.js';
 import { createVerboseLogger, type VerboseLogger } from './verbose.js';
+import { flattenClaimCounters, formatClaimRoundLines, hasClaimActivity, type ClaimCounters } from './claim-counters.js';
+import { updatePidFileClaims } from './health.js';
 import { buildCustomAgentCommand } from './agent-spawn.js';
 
 const storage = new FSStorageProvider();
@@ -181,12 +184,20 @@ export interface ReportBoardOptions {
   repoName?: string;
   /** When set, overrides the "Board is clear" message for failed scans. */
   scanStatus?: RunCheckStatus;
+  /**
+   * This round's work-claim counters (ADR-002). Pass only when the provider
+   * excludes other executors; printed only when a counter is non-zero.
+   */
+  claims?: { provider: string; round: ClaimCounters };
 }
 
 export function reportBoard(state: BoardState, round: number, options?: ReportBoardOptions): void {
   const level = options?.notifyLevel ?? 'all';
   const total = Object.values(state).reduce((a, b) => a + b, 0);
   const scanStatus = options?.scanStatus ?? 'ok';
+  const claimLines = options?.claims && hasClaimActivity(options.claims.round)
+    ? formatClaimRoundLines(options.claims.provider, options.claims.round)
+    : [];
 
   // Rate-limit / error warnings always print (bypass notifyLevel suppression)
   if (total === 0 && scanStatus === 'rate-limited') {
@@ -199,10 +210,11 @@ export function reportBoard(state: BoardState, round: number, options?: ReportBo
   }
 
   if (level === 'none') return;
-  if (level === 'important' && total === 0) return;
+  if (level === 'important' && total === 0 && claimLines.length === 0) return;
 
   if (total === 0) {
-    console.log(`${DIM}📋 Board is clear — Ralph is idling${RESET}`);
+    if (level !== 'important') console.log(`${DIM}📋 Board is clear — Ralph is idling${RESET}`);
+    for (const line of claimLines) console.log(line);
     return;
   }
   const suffix = options?.machineName || options?.repoName
@@ -218,6 +230,7 @@ export function reportBoard(state: BoardState, round: number, options?: ReportBo
   if (state.needsReview > 0) console.log(`  🔵 Needs review:      ${state.needsReview}`);
   if (state.readyToMerge > 0) console.log(`  🟢 Ready to merge:    ${state.readyToMerge}`);
   if (state.executed > 0) console.log(`  🚀 Executed:          ${state.executed}`);
+  for (const line of claimLines) console.log(line);
   console.log();
 }
 
@@ -608,6 +621,8 @@ async function preflightCapabilities(
  */
 export interface WatchOptions {
   intervalMinutes: number;
+  maxRounds?: number;
+  maxDuration?: string;
   execute?: boolean;
   copilotFlags?: string;
   agentCmd?: string;
@@ -638,6 +653,8 @@ function legacyToConfig(options: WatchOptions): WatchConfig {
 
   return {
     interval: options.intervalMinutes,
+    maxRounds: options.maxRounds,
+    maxDuration: options.maxDuration,
     execute: options.execute ?? false,
     maxConcurrent: options.maxConcurrent ?? 1,
     timeout: options.issueTimeoutMinutes ?? 30,
@@ -726,6 +743,14 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   if (isNaN(interval) || interval < 1) {
     fatal('--interval must be a positive number of minutes');
   }
+  if (config.maxRounds !== undefined && (!Number.isSafeInteger(config.maxRounds) || config.maxRounds < 1)) {
+    fatal('--max-rounds must be a positive integer');
+  }
+  const maxDurationMs = config.maxDuration === undefined ? undefined : parseWatchDuration(config.maxDuration);
+  if (config.maxDuration !== undefined && (maxDurationMs === undefined || !Number.isSafeInteger(Date.now() + maxDurationMs))) {
+    fatal('--max-duration must be a positive duration (ms, s, m, h, or d)');
+  }
+  const deadline = maxDurationMs === undefined ? undefined : Date.now() + maxDurationMs;
 
   // Detect squad directory — follows external state if configured
   const { local: squadDirInfo, stateDir } = effectiveSquadDir(dest);
@@ -850,6 +875,56 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   // Register exit handlers for graceful cleanup
   pidTracker.registerExitHandlers();
 
+  // Work claims (ADR-002): flag > config.json watch.claims > none
+  const { resolveExecutorIdentity, DEFAULT_CLAIM_TTL_MS, DEFAULT_CLAIM_SKEW_MARGIN_MS } =
+    await import('@bradygaster/squad-sdk/ralph/claims');
+  const { createWatchClaimProvider, describeClaimProvider, resolveWorkRepo } = await import('./claims.js');
+  // Hostname fallback is pseudonymized, salted with the (unpublished) team root path.
+  const executor = resolveExecutorIdentity({ capabilities, actor: config.authUser, hostnameSalt: path.resolve(teamRoot) });
+  const claimTiming = {
+    ttlMs: config.claims?.ttlMs ?? DEFAULT_CLAIM_TTL_MS,
+    skewMarginMs: config.claims?.skewMarginMs ?? DEFAULT_CLAIM_SKEW_MARGIN_MS,
+  };
+  let claimProvider: Awaited<ReturnType<typeof createWatchClaimProvider>>;
+  // Assigned once the provider exists; the provider warns before any round runs.
+  let claimMetrics: import('./claim-metrics.js').WatchClaimMetrics | undefined;
+  const {
+    claimMetricsFor,
+    initializeWatchClaimMetrics,
+    isImplausibleTakeoverWarning,
+    isWatchTelemetryEnabled,
+  } = await import('./claim-metrics.js');
+  try {
+    claimProvider = await createWatchClaimProvider(config.claims, {
+      teamRoot,
+      identity: executor,
+      onWarning: (message) => {
+        if (isImplausibleTakeoverWarning(message)) claimMetrics?.record('implausibleTakeover');
+        console.warn(message);
+      },
+    });
+  } catch (err) {
+    return fatal(`Invalid claims configuration: ${(err as Error).message}`);
+  }
+  let claimTelemetry: { shutdown: () => Promise<void> } | undefined;
+  if (claimProvider.guarantees.exclusion !== 'none' && isWatchTelemetryEnabled()) {
+    const { initSquadTelemetry } = await import('@bradygaster/squad-sdk');
+    const initialized = initializeWatchClaimMetrics(
+      claimProvider,
+      () => initSquadTelemetry({ serviceName: 'squad-watch', mode: 'cli', installTransport: false }),
+      { telemetryEnabled: true },
+    );
+    claimMetrics = initialized.metrics;
+    claimTelemetry = initialized.telemetry;
+  } else {
+    claimMetrics = claimMetricsFor(claimProvider);
+  }
+  const workRepo = resolveWorkRepo(teamRoot);
+  console.log(`${DIM}🔒 ${describeClaimProvider(claimProvider, claimTiming, {
+    remote: config.claims?.provider === 'git-ref' ? (config.claims.remote ?? 'origin') : undefined,
+  })}${RESET}`);
+  vlog.log(`Claim holder: ${executor.machineId}/${executor.instanceId}; work repo: ${workRepo ?? '(unknown)'}`);
+
   const baseContext: WatchContext = {
     teamRoot,
     stateRoot: stateDir,
@@ -861,6 +936,10 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     copilotFlags: config.copilotFlags,
     verbose: config.verbose,
     pidTracker,
+    claims: claimProvider,
+    executor,
+    claimTiming,
+    ...(workRepo ? { workRepo } : {}),
   };
 
   const enabledCapabilities = await preflightCapabilities(registry, config, baseContext);
@@ -927,12 +1006,14 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   let stopRequested = false;
   let isShuttingDown = false;
   let intervalId: NodeJS.Timeout | undefined;
+  let durationTimer: NodeJS.Timeout | undefined;
   let resolveRun: (() => void) | undefined;
 
   const shutdown = async (): Promise<void> => {
     if (isShuttingDown) return;
     isShuttingDown = true;
     if (intervalId) clearInterval(intervalId);
+    if (durationTimer) clearTimeout(durationTimer);
     process.off('SIGINT', shutdown);
     process.off('SIGTERM', shutdown);
     await eventBus.emit({
@@ -941,12 +1022,38 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     });
     await monitor.stop();
     saveCBState(squadDirInfo.path, cbState);
+    await claimTelemetry?.shutdown().catch(() => undefined);
     console.log(`\n${DIM}🔄 Ralph — Watch stopped${RESET}`);
     logStream?.end();
     resolveRun?.();
   };
 
+  const stopIfBoundReached = async (): Promise<boolean> => {
+    if (isShuttingDown) return true;
+    const reason = watchBoundReason(round, Date.now(), config.maxRounds, deadline, config.maxDuration);
+    if (!reason) return false;
+    console.log(`\n${YELLOW}🛑${RESET} [${new Date().toLocaleTimeString()}] Stop requested - ${reason}`);
+    stopRequested = true;
+    await shutdown();
+    return true;
+  };
+
+  const scheduleDurationStop = (): void => {
+    if (deadline === undefined) return;
+    const delay = Math.min(Math.max(deadline - Date.now(), 1), 2_147_483_647);
+    durationTimer = setTimeout(() => {
+      if (isShuttingDown) return;
+      if (Date.now() < deadline) {
+        scheduleDurationStop();
+      } else if (!roundInProgress) {
+        void stopIfBoundReached().catch(err => console.error(`${RED}✗${RESET} Watch shutdown error: ${(err as Error).message}`));
+      }
+    }, delay);
+  };
+  scheduleDurationStop();
+
   async function executeRound(): Promise<void> {
+    if (await stopIfBoundReached()) return;
     const ts = new Date().toLocaleTimeString();
     const roundStart = Date.now();
 
@@ -1004,7 +1111,13 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     }
 
     round++;
-    const roundContext: WatchContext = { ...baseContext, round };
+    claimMetrics?.startRound();
+    const roundContext: WatchContext = {
+      ...baseContext,
+      round,
+      dispatchedThisRound: new Set<number>(),
+      ...(claimMetrics ? { claimMetrics } : {}),
+    };
 
     // Fix 1: Print round start marker
     console.log(`\n${DIM}Starting round ${round}...${RESET}`);
@@ -1077,7 +1190,13 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
       executed: roundState.executed,
     });
 
-    reportBoard(roundState, round);
+    const claimSnapshot = claimMetrics?.snapshot();
+    if (claimSnapshot) {
+      vlog.table({ claimProvider: claimSnapshot.provider, ...flattenClaimCounters(claimSnapshot.round) });
+      updatePidFileClaims(teamRoot, claimSnapshot);
+    }
+
+    reportBoard(roundState, round, claimSnapshot ? { claims: claimSnapshot } : undefined);
 
     // Fix 1: Print next poll time
     const nextPollTime = new Date(Date.now() + interval * 60 * 1000);
@@ -1104,7 +1223,13 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   }
 
   // Run immediately, then on interval
-  await executeRound();
+  roundInProgress = true;
+  try {
+    await executeRound();
+  } finally {
+    roundInProgress = false;
+    await stopIfBoundReached();
+  }
 
   return new Promise<void>((resolve) => {
     resolveRun = resolve;
@@ -1118,7 +1243,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
 
     intervalId = setInterval(
       async () => {
-        if (roundInProgress) return;
+        if (roundInProgress || isShuttingDown) return;
         roundInProgress = true;
         try {
           await executeRound();
@@ -1137,6 +1262,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
           }
         } finally {
           roundInProgress = false;
+          await stopIfBoundReached();
         }
       },
       interval * 60 * 1000,

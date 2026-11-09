@@ -83,6 +83,9 @@ export function createStateMcpToolRegistry(startDir: string): ToolRegistry {
   return new ToolRegistry(context.paths.teamSquadDir, undefined, context.storage, undefined, undefined, undefined, {
     backendName: context.backend.name,
     upstreamDir: context.paths.projectDir,
+    runtimeVersion: SERVER_INFO.version,
+    cliVersion: SERVER_INFO.version,
+    launchMode: 'stdio',
   });
 }
 
@@ -265,7 +268,44 @@ export async function runStateMcp(startDir = process.cwd(), options: StateMcpOpt
     return normalizeToolResult(result);
   });
 
-  await server.connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  let stopping = false;
+  let forceExit: NodeJS.Timeout | undefined;
+
+  const stop = async (): Promise<void> => {
+    if (stopping) return;
+    stopping = true;
+    forceExit = setTimeout(() => process.exit(0), 500);
+    try {
+      await server.close();
+    } catch {
+      // Transport teardown is best-effort; the grace timer guarantees exit.
+    }
+  };
+
+  const onStdinEnd = (): void => { void stop(); };
+  const onDisconnect = (): void => { void stop(); };
+  const onSigpipe = (): void => { void stop(); };
+  const onStdoutError = (error: NodeJS.ErrnoException): void => {
+    if (error.code === 'EPIPE') void stop();
+  };
+
+  process.stdin.once('end', onStdinEnd);
+  process.stdin.once('close', onStdinEnd);
+  process.once('disconnect', onDisconnect);
+  process.once('SIGPIPE', onSigpipe);
+  process.stdout.on('error', onStdoutError);
+
+  try {
+    await server.connect(transport);
+  } finally {
+    process.stdin.off('end', onStdinEnd);
+    process.stdin.off('close', onStdinEnd);
+    process.off('disconnect', onDisconnect);
+    process.off('SIGPIPE', onSigpipe);
+    process.stdout.off('error', onStdoutError);
+    if (forceExit && !stopping) clearTimeout(forceExit);
+  }
 }
 
 export function printStateMcpHelp(): void {
@@ -274,8 +314,10 @@ export function printStateMcpHelp(): void {
     '',
     'Usage: squad state-mcp [--experimental-backend]',
     '',
-    'This command is intended to be launched by GitHub Copilot CLI through',
-    '.copilot/mcp-config.json. It exposes squad_decide, squad_state_* and',
+    'This command is intended to be launched by your MCP host from the',
+    'squad_state entry Squad writes to the repo-root .mcp.json (--client',
+    'hosts get it in their own MCP config file). It exposes squad_decide,',
+    'squad_state_* and',
     'squad_state_upstreams (declared upstream inheritance, read from local',
     'snapshots only) backed by the configured Squad state backend. Pass',
     '--experimental-backend',
