@@ -248,10 +248,10 @@ An automated readiness check runs on every push and posts a checklist comment on
 
 | | |
 |---|---|
-| **What** | All CI check runs (excluding the readiness check itself) must be green |
+| **What** | All CI check runs must be green, excluding the readiness check itself and the `workflow_run` writer jobs (`readiness-bind`, `impact`, `Post Repo Health findings`, `heartbeat`) |
 | **Pass** | Fix any build, test, or lint failures and push |
 | **Fix** | Read the failing check's logs (`gh run view {run-id} --log-failed`), fix the issue, push |
-| **Gotcha** | Pending/in-progress checks also show ❌. Wait for all checks to complete before evaluating. The readiness check re-runs after CI completes via `workflow_run` trigger |
+| **Gotcha** | Pending/in-progress checks also show ❌. Wait for all checks to complete before evaluating. The readiness check re-runs after CI completes via `workflow_run` trigger. `workflow_run` jobs attach their check runs to the default-branch tip (the head of any dev→main PR), so cancelled or failed runs from other PRs would otherwise show up there — that is why they are excluded |
 
 #### Check 10: Issue Linked
 
