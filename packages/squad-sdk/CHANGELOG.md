@@ -2,6 +2,24 @@
 
 <!-- cspell:words ambiently -->
 
+## 2.0.0-preview.4
+
+### Patch Changes
+
+- Point published package metadata, SDK build and distribution defaults, user-facing links, and the shipped `gh-aw-enlistment` skill and verifier at `github/squad` (`github/squad/workflows` package identity, explicit `SQUAD_SHA` manifest preflight verification, legacy migration guidance, and Windows/XDG `gh` extension environment preservation).
+
+- Keep `.squad/casting/` configuration on the normal source branch across every state backend, reject runtime casting policy mutations, and align memory and identity safeguards with their actual scope.
+
+- Serialize governed-memory index updates across local store instances and processes, and coordinate memory index locks across worktrees with the configured state backend.
+
+- Hold `@github/copilot-sdk` below `1.0.29` to prevent `vscode-jsonrpc` 10 ESM export errors in the CLI (#2414).
+
+- Expose versioned machine-readable runtime and state-backend metadata in health reports.
+
+- Read legacy `## Role` and `## Owns` charter sections during team capability advertisement so declared implementers and reviewers are not reported as advisory-only.
+
+- Fix `history-shadow` section parsing by replacing the invalid `\Z` regex anchor so terminal sections match without duplicate headers and preserve a blank line before the next section.
+
 ## 2.0.0-preview.3
 
 ### Minor Changes
