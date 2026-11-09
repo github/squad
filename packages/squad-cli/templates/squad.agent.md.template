@@ -131,7 +131,9 @@ requirements remain in `.github/PR_REQUIREMENTS.md`.
 
 **State-backend handshake — MANDATORY on every session before any state mutation (bradygaster/squad#1305):**
 
-For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/casting/*.json`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes either fail at the pre-commit hook or create phantom state the runtime overwrites at next read — a contract violation that produces silent data loss.
+For all backends EXCEPT `"local"` / `"worktree"`, the runtime owns persistence and you MUST NOT touch `.squad/decisions.md`, `.squad/decisions/inbox/`, `.squad/agents/*/history.md`, `.squad/identity/*.md`, or `.squad/memory/*` paths via `create` / `edit` / `write_file` tools. Those writes create phantom state outside the configured store. For orphan/two-layer backends, Git ignores decisions, histories, memory and identity; the pre-commit hook rejects staged additions or edits to decisions.md, agent histories, memory and identity. These safeguards do not cover every runtime path or git-notes; the runtime tool contract still applies.
+
+**Casting ownership:** `.squad/casting/` is static source-branch configuration for every backend, not runtime state. Read and edit policy on disk and commit casting changes on the normal source branch. Registry/history updates must use the atomic casting protocol (`commitCastingRegistryPair`), including its commit marker. Do not write casting through `squad_state_*` or move it onto `squad-state`.
 
 The `squad_state_*` and `memory.*` tools that own persistence are exposed via the `squad_state` MCP server (declared in `.mcp.json`). Copilot CLI may load MCP tools **lazily** — they are not always advertised in your initial function list at session start. You MUST proactively confirm they are reachable:
 
@@ -289,13 +291,12 @@ If `memory.*` is not present in the bridge (older Squad versions before the brid
 - `.squad/decisions.md`
 - `.squad/decisions/inbox/**`
 - `.squad/agents/*/history.md`
-- `.squad/casting/*.json`
 - `.squad/identity/*.md`
 - `.squad/memory/**`
 - `.squad/rai/audit-trail.md`
 - `.squad/fact-checker/audit-trail.md`
 
-These are runtime-managed paths under non-local backends. Hand-writing creates phantom state. The pre-commit hook will catch it and fail the user; even if it didn't, the runtime overwrites the file at next read. Report the missing bridge and halt instead.
+These are runtime-managed paths under non-local backends. Hand-writing creates phantom state outside the configured store. Git safeguards cover only the subset described above, not every path in this list. Report the missing bridge and halt instead. Casting remains source-branch configuration and is not blocked by a missing runtime bridge.
 
 For `STATE_BACKEND ∈ {"local", "worktree"}`, file writes to `.squad/` are valid because the local backend IS the filesystem.
 
@@ -655,7 +656,7 @@ If the user says "I need a designer" or "add someone for DevOps":
 1. **Allocate a name** from the current assignment's universe (read from `.squad/casting/history.json`). If the universe is exhausted, apply overflow handling (see Casting & Persistent Naming → Overflow Handling).
 2. **Check plugin marketplaces.** If `.squad/plugins/marketplaces.json` exists and contains registered sources, browse each marketplace for plugins matching the new member's role or domain (e.g., "azure-cloud-development" for an Azure DevOps role). Use the CLI: `squad plugin marketplace browse {marketplace-name}` or read the marketplace repo's directory listing directly. If matches are found, present them: *"Found '{plugin-name}' in {marketplace} — want me to install it as a skill for {CastName}?"* If the user accepts, copy the plugin content into `.squad/skills/{plugin-name}/SKILL.md` or merge relevant instructions into the agent's charter. If no marketplaces are configured, skip silently. If a marketplace is unreachable, warn (*"⚠ Couldn't reach {marketplace} — continuing without it"*) and continue.
 3. Generate a new charter.md + history.md (seeded with project context from team.md), using the cast name. If a plugin was installed in step 2, incorporate its guidance into the charter.
-4. **Update `.squad/casting/registry.json`** with the new agent entry.
+4. **Update the casting pair** with the new agent entry using the atomic on-disk protocol described above, not a standalone registry write.
 5. Add to team.md roster.
 6. Add routing entries to routing.md.
 7. Run `squad upgrade` to regenerate Team Capabilities.
@@ -667,7 +668,7 @@ If the user wants to remove someone:
 1. Move their folder to `.squad/agents/_alumni/{name}/`
 2. Remove from team.md roster
 3. Update routing.md
-4. **Update `.squad/casting/registry.json`**: set the agent's `status` to `"retired"`. Do NOT delete the entry — the name remains reserved.
+4. **Update the casting pair atomically**: set the registry entry's `status` to `"retired"`. Do NOT delete the entry — the name remains reserved.
 5. Run `squad upgrade` to regenerate Team Capabilities and remove stale references.
 6. Their knowledge is preserved, just inactive.
 
@@ -737,8 +738,8 @@ After selecting a naming mode:
 5. **Ralph is always "Ralph"** — exempt from casting.
 6. **Rai is always "Rai"** — exempt from casting.
 7. **@copilot is always "@copilot"** — exempt from casting. If the user says "add team member copilot" or "add copilot", this is the GitHub Copilot coding agent. Do NOT cast a name — follow the Copilot Coding Agent Member section instead.
-8. Store the mapping in `.squad/casting/registry.json`.
-9. Record the assignment snapshot in `.squad/casting/history.json`.
+8. Prepare the mapping in `.squad/casting/registry.json`.
+9. Record the assignment snapshot in `.squad/casting/history.json` and commit both through the atomic on-disk protocol, including its commit marker.
 10. Use the allocated name everywhere: charter.md, history.md, team.md, routing.md, spawn prompts.
 
 ### Overflow Handling
@@ -755,14 +756,14 @@ Existing agents are NEVER renamed during overflow (only during explicit re-cast)
 
 **On-demand reference:** Read `.squad/templates/casting-reference.md` for the full JSON schemas of policy.json, registry.json, and history.json.
 
-The casting system maintains state in `.squad/casting/` with three files: `policy.json` (config), `registry.json` (persistent name registry), and `history.json` (universe usage history + snapshots).
+The casting system maintains source-branch configuration in `.squad/casting/`: `policy.json` (policy), `registry.json` (persistent name registry), `history.json` (universe usage history + snapshots), and `registry-history.commit.json` (atomic pair manifest). All remain on disk for every backend.
 
 ### Migration — Already-Squadified Repos
 
 When `.squad/team.md` exists but `.squad/casting/` does not:
 
 1. **Do NOT rename existing agents.** Mark every existing agent as `legacy_named: true` in the registry.
-2. Initialize `.squad/casting/` with default policy.json, a registry.json populated from existing agents, and empty history.json.
+2. Initialize `.squad/casting/` with default policy.json and an atomic registry/history pair populated from existing agents. Keep this configuration on the normal source branch.
 3. For any NEW agents added after migration, apply the full casting algorithm.
 4. Report that casting was initialized without creating a session or orchestration log.
 
