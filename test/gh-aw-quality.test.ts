@@ -4811,7 +4811,10 @@ describe('gh-aw: canonical package integrity contract', () => {
     const state = `${OWNERSHIP_FIXTURE} (${PACKAGE_NAME}) and ${legacyPath} (${LEGACY_PACKAGE_NAME}) both present`;
     expect(failure, state).toContain('Expected exactly one Squad package ownership record; found 2');
     expect(failure, state).toContain(`${legacyPath} (${LEGACY_PACKAGE_NAME})`);
-    expect(failure, state).toContain(`after reinstalling as ${PACKAGE_NAME}, delete ${legacyPath}.`);
+    expect(failure, `${state}: the guidance must move to ${PACKAGE_NAME}`)
+      .toContain(`. After reinstalling as ${PACKAGE_NAME}, delete ${legacyPath}.`);
+    expect(failure, `${state}: the guidance must not offer keeping the ${LEGACY_PACKAGE_NAME} record`)
+      .not.toContain('Keep only the record whose identity matches the installed workflow source bindings');
     unlinkSync(join(root, legacyPath));
     expect(verifyInstall(root, { expectedRevision: revisionA }).failures).toEqual([]);
   });
@@ -4859,25 +4862,31 @@ describe('gh-aw: canonical package integrity contract', () => {
       .not.toContain('exactly as typed');
   });
 
-  it('rejects a case-variant ownership record left beside the exact record', () => {
-    // gh-aw names each record by a digest of the identity as typed, so reinstalling a
-    // GitHub/Squad/workflows install as github/squad/workflows leaves both records.
+  it.each([
+    ['canonical', PACKAGE_NAME, 'workflow'],
+    ['legacy', LEGACY_PACKAGE_NAME, 'package'],
+  ] as const)('rejects a case-variant ownership record left beside the exact %s record', (label, exactName, binding) => {
+    // gh-aw names each record by a digest of the identity as typed, so reinstalling as
+    // GitHub/Squad/workflows over an exact install leaves both records.
     const variant = 'GitHub/Squad/workflows';
     const variantPath = '.github/aw/packages/github-squad-workflows-'
       + `${createHash('sha256').update(variant).digest('hex').slice(0, 12)}.json`;
-    const root = makeConsumer();
+    const root = makeConsumer(revisionA, true, binding, exactName);
     const record = JSON.parse(readText(join(root, OWNERSHIP_FIXTURE)));
     writeFileSync(join(root, variantPath), `${JSON.stringify({
       ...record, package: variant, source: `${variant}@${revisionA}`,
     }, null, 2)}\n`);
-    const state = `${OWNERSHIP_FIXTURE} (${PACKAGE_NAME}) beside ${variantPath} (${variant})`;
+    // Squad always moves to PACKAGE_NAME, so an exact legacy record is superseded too.
+    const stale = exactName === PACKAGE_NAME ? [variantPath] : [OWNERSHIP_FIXTURE, variantPath];
+    const state = `${label} ${OWNERSHIP_FIXTURE} (${exactName}) beside ${variantPath} (${variant})`;
     const failure = verifyInstall(root, { expectedRevision: revisionA }).failures.join('\n');
     expect(failure, `${state} must fail verification`).toContain(
-      `Expected exactly one Squad package ownership record; found ${OWNERSHIP_FIXTURE} (${PACKAGE_NAME}) `
+      `Expected exactly one Squad package ownership record; found ${OWNERSHIP_FIXTURE} (${exactName}) `
       + `and case-variant record ${variantPath} (${variant}), so more than one record claims the installed files.`,
     );
-    expect(failure, `${state} must name the record to delete`)
-      .toContain(`After reinstalling as ${PACKAGE_NAME}, delete ${variantPath}.`);
+    expect(failure, `${state} must recommend ${PACKAGE_NAME} and name every record to delete`)
+      .toContain(`After reinstalling as ${PACKAGE_NAME}, delete ${stale.join(', ')}.`);
+    if (exactName !== PACKAGE_NAME) return;
     unlinkSync(join(root, variantPath));
     expect(verifyInstall(root, { expectedRevision: revisionA }).failures, `${state} after deleting ${variantPath}`)
       .toEqual([]);

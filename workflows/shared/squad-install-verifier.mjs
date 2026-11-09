@@ -791,19 +791,20 @@ function findOwnershipRecord(root) {
     throw new Error(
       `Expected exactly one Squad package ownership record; found ${matches.length}: `
       + `${describeRecords(matches)}. `
-      + 'Keep only the record whose identity matches the installed workflow source bindings; '
-      + `after reinstalling as ${PACKAGE_NAME}, delete ${LEGACY_OWNERSHIP_DESTINATIONS.join(', ')}.`,
+      + `After reinstalling as ${PACKAGE_NAME}, delete ${LEGACY_OWNERSHIP_DESTINATIONS.join(', ')}.`,
     );
   }
   if (matches.length === 1 && caseVariants.length > 0) {
     // gh-aw keys records by the identity exactly as typed, so a case-only reinstall keeps the old record.
-    const [{ record }] = matches;
+    // Always move to PACKAGE_NAME; a legacy exact record is then superseded as well.
+    const [match] = matches;
+    const stale = [...(match.record.package === PACKAGE_NAME ? [] : [match]), ...caseVariants];
     throw new Error(
       `Expected exactly one Squad package ownership record; found ${describeRecords(matches)} and case-variant `
       + `${caseVariants.length === 1 ? 'record' : 'records'} ${describeRecords(caseVariants)}, `
       + 'so more than one record claims the installed files. gh-aw records the package identity exactly as typed '
-      + `and Squad matches it case-sensitively. After reinstalling as ${record.package}, delete `
-      + `${caseVariants.map(({ path }) => path).join(', ')}.`,
+      + `and Squad matches it case-sensitively. After reinstalling as ${PACKAGE_NAME}, delete `
+      + `${stale.map(({ path }) => path).join(', ')}.`,
     );
   }
   if (matches.length !== 1) {

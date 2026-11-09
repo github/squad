@@ -14,6 +14,7 @@
 #       version: 'v0.11.0'          # default: latest release
 #       preset: 'default'           # default: default
 #       state-backend: 'local'      # default: local
+#       repository: 'github/squad'  # older pins default to the bradygaster/squad fork
 #
 # Every input is optional; the defaults match what the gh-aw shared component
 # runs today.

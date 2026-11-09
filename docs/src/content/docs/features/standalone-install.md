@@ -133,9 +133,10 @@ The `squad-init` action wraps the install and init steps:
 ```yaml
 - uses: github/squad/.github/actions/squad-init@<sha>
   with:
-    version: v0.13.1        # default: latest release
+    version: v0.13.1          # default: latest release
     preset: default
     state-backend: local
+    repository: github/squad  # older pins default to the bradygaster/squad fork
 ```
 
 Point `repository:` at an internal mirror if your runners cannot reach

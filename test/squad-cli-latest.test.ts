@@ -27,6 +27,46 @@ function activationInput(name: string): string {
   return String(steps[0].with?.[name] ?? action.inputs[name].default);
 }
 
+/**
+ * Every `uses: <owner>/<repo>/.github/actions/squad-init@<ref>` step in tracked docs, skills, templates,
+ * workflows and YAML comments, with the `repository` its `with:` block passes.
+ */
+function squadInitExamples(): { where: string; repository: string | null }[] {
+  const tracked = spawnSync('git', ['ls-files', '-z', '--', '*.md', '*.mdx', '*.yml', '*.yaml'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+  expect(tracked.status, `git ls-files: ${tracked.stderr}`).toBe(0);
+  const examples: { where: string; repository: string | null }[] = [];
+  for (const path of tracked.stdout.split('\0').filter(path => path && !path.startsWith('test/'))) {
+    const lines = read(path).split('\n');
+    lines.forEach((line, index) => {
+      const uses = /^(\s*#?)\s*(?:-\s+)?uses:\s*['"]?[\w.-]+\/[\w.-]+\/\.github\/actions\/squad-init@/.exec(line);
+      if (!uses) return;
+      // An example inside YAML comments keeps the same `#` prefix on every line.
+      const comment = uses[1].endsWith('#') ? uses[1] : '';
+      const body = (text: string) => (text.startsWith(comment) ? text.slice(comment.length) : null);
+      const keyColumn = body(line)!.indexOf('uses:');
+      let inWith = false;
+      let repository: string | null = null;
+      for (const next of lines.slice(index + 1)) {
+        const text = body(next);
+        if (text === null || !text.trim() || text.trim().startsWith('```')) break;
+        const column = text.search(/\S/);
+        if (column < keyColumn) break;
+        if (column === keyColumn) {
+          inWith = /^with:\s*(?:#.*)?$/.test(text.trim());
+          continue;
+        }
+        const value = inWith ? /^repository:\s*['"]?([^'"\s#]+)['"]?\s*(?:#.*)?$/.exec(text.trim()) : null;
+        if (value) repository = value[1];
+      }
+      examples.push({ where: `${path}:${index + 1}`, repository });
+    });
+  }
+  return examples;
+}
+
 function pinnedInstallShell(platform: NodeJS.Platform = process.platform): string {
   const install = action.runs.steps.find((step: { id?: string }) => step.id === 'install');
   expect(install).toBeDefined();
@@ -170,6 +210,22 @@ describe('Squad standalone activation latest-release default', () => {
       activationInput('repository'),
       `workflows/shared/squad.md must pass repository to squad-init@${revision}, whose default is bradygaster/squad`,
     ).toBe('github/squad');
+  });
+
+  it('passes repository: github/squad in every squad-init example a reader could pin to an older revision', () => {
+    const examples = squadInitExamples();
+    expect([...new Set(examples.map(({ where }) => where.replace(/:\d+$/, '')))], 'files with squad-init examples')
+      .toEqual(expect.arrayContaining([
+        '.github/actions/squad-init/action.yml',
+        'docs/src/content/docs/features/standalone-install.md',
+        'workflows/shared/squad.md',
+      ]));
+    expect(
+      examples.filter(({ repository }) => repository !== 'github/squad')
+        .map(({ where, repository }) => `${where}: repository ${repository ?? 'not passed'}`),
+      `squad-init examples without repository: github/squad; squad-init@${revision} defaults it to `
+        + `${action.inputs.repository.default}`,
+    ).toEqual([]);
   });
 
   it('executes the pinned action latest default with a verified platform archive', () => {
