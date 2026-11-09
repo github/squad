@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Stable promotion notes
+
+- Stable `v1.1.0` predates the following fixes; merging them into `dev` did not publish a fixed stable package. Carry these notes into the next stable release when it is actually promoted. No stable version or publication date is assigned here.
+- `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). Available in `v2.0.0-preview.2` and later previews, not stable `v1.1.0`.
+- `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. Available in `v2.0.0-preview.3` and later previews, not stable `v1.1.0`. Transactional existing-memory backend migration (#2425, #2439) is available in `v2.0.0-preview.4`.
+
+## [2.0.0-preview.4] - 2026-11-09
+
+Fourth Squad 2.0 preview. This release completes the repository migration to `github/squad` across published npm and NuGet package metadata, runtime links, templates, documentation, and `gh-aw` workflow package identity, adds transactional governed-memory backend migration with source-branch casting ownership, and includes memory lock coordination and Copilot SDK runtime compatibility fixes. npm continues to use `insider` as the canonical dist-tag with `preview` as a compatibility alias; `latest` remains on 1.1.0.
+
+### Added
+
+- Expose versioned machine-readable runtime and state-backend metadata in health reports (#2384).
+
+### Changed
+
+- Complete the repository move to `github/squad`: update published npm and NuGet metadata, SDK build and distribution defaults, CLI and SDK user-facing links, `squad init` templates, documentation links (`github.github.com/squad`), and the `gh-aw-enlistment` skill and install verifier for the `github/squad/workflows` package identity, explicit `SQUAD_SHA` manifest preflight verification, and legacy `bradygaster/squad/workflows` migration (#2408, #2410, #2411, #2412, #2432, #2433, #2435).
+- Keep all `.squad/casting/` configuration on the normal source branch across every state backend, refresh managed git hooks to remove the obsolete casting staging block, reject runtime casting policy mutations, and align memory and identity safeguards with their actual scope (#2229, #2439).
+
+### Fixed
+
+- Preserve governed memory transactionally when migrating `local` or `worktree` storage to `orphan` or `two-layer` storage, including decision inbox records, the array index, configuration, audit archives, and tombstones; abort on destination conflicts or transfer errors before switching backend authority and retain source files until the configuration write succeeds (#2425, #2439).
+- Serialize governed-memory index updates across local store instances and processes, and coordinate memory index locks across worktrees with the configured state backend (#2356, #2383).
+- Hold `@github/copilot-sdk` below `1.0.29` so fresh installs do not fail with `ERR_PACKAGE_PATH_NOT_EXPORTED` when `vscode-jsonrpc` 10 breaks the CLI's ESM import patch, and support the Copilot SDK bundled runtime in `Squad.Agents.AI` (#2373, #2414, #2416).
+- Read legacy `## Role` and `## Owns` charter sections during team capability advertisement so declared implementers and reviewers are not reported as advisory-only (#2381).
+- Preserve customized `squad-ci` workflows during `squad upgrade` (#2382).
+- Return a failing exit status from `squad doctor` when validation checks fail (#2376).
+- Replace the invalid `\Z` regex anchor in `history-shadow` section parsing so terminal sections match without duplicating headers and keep a blank line before the next section (#2374).
+- Bind standalone archive checksums to validation records before release upload and remove deprecated Homebrew cask syntax from `generate-packaging.mjs` (#2377, #2437).
+
 ## [2.0.0-preview.3] - 2026-10-29
 
 Third Squad 2.0 preview. npm continues to use `insider` as the canonical dist-tag with `preview` as a compatibility alias; `latest` remains on 1.1.0. Homebrew, WinGet, and stable promotion remain held. Optional built-in roster members remain opt-in through `squad roster add`, and multi-machine watch claims remain off by default.

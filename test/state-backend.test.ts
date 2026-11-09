@@ -758,7 +758,7 @@ describe('ToolRegistry state tools with git-native backend', () => {
     expect(backend.read('sessions/session-1/state.md')).toBeUndefined();
   });
 
-  it('allows casting policy but rejects individual registry/history mutations', { timeout: 30_000 }, async () => {
+  it('keeps all casting configuration out of runtime state mutations', { timeout: 30_000 }, async () => {
     const backend = new OrphanBranchBackend(TMP);
     const adapter = new StateBackendStorageAdapter(backend, squadDir());
     const registry = new ToolRegistry(squadDir(), undefined, adapter);
@@ -766,11 +766,7 @@ describe('ToolRegistry state tools with git-native backend', () => {
     const append = registry.getTool('squad_state_append')!;
     const del = registry.getTool('squad_state_delete')!;
 
-    await expect(write.handler({ key: 'casting/policy.json', content: '{}\n' }))
-      .resolves.toMatchObject({ resultType: 'success' });
-    expect(backend.read('casting/policy.json')).toBe('{}\n');
-
-    for (const key of ['casting/registry.json', 'casting/history.json']) {
+    for (const key of ['casting/policy.json', 'casting/registry.json', 'casting/history.json']) {
       await expect(write.handler({ key, content: '{}\n' }))
         .resolves.toMatchObject({ resultType: 'failure' });
       await expect(append.handler({ key, content: '{}\n' }))

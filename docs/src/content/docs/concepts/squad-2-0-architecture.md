@@ -49,7 +49,7 @@ The client plane lives in `@bradygaster/squad-sdk/client` (with `@bradygaster/sq
 | Host (`ClientId`) | Generated workspace projection | Coordinator dispatch primitive |
 |---|---|---|
 | GitHub Copilot (`copilot`) | `.github/agents/squad.agent.md`, `.mcp.json` | Copilot `task` / `create_session` / `runSubagent` |
-| Claude Code (`claude`) | `.claude/agents/squad.md`, `CLAUDE.md` (managed marker block), `.mcp.json`, `.gitignore` block for `.claude/worktrees/` | Claude `Task` subagent tool |
+| Claude Code (`claude`) | `.claude/agents/squad.md`, `CLAUDE.md` (managed marker block), `.mcp.json`, `.gitignore` block for `.claude/worktrees/` | Claude `Agent` subagent tool |
 | Kiro (`kiro`) | `.kiro/steering/squad.md` (`inclusion: manual`), `.kiro/agents/squad.json`, `.kiro/settings/mcp.json` | Kiro `squad` agent referencing `../steering/squad.md` |
 | OpenCode (`opencode`) | `.opencode/agent/squad.md`, `opencode.json` | OpenCode `@agent` / `task` primitive |
 | Cursor (`cursor`) | `.cursor/agents/squad.md`, `.cursor/rules/squad.mdc` (`alwaysApply: false`), `.cursor/mcp.json` | Cursor subagents or inline charter turn |

@@ -153,10 +153,10 @@ const STRATEGIES: Record<ClientId, DispatchStrategy> = {
 Spawn each specialist with the \`task\` tool (Copilot CLI), \`create_session\` (Copilot app) or \`runSubagent\` (VS Code). Pass the full specialist prompt from the core protocol. Run independent specialists in parallel by issuing multiple spawn calls in the same turn. The \`squad_state\` MCP server is loaded from \`.mcp.json\`.`,
   },
   claude: {
-    summary: 'Claude Code Task subagent',
+    summary: 'Claude Code Agent subagent',
     section: `## Dispatch adapter: Claude Code
 
-Spawn each specialist with the \`Task\` tool, using a general-purpose subagent with the member's charter (\`.squad/agents/<member>/charter.md\`) inlined in the prompt. Launch independent \`Task\` calls in one message to run them in parallel. Subagents cannot spawn subagents, so only the coordinator dispatches. The \`squad_state\` MCP tools are available as \`mcp__squad_state__*\` from \`.mcp.json\`.`,
+Spawn each specialist with the \`Agent\` tool, using a general-purpose subagent with the member's charter (\`.squad/agents/<member>/charter.md\`) inlined in the prompt. Launch independent \`Agent\` calls in one message to run them in parallel; \`run_in_background: true\` lets long or non-blocking work (Scribe, Rai) run while you continue, and \`isolation: "worktree"\` gives an implementer its own git worktree under \`.claude/worktrees/\`. Squad dispatches specialists only from the coordinator: members never spawn subagents of their own. The \`squad_state\` MCP tools are available as \`mcp__squad_state__*\` from \`.mcp.json\`.`,
   },
   kiro: {
     summary: 'Kiro subagent + steering, MCP backend',

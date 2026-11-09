@@ -4,7 +4,7 @@
 
 **Human-led AI agent teams for any project.** One command. A team that helps you move faster with your code.
 
-[![Platform](https://img.shields.io/badge/platform-GitHub%20Copilot-blue)](#what-is-squad)
+[![Platform](https://img.shields.io/badge/platform-GitHub%20Copilot%20%2B%206%20more%20hosts-blue)](#use-squad-in-other-ai-hosts)
 
 Breaking changes are documented in [CHANGELOG.md](CHANGELOG.md).
 
@@ -42,14 +42,14 @@ Choose the install method for your platform:
 | npm (all platforms, Node.js 22.5+) | `npm install -g @bradygaster/squad-cli` |
 | Homebrew (macOS) | `brew install --cask bradygaster/squad/squad` |
 | WinGet (Windows) | `winget install --id bradygaster.Squad --exact` |
-| Install script (macOS/Linux, no npm) | See [Standalone Install](https://bradygaster.github.io/squad/docs/features/standalone-install/) |
+| Install script (macOS/Linux, no npm) | See [Standalone Install](https://github.github.com/squad/docs/features/standalone-install/) |
 
 Preview and insider builds are available as `squad-preview` and
 `squad-insider` Homebrew casks, or as `bradygaster.Squad.Preview` and
 `bradygaster.Squad.Insider` WinGet packages.
 
 Direct archives for macOS, Linux, and Windows are also available from
-[GitHub Releases](https://github.com/bradygaster/squad/releases/latest).
+[GitHub Releases](https://github.com/github/squad/releases/latest).
 
 ```bash
 squad init
@@ -57,7 +57,7 @@ squad init
 
 All methods install the same CLI. Standalone installs vendor Node.js, so they do
 not require Node.js or access to the npm registry. See the
-[complete installation guide](https://bradygaster.github.io/squad/docs/get-started/installation/)
+[complete installation guide](https://github.github.com/squad/docs/get-started/installation/)
 for prerequisites and platform details.
 
 > **⚡ Want to be up and running in under a second?** Use `squad init --preset default` to start with a fully-configured squad — complete with members, charters, and routing rules — ready to go immediately. The default `squad init` (without the flag) walks you through setup step by step, ideal if you prefer to build and customize your squad deliberately.
@@ -112,8 +112,8 @@ Use the same channel you installed from:
 | npm | `npm install -g @bradygaster/squad-cli@latest` |
 | Homebrew | `brew upgrade --cask squad` |
 | WinGet | `winget upgrade --id bradygaster.Squad --exact` |
-| Install script | Re-run the [install script](https://bradygaster.github.io/squad/docs/features/standalone-install/#macos-and-linux) |
-| Direct archive | Download the newer archive from [GitHub Releases](https://github.com/bradygaster/squad/releases/latest) |
+| Install script | Re-run the [install script](https://github.github.com/squad/docs/features/standalone-install/#macos-and-linux) |
+| Direct archive | Download the newer archive from [GitHub Releases](https://github.com/github/squad/releases/latest) |
 
 **Step 2: Update Squad-owned files in your project**
 
@@ -144,7 +144,7 @@ To install and run Squad from source for development:
 
 ```bash
 # Clone the repository
-git clone https://github.com/bradygaster/squad.git
+git clone https://github.com/github/squad.git
 cd squad
 
 # Install dependencies (npm workspaces)
@@ -442,7 +442,7 @@ When agents finish, the coordinator records follow-up work and leaves a breadcru
 
 **And it's all in git.** Anyone who clones your repo gets the team — with all their accumulated knowledge.
 
-**Each agent gets the right model.** Squad picks models quality-first by default: premium for architecture, research and review, standard for code and docs, fast for mechanical work. Opt in to the `balanced` or `economy` profile, or to the `hydrafusion` research preview with `"modelProfile": "hydrafusion"` in `.squad/config.json`. Per-agent selection works in the Copilot CLI and app; VS Code runs every agent on the one session model. See [Model Selection](https://bradygaster.github.io/squad/docs/features/model-selection/).
+**Each agent gets the right model.** Squad picks models quality-first by default: premium for architecture, research and review, standard for code and docs, fast for mechanical work. Opt in to the `balanced` or `economy` profile, or to the `hydrafusion` research preview with `"modelProfile": "hydrafusion"` in `.squad/config.json`. Per-agent selection works in the Copilot CLI and app; VS Code runs every agent on the one session model, and so do the other hosts (Claude Code, Kiro, OpenCode, Cursor, Codex, Antigravity) for now — see the [Host Feature Matrix](docs/src/content/docs/reference/host-feature-matrix.md). See [Model Selection](https://github.github.com/squad/docs/features/model-selection/).
 
 ---
 
@@ -600,7 +600,24 @@ test "$(gh api "repos/${owner_repo}" --jq '.has_issues')" = "true" || {
 }
 
 SQUAD_SHA="<40-character-commit-sha>"  # explicit, maintainer-approved; never `commits/dev`
-gh aw add "bradygaster/squad/workflows@${SQUAD_SHA}"
+[[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
+  exit 1
+}
+squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
+  "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
+  --jq '.package')" || squad_package=""
+test "${squad_package}" = "github/squad/workflows" || {
+  if [ -z "${squad_package}" ]; then
+    echo "STOP: cannot read workflows/squad-workflows.manifest.json from github/squad at ${SQUAD_SHA}." >&2
+    echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
+  else
+    echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
+    echo "Use a revision whose manifest declares github/squad/workflows, or ask the Squad maintainers for one. Older revisions download the Squad CLI from the bradygaster/squad fork, which has no releases." >&2
+  fi
+  exit 1
+}
+gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 git add -- \
   .github/aw/ \
@@ -610,6 +627,14 @@ git add -- \
 git commit -m "Add Squad workflow"
 git push
 ```
+
+`github/squad/workflows` verifies only at Squad revisions whose
+`workflows/squad-workflows.manifest.json` declares
+`"package": "github/squad/workflows"`, so the identity check stops on any other
+revision. Do not install an older revision as `bradygaster/squad/workflows`
+instead: its activation downloads the Squad CLI from the separately controlled
+`bradygaster/squad` fork, which has no releases. Use a revision whose manifest
+declares `github/squad/workflows`, or ask the Squad maintainers for one.
 
 `gh aw add` compiles the workflows automatically. If it reports unapproved
 safe-update changes, review them and run `gh aw compile --approve`.
@@ -654,7 +679,7 @@ durable human handoff after exhaustion. Both workers produce drafts only;
 open, merged and closed-unmerged linked PRs suppress automatic duplicates.
 Human review and merge are always required.
 
-See [the gh-aw guide](https://bradygaster.github.io/squad/docs/guide/gh-aw/#retrospective-auto-implementation-opt-in) for the full authority model.
+See [the gh-aw guide](https://github.github.com/squad/docs/guide/gh-aw/#retrospective-auto-implementation-opt-in) for the full authority model.
 
 ### Slash commands
 
@@ -675,7 +700,7 @@ See [the gh-aw guide](https://bradygaster.github.io/squad/docs/guide/gh-aw/#retr
 
 Write a detailed team description in the issue body, then comment `/squad cast` — the issue becomes your casting brief. The more context you give, the better Squad tailors your team.
 
-📖 See [GitHub Agentic Workflows guide](https://bradygaster.github.io/squad/docs/guide/gh-aw/) for the complete setup, configuration, and usage reference.
+📖 See [GitHub Agentic Workflows guide](https://github.github.com/squad/docs/guide/gh-aw/) for the complete setup, configuration, and usage reference.
 
 ---
 

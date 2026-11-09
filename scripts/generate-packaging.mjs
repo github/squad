@@ -31,9 +31,10 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const DEFAULT_REPO = 'bradygaster/squad';
+const DEFAULT_REPO = 'github/squad';
 const PACKAGE_IDENTIFIER = 'bradygaster.Squad';
-const HOMEPAGE = 'https://github.com/bradygaster/squad';
+const HOMEPAGE = 'https://github.com/github/squad';
+const DOCS_URL = 'https://github.github.com/squad/';
 
 /** Manifest schema version. Matches what winget-pkgs currently accepts. */
 const WINGET_SCHEMA = '1.12.0';
@@ -196,8 +197,7 @@ export function renderHomebrewCask({ version, repo, checksums }) {
   sha256 arm:   "${armSha}",
          intel: "${intelSha}"
 
-  url "https://github.com/${repo}/releases/download/v#{version}/squad-darwin-#{arch}.tar.gz",
-      verified: "github.com/${repo}/"
+  url "https://github.com/${repo}/releases/download/v#{version}/squad-darwin-#{arch}.tar.gz"
   name "Squad"
   desc "Programmable multi-agent runtime for GitHub Copilot${channelLabel}"
   homepage "${HOMEPAGE}"
@@ -206,7 +206,7 @@ ${livecheck}
 ${conflicts},
   ]
 
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   binary "squad-darwin-#{arch}/squad"
 
@@ -309,7 +309,7 @@ Tags:
 ReleaseNotesUrl: https://github.com/${repo}/releases/tag/${version}
 Documentations:
 - DocumentLabel: Documentation
-  DocumentUrl: https://bradygaster.github.io/squad/
+  DocumentUrl: ${DOCS_URL}
 ManifestType: defaultLocale
 ManifestVersion: ${WINGET_SCHEMA}
 `;

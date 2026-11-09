@@ -411,6 +411,7 @@ When `stateBackend` is set to `two-layer` or `orphan`, the following templates a
 **Config vs State distinction:**
 
 - **Static config** (charters, team.md, routing.md, casting/) — always on disk, all backends
+- Casting policy, registry, history and the atomic pair commit marker belong on the normal source branch. The registry/history pair is written through `commitCastingRegistryPair`, not individual runtime state-tool writes. Casting policy is edited on disk, not through state tools.
 - **Mutable state** (history.md, decisions/inbox/, logs, orchestration-log/) — backend-dependent
 The coordinator passes `STATE_BACKEND` into every agent spawn prompt. Agents receive backend-specific instructions for reading and writing state. Scribe receives backend-specific commit instructions. This is fully automatic — no user configuration beyond setting `stateBackend` in config.json is needed.
 
@@ -425,8 +426,8 @@ This will:
 1. Update `.squad/config.json` with the new backend
 2. Create the `squad-state` orphan branch (if needed)
 3. Install git hooks for automatic sync
-4. Preserve all existing state
-**What happens:** Existing `.squad/` files are migrated to the orphan branch and may be removed from the working tree on subsequent commits. New decisions and state writes go to the orphan branch (and git notes for two-layer). The pre-commit hook prevents you from accidentally re-committing mutable state files into the working tree.
+4. Transfer existing decisions, agent histories, decision inbox records and the complete governed `memory/` store, including its array index, configuration, audit archives and tombstones
+**What happens:** These files are imported in one orphan-branch commit before configuration switches authority. Unrelated destination files are preserved. Identical destination files are safe to retry; a differing file at the same path (including an index, audit log or config) stops migration with an error for manual reconciliation, without overwriting either copy or changing the backend. Source files are removed only after the transfer and config write succeed. Static casting files remain on disk. Reconnect MCP sessions after migration so they resolve the new backend. This does not migrate transient sessions, scratch or logs.
 ### Switching between orphan and two-layer
 Change `stateBackend` in `.squad/config.json`. The coordinator adapts on the next session. Both use the `squad-state` orphan branch, so existing state is preserved. Two-layer additionally enables git notes for commit-scoped annotations.
 
@@ -437,8 +438,9 @@ Once you've migrated to `orphan` or `two-layer`, two additional git hooks enforc
 Before every commit, this hook scans the staged index for files that belong on the orphan branch:
 - `.squad/decisions.md`
 - `.squad/agents/*/history.md`
-- `.squad/casting/`
-- `.squad/routing/`
+- `.squad/memory/`
+- `.squad/identity/`
+Only additions and edits are blocked; staged deletions of migrated source files are allowed. Casting and routing configuration remain committable on the normal source branch. Memory and identity are also added to the backend-specific ignore block, including when upgrading an existing block. Other runtime paths still rely on their existing ignore rules and the runtime tool contract; this hook is not a blanket guard for all state.
 If any of those paths are staged, the commit is refused with:
 ```
 ⚠ squad pre-commit: refusing to commit two-layer state into the working tree.
@@ -454,11 +456,11 @@ Setting `SQUAD_SYNC_ACTIVE=1` in the environment causes both hooks to exit immed
 > ⚠️ **Do not use `SQUAD_SYNC_ACTIVE=1` routinely.** Bypassing the pre-commit hook lets state files land in your working branch commits — exactly the situation `two-layer` is designed to prevent. Any PR created from that branch will carry squad state in the diff, defeating the clean-PR promise of the two-layer backend. Use the recovery flow instead.
 ## Troubleshooting
 ### "Pre-commit hook refused my commit"
-**Cause:** You staged `.squad/` files that belong on the `squad-state` orphan branch (decisions.md, agent histories, casting/, routing/). The pre-commit hook blocks these to keep mutable state off your working-tree branches.
+**Cause:** You staged additions or edits to `.squad/` files that belong on the `squad-state` orphan branch (decisions.md, agent histories, memory/, identity/). The pre-commit hook blocks these to keep mutable state off your working-tree branches.
 **Fix:**
 ```bash
 # Unstage the offending paths
-git restore --staged .squad/decisions.md .squad/agents/*/history.md .squad/casting/ .squad/routing/
+git restore --staged .squad/decisions.md .squad/agents/*/history.md .squad/memory/ .squad/identity/
 # Then commit normally — only your code changes go through
 git commit
 ```

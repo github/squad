@@ -17,7 +17,7 @@ Create a normal release-preparation PR targeting `dev`. Keep the root, SDK, and
 CLI versions in lockstep:
 
 ```bash
-VERSION=2.0.0-preview.3
+VERSION=2.0.0-preview.4
 npm version "$VERSION" --workspaces --include-workspace-root --no-git-tag-version
 npm pkg set "dependencies.@bradygaster/squad-sdk=>=$VERSION" \
   --workspace @bradygaster/squad-cli
@@ -27,7 +27,7 @@ npm install --package-lock-only
 Add an exact changelog heading:
 
 ```markdown
-## [2.0.0-preview.3] - YYYY-MM-DD
+## [2.0.0-preview.4] - YYYY-MM-DD
 ```
 
 Before merging, verify:
@@ -45,11 +45,11 @@ Wait for `dev` CI to pass after the PR merges.
 
 ## Publish a preview
 
-Use a unique prerelease version such as `2.0.0-preview.3`. The release trigger
+Use a unique prerelease version such as `2.0.0-preview.4`. The release trigger
 is human-only and pins the exact reviewed commit:
 
 ```bash
-VERSION=2.0.0-preview.3
+VERSION=2.0.0-preview.4
 SHA=$(git rev-parse origin/dev)   # the reviewed dev tip, full 40-hex SHA
 gh workflow run squad-release.yml \
   --ref dev \
@@ -62,11 +62,11 @@ gh workflow run squad-release.yml \
 gh run watch
 ```
 
-For `2.0.0-preview.3`, reviewers and release owners explicitly hold Homebrew,
+For `2.0.0-preview.4`, reviewers and release owners explicitly hold Homebrew,
 WinGet, `latest`, and stable promotion. This dispatch publishes the npm pair
 (`insider` canonical plus the `preview` alias) and standalone artifacts only.
 `publish_package_managers=false` is required for this release; there is no
-preview.3 package-manager installation path.
+preview.4 package-manager installation path.
 
 Optional inputs: `npm_dist_tag` (`insider`, the default, or `preview`),
 `add_preview_alias` (default `true`), `build_standalone` (default `true`),
@@ -116,7 +116,7 @@ npm install -g @bradygaster/squad-cli@insider   # canonical self-upgrade channel
 npm install -g @bradygaster/squad-cli@preview   # compatibility alias
 ```
 
-Homebrew and WinGet are intentionally unavailable for preview.3.
+Homebrew and WinGet are intentionally unavailable for preview.4.
 
 Do not dispatch `squad-insider-publish.yml` for a prepared preview version: it
 computes and publishes its own `X.Y.Z-insider.N` snapshot version.
@@ -139,7 +139,7 @@ updates `squad-insider` in Homebrew, and opens or reuses the
 
 Prepare another PR that changes all package versions and the changelog heading
 from the prerelease version to stable `2.0.0`. A preview version cannot be
-converted in place after publication; `2.0.0-preview.3` and `2.0.0` are
+converted in place after publication; `2.0.0-preview.4` and `2.0.0` are
 different releases.
 
 After the stable preparation lands on `dev`, a human must run the promotion
