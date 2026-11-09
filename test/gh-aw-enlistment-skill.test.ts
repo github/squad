@@ -29,6 +29,7 @@ import {
   LEGACY_PACKAGE_NAMES,
   OWNERSHIP_DESTINATION,
   PACKAGE_NAME,
+  SAFE_ENVIRONMENT_KEYS,
   UNOWNED_MUTABLE_ROUTER_SKILL,
   WORKFLOW_TUPLES,
   compileWithPinnedActions,
@@ -842,7 +843,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(endMatches.length,   '<!-- allowlist-end --> must appear exactly once').toBe(1);
     });
 
-    it('allowlist region contains EXACTLY the two documented secrets and the one documented action — no more, no fewer', () => {
+    it('allowlist region contains EXACTLY the three documented secrets and the one documented action — no more, no fewer', () => {
       const startTag = '<!-- allowlist-start -->';
       const endTag   = '<!-- allowlist-end -->';
       const startIdx = content.indexOf(startTag);
@@ -855,15 +856,16 @@ describe('gh-aw-enlistment skill', () => {
 
       // Every backtick-delimited token in the region — order-independent exact set.
       const tokens = [...region.matchAll(/`([^`]+)`/g)].map(m => m[1]);
-      expect(tokens.slice().sort(), 'allowlist tokens must be exactly the three documented entries').toEqual(
+      expect(tokens.slice().sort(), 'allowlist tokens must be exactly the four documented entries').toEqual(
         [
+          'GH_AW_GITHUB_READ_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_TOKEN',
           SQUAD_INIT_ACTION,
         ].sort()
       );
 
-      // Structural: exactly 2 bullet lines (one for the two secrets, one for the action).
+      // Structural: exactly 2 bullet lines (one for the three secrets, one for the action).
       const bulletLines = region.split('\n').filter(l => l.trimStart().startsWith('- '));
       expect(bulletLines.length, 'allowlist region must contain exactly 2 bullet lines').toBe(2);
     });
@@ -1124,7 +1126,7 @@ describe('gh-aw-enlistment skill', () => {
           .not.toContain(LEGACY_SQUAD_INIT_ACTION);
       }
       expect(antiPatterns.replace(/\s+/g, ' ')).toContain(
-        `Approve ONLY \`SQUAD_GITHUB_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_TOKEN\`, and \`${SQUAD_INIT_ACTION}\`. `
+        `Approve ONLY \`GH_AW_GITHUB_READ_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_TOKEN\`, and \`${SQUAD_INIT_ACTION}\`. `
         + 'Anything else is a STOP.',
       );
     });
@@ -1214,8 +1216,27 @@ describe('gh-aw-enlistment skill', () => {
     });
 
     it('resolves repo identity at runtime (no hardcoded owner/repo placeholder)', () => {
+      expect(content).toContain('gh auth status --hostname github.com');
       expect(content).toContain('gh repo view --json nameWithOwner');
       expect(content).toContain('gh repo view --json defaultBranchRef');
+    });
+
+    it('preserves Windows and XDG gh extension environment variables in squad-install-verifier spawnChecked', () => {
+      for (const envKey of [
+        'APPDATA',
+        'GH_CONFIG_DIR',
+        'GH_DATA_DIR',
+        'LOCALAPPDATA',
+        'SystemRoot',
+        'TEMP',
+        'TMP',
+        'USERPROFILE',
+        'XDG_CONFIG_HOME',
+        'XDG_DATA_HOME',
+      ]) {
+        expect(SAFE_ENVIRONMENT_KEYS, `SAFE_ENVIRONMENT_KEYS must preserve ${envKey}`).toContain(envKey);
+      }
+      expect(Object.isFrozen(SAFE_ENVIRONMENT_KEYS)).toBe(true);
     });
 
     it('names the bootstrap job\'s own PR-creation fallback branch as the real Cast branch, distinct from the human-run install branch', () => {
@@ -1332,6 +1353,8 @@ describe('gh-aw-enlistment skill', () => {
             .not.toContain(LEGACY_INSTALL_PREFIX);
         }
       }
+      expect(guide).toContain('gh auth status --hostname github.com');
+      expect(guide).toContain('GH_AW_GITHUB_READ_APP_PRIVATE_KEY');
       expect(guide).toContain(`# (${SQUAD_INIT_ACTION}) and nothing else. STOP and`);
       expect(guide).toContain(`- Action: \`${SQUAD_INIT_ACTION}\``);
       expect(guide.replace(/\s+/g, ' '), `${GUIDE} must not offer ${LEGACY_SQUAD_INIT_ACTION} as a referenced name`)
