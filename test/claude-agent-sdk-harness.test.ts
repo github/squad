@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  BACKEND_PROTOCOL_VERSION,
   ClaudeAgentSdkHarness,
   DefaultHarnessRegistry,
   LocalSquadBackend,
@@ -256,4 +257,38 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK)', () => 
     await harness.settled('live2', 'r1', 1);
     expect(['completed', 'failed']).toContain((await backend.getTurn('live2', 1)).state);
   }, 180_000);
+});
+
+describe('claude-agent-sdk harness: state-mcp registration', () => {
+  it('registers only when the SDK is installed, and SQUAD_BACKEND_HARNESSES=none turns it off', async () => {
+    const { createLocalHarnesses } = await import('../packages/squad-cli/src/cli/core/backend-mcp.js');
+    expect(createLocalHarnesses('/repo', {}, () => true).list().map((h) => h.id)).toEqual([HARNESS]);
+    expect(createLocalHarnesses('/repo', {}, () => false).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'none' }, () => true).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'other' }, () => true).list()).toEqual([]);
+  });
+
+  it('createMcpBackend wires the registry into the local backend', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { createMcpBackend } = await import('../packages/squad-cli/src/cli/core/backend-mcp.js');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-harness-reg-'));
+    fs.mkdirSync(path.join(root, '.squad'));
+    fs.writeFileSync(path.join(root, '.squad', 'team.md'), '# Team\n');
+    try {
+      let seenRoot = '';
+      const { sdk } = replay({ text: 'via mcp' });
+      const backend = createMcpBackend(root, {}, undefined, (repoRoot) => {
+        seenRoot = repoRoot;
+        const r = new DefaultHarnessRegistry();
+        r.register(new ClaudeAgentSdkHarness({ cwd: repoRoot, loadSdk: async () => sdk }));
+        return r;
+      });
+      expect(fs.realpathSync(seenRoot)).toBe(fs.realpathSync(root));
+      expect((await backend.negotiate({ protocols: [BACKEND_PROTOCOL_VERSION] })).harnesses).toEqual([HARNESS]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

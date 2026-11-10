@@ -13,8 +13,10 @@
 **Implementation status:** The contract in this draft is implemented as the
 experimental `@bradygaster/squad-sdk/backend` subpath (`LocalSquadBackend`,
 `DurableHttpSquadBackend`, `DefaultHarnessRegistry`) and bridged over MCP by
-`squad state-mcp --experimental-backend`. No execution harness ships with it;
-the MCP bridge records transcripts and events only.
+`squad state-mcp --experimental-backend`. One execution harness ships:
+`claude-agent-sdk` (`ClaudeAgentSdkHarness`), registered by the MCP bridge when
+the optional `@anthropic-ai/claude-agent-sdk` peer is installed. Without it the
+bridge records transcripts and events only.
 
 **Known deviations:** Approval hashes are opaque harness-supplied strings
 (not broker-computed digests), lease epochs are client-asserted rather than
@@ -415,8 +417,8 @@ The same contract is projected through three backend families.
 `LocalSquadBackend` runs the broker in process and stores each conversation as
 one JSON snapshot under `.squad/backend/conversations/<id>.json`, serialized
 across processes by `.squad/backend/locks/<id>.lock`. Harnesses are plugged in
-through a `HarnessRegistry`; the SDK ships the registry and the harness
-interface but no harness implementation.
+through a `HarnessRegistry`; the SDK ships the registry, the harness
+interface and one implementation, `claude-agent-sdk` (Claude Agent SDK).
 
 ### 10.2 MCP bridge
 
@@ -454,7 +456,12 @@ replayed to another origin.
 - Lease epochs are client-asserted (see section 9).
 - Cursors are unsigned `base64url("c1:<conversationId>:<sequence>")` values,
   validated only for the conversation id and numeric form.
-- No execution harness ships with the CLI or SDK.
+- The only shipped harness is `claude-agent-sdk`; it needs the optional
+  `@anthropic-ai/claude-agent-sdk` peer and Anthropic API, Bedrock or Vertex
+  credentials. There is no Copilot `HarnessAdapter` yet.
+- `claude-agent-sdk` keeps a pending approval in process memory, so a harness
+  restart loses it; the broker's record must then be cancelled and the session
+  resumed.
 
 ## 11. Protocol versioning and compatibility policy
 

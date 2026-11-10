@@ -349,7 +349,7 @@ describe.each(CLIENTS)('real stdio MCP server launched from the %s config', (cli
     const conv = await server!.call('squad_backend_create_conversation', { conversationId: `${client}-conv`, title: `real ${client}` });
     expect(conv.json).toMatchObject({ conversationId: `${client}-conv`, epoch: 1 });
 
-    // no execution harness ships with the CLI: the bridge refuses to admit a turn instead of queueing it forever
+    // no harness is registered here (the optional Claude Agent SDK isn't installed): the bridge refuses to admit a turn instead of queueing it forever
     const sent = await server!.call('squad_backend_send_message', {
       conversationId: `${client}-conv`, runId: `${client}-run`, seq: 1, correlationId: 'corr-real',
       parts: [{ type: 'text', text: 'hello from a real client' }, { type: 'resource', uri: 'file:///README.md', title: 'README' }],

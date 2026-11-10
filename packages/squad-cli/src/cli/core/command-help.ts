@@ -266,8 +266,9 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
     console.log(`state read/write tools to MCP-compatible hosts.\n`);
     console.log(`Options:`);
     console.log(`  ${BOLD}--experimental-backend${RESET}      Also expose the experimental squad_backend_* conversation`);
-    console.log(`                              tools (or set SQUAD_EXPERIMENTAL_BACKEND=1). Transcript/event-log`);
-    console.log(`                              only: no execution harness is bundled.\n`);
+    console.log(`                              tools (or set SQUAD_EXPERIMENTAL_BACKEND=1). Runs turns on the`);
+    console.log(`                              claude-agent-sdk harness when @anthropic-ai/claude-agent-sdk is`);
+    console.log(`                              installed; otherwise transcript/event-log only.\n`);
   },
 
   doctor: (version) => {

@@ -229,10 +229,20 @@ registry lists harnesses during capability negotiation.
 `decision: 'approve' | 'deny'`, `reason?`, `epoch?`); the `hash` is the opaque
 string the harness itself supplied with its `approval-requested` event.
 
-No `HarnessAdapter` implementation ships in the SDK or CLI today. The
-registry, the SPI and the broker-side delivery guarantees exist and are tested
-with in-memory harnesses; the `squad state-mcp` bridge runs without any
-harness and refuses `squad_backend_send_message` accordingly.
+One `HarnessAdapter` ships: `claude-agent-sdk` (`ClaudeAgentSdkHarness`, in
+`packages/squad-sdk/src/backend/harnesses/`). It runs each admitted turn as a
+Claude Agent SDK `query()`, resuming the conversation's session, and maps
+`canUseTool` onto `approval-requested`: `approvalId` is the tool-use id, `hash`
+is a sha256 of the canonical tool name and input, parallel tool calls are
+offered one at a time (the broker holds one pending approval per turn), and a
+deny ends the turn. It runs with `permissionMode: 'default'` and
+`settingSources: []`, so no repository or user allow rule approves a call the
+broker never sees. The SDK is an optional peer dependency; `squad state-mcp
+--experimental-backend` registers the harness only when it is installed
+(`SQUAD_BACKEND_HARNESSES=none` turns it off), and otherwise refuses
+`squad_backend_send_message`. No Copilot harness exists yet, so the shared
+contract suite (`test/harness-contract.ts`) runs against `claude-agent-sdk`
+only.
 
 `describe` and `projectWorkspace` on `ClientAdapter`
 let the broker reason about host capabilities and file projection without
@@ -532,6 +542,7 @@ module and keep host projections in one sibling folder per host family.
 | backend conversation contracts (experimental) | `packages/squad-sdk/src/backend/` (`@bradygaster/squad-sdk/backend`) |
 | client and harness adapter SPI | `packages/squad-sdk/src/client/adapter-contract.ts` |
 | host projection implementations | `packages/squad-sdk/src/client/adapters/` |
+| execution harness implementations (experimental) | `packages/squad-sdk/src/backend/harnesses/` |
 | public client exports | `packages/squad-sdk/src/client/index.ts` (`@bradygaster/squad-sdk/client`) |
 | deprecated alias | `@bradygaster/squad-sdk/clients` via `src/clients/index.ts` |
 

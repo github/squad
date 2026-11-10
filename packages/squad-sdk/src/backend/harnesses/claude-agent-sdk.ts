@@ -90,6 +90,19 @@ export interface ClaudeAgentSdkHarnessOptions {
   loadSdk?: () => Promise<ClaudeAgentSdkModule>;
 }
 
+/**
+ * Whether the optional `@anthropic-ai/claude-agent-sdk` peer resolves from this package, without loading it.
+ * Used to register the harness only where it can run.
+ */
+export function isClaudeAgentSdkAvailable(): boolean {
+  try {
+    import.meta.resolve(SDK_MODULE);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** sha256 over canonical JSON (sorted keys) of the tool name and input: the approval's bound payload. */
 export function claudeApprovalHash(toolName: string, input: unknown): string {
   const canonical = (v: unknown): unknown =>
