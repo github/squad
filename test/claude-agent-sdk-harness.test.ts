@@ -12,6 +12,7 @@ import {
   ClaudeAgentSdkHarness,
   DefaultHarnessRegistry,
   LocalSquadBackend,
+  MemoryStateStore,
   claudeApprovalHash,
   type ClaudeAgentSdkModule,
   type ClaudeQueryOptions,
@@ -284,6 +285,79 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK)', () => 
       fs.rmSync(cwd, { recursive: true, force: true });
     }
   }, 180_000);
+});
+
+describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden trace', () => {
+  /**
+   * golden-trace.json (decoupling §14.4) on the real Claude harness: accept → a real tool approval → client
+   * disconnect and reconnect from a cursor → approve (the approved command really runs) → cancel → cancelled.
+   * Ids and the hash come from the harness rather than the fixture; the fixture's backend events must appear in
+   * order among the real ones (a real harness adds messages and running states).
+   */
+  it('runs G1–G9 on claude-agent-sdk: approve after reconnect, then cancel', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const golden = JSON.parse(fs.readFileSync(path.resolve('test-fixtures/spec/suite-v0.2/golden-trace.json'), 'utf8')) as {
+      conversationId: string; runId: string; expectedTerminalState: string; events: Array<Record<string, unknown> & { event: string }>;
+    };
+    const ev = (name: string) => golden.events.find((e) => e.event === name)!;
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-golden-'));
+    const marker = path.join(cwd, 'squad-golden-marker.txt');
+    const harness = new ClaudeAgentSdkHarness({ cwd, maxTurns: 6 });
+    const registry = new DefaultHarnessRegistry();
+    registry.register(harness);
+    const state = new MemoryStateStore();
+    const connect = () => new LocalSquadBackend({ state, harnesses: registry });
+    let client = connect();
+    const { conversationId, runId } = golden;
+    const seq = ev('message.accepted')['turnSeq'] as number;
+    try {
+      await client.createConversation({ conversationId });
+      const adm = await client.sendMessage(conversationId, {
+        runId, seq, role: 'user', harness: HARNESS,
+        content: 'Use the Bash tool to run these two commands, one after the other, exactly as written: touch squad-golden-marker.txt ; then: sleep 60',
+      });
+      expect(adm).toMatchObject({ runId, seq, duplicate: false });
+
+      await until(async () => (await client.getApprovals(conversationId)).some((a) => a.state === 'pending'), 120_000);
+      const requested = ev('approval.requested');
+      const [v1] = await client.getApprovals(conversationId);
+      expect(v1).toMatchObject({ version: requested['version'], state: requested['state'], scope: { kind: requested['scope'] } });
+      expect(v1!.action).toMatch(/^Bash: .*touch/);
+
+      // client.disconnected: remember the cursor and drop the client; client.reconnected: resume from it
+      const beforeDrop = await client.readEvents(conversationId);
+      const seen = new Map(beforeDrop.events.map((e) => [e.id, e]));
+      client = connect();
+      const resume = await client.readEvents(conversationId, { after: beforeDrop.nextCursor });
+      expect(resume.resumable).toBe(ev('client.reconnected')['resumable']);
+      expect(resume.lastAcceptedSeq).toBe(beforeDrop.events.at(-1)!.sequence);
+      for (const e of (await client.readEvents(conversationId)).events) seen.set(e.id, e);
+      expect(seen.size).toBeGreaterThanOrEqual(beforeDrop.events.length);
+
+      const decided = ev('approval.resolved');
+      const turn = await client.respondApproval(conversationId, { approvalId: v1!.approvalId, hash: v1!.hash, decision: decided['decision'] as 'approve' });
+      expect(turn.state).toBe('running');
+      // The approved command really runs: the first live approve on the real harness.
+      await until(() => fs.existsSync(marker), 60_000);
+
+      const cancelled = await client.cancelRun(conversationId, runId, ev('cancellation.requested')['reason'] as string);
+      expect(cancelled.state).toBe(golden.expectedTerminalState);
+      await harness.settled(conversationId, runId, seq);
+
+      const history = (await client.readEvents(conversationId)).events.map((e) => e.type);
+      const expected = golden.events.map((e) => e.event).filter((n) => !n.startsWith('client.'));
+      let i = 0;
+      for (const type of history) if (type === expected[i]) i++;
+      expect(i, `golden events in order within: ${history.join(', ')}`).toBe(expected.length);
+      const approvals = await client.getApprovals(conversationId);
+      expect(approvals[0]).toMatchObject({ approvalId: v1!.approvalId, version: decided['version'], state: decided['state'], decision: 'approve' });
+      expect((await client.getTurn(conversationId, seq)).state).toBe(golden.expectedTerminalState);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 300_000);
 });
 
 describe('claude-agent-sdk harness: state-mcp registration', () => {

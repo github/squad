@@ -518,7 +518,11 @@ message.accepted(runId, seq)
 `client.*` entries are client-side steps that produce no backend event. The
 trace is executed end to end against the file-backed local backend and the
 durable-http client in `test/squad-20-all-scenarios.e2e.test.ts`, with the
-same canonical history on both.
+same canonical history on both. It also runs live on the real `claude-agent-sdk` harness
+(`test/claude-agent-sdk-harness.test.ts`, behind `SQUAD_REAL_CLI_TESTS=1` and an
+Anthropic API key): the approval is a real tool call, the approved command
+runs, and the fixture's backend events appear in order among the harness's
+own (verified 2026-11-10).
 
 This trace captures the core invariants of the split: stable `runId`
 cancellation, monotonic `seq` ordering, durable approval versioning, resumable

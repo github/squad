@@ -4401,9 +4401,11 @@
             "validated-test:test/harness-contract.test.ts::*",
             "validated-test:test/claude-agent-sdk-harness.test.ts::*",
             "validated-test:test/claude-agent-sdk-harness.test.ts::routes a real tool call through broker approval and honours a deny",
-            "validated-manual:lab:claude-agent-sdk-harness@2026-11-10"
+            "validated-manual:lab:claude-agent-sdk-harness@2026-11-10",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::runs G1–G9 on claude-agent-sdk: approve after reconnect, then cancel",
+            "validated-manual:lab:claude-agent-sdk-golden-trace@2026-11-10"
           ],
-          "notes": "Live (2026-11-10): one turn through the broker, and a write command approved-or-denied through the broker (denied: not run). Claude Code runs some read-only commands without asking, so those never reach the broker."
+          "notes": "Live (2026-11-10): a plain turn; a write denied through the broker (not run); and the golden trace (G1–G9): a real approval across a client reconnect, approved and run, then cancelled. Claude Code runs some read-only commands without asking, so those never reach the broker."
         },
         "kiro": {
           "capability": "supported",
@@ -5017,6 +5019,16 @@
       "outcome": "pass",
       "observedTools": [],
       "notes": "After review round 4 (event correlation to the turn's own user.message, durable state): one turn through LocalSquadBackend completed (5.7 s), and the same with a harness-only Copilot configDirectory in an empty temp dir (3.2 s): sign-in still works there, so state-mcp's isolated config directory is safe."
+    },
+    {
+      "host": "claude",
+      "scenario": "claude-agent-sdk-golden-trace",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash"
+      ],
+      "notes": "golden-trace.json (G1–G9) on the real claude-agent-sdk harness (Agent SDK 0.3.317, Anthropic API key), 8.1 s: a real Bash `touch` approval survived a client disconnect and cursor reconnect, the broker approved it and the file was created (first live approve), then a cancel during `sleep 60` ended the turn cancelled; the fixture's backend events appeared in order."
     }
   ],
   "expectedFailures": [
