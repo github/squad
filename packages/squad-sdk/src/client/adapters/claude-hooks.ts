@@ -213,11 +213,33 @@ function memberIdsWithCharters(teamAbs: string): string[] {
   }
 }
 
+/**
+ * Lockout fields come from a file in the repository and from free text typed with `squad lockout`,
+ * so they reach the coordinator as inert data: one line, no markup or code delimiters, bounded.
+ */
+function inert(value: unknown, max = 120): string {
+  const flat = String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ')
+    .replace(/[`<>{}[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/** Member IDs only (`a-z0-9-`); anything else in the file is dropped. */
+function ids(values: readonly unknown[]): string[] {
+  return values.filter((v): v is string => typeof v === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v));
+}
+
 function describeLockout(r: LockoutRecord): string {
-  const scope = r.paths.length > 0 ? ` on ${r.paths.join(', ')}` : '';
-  const who = effectiveLocked(r).join(', ');
-  const next = r.successor ? `; revision assigned to ${r.successor}` : '';
-  return `${r.subject} (${r.state})${scope}: ${who} locked out${r.reviewer ? ` after ${r.reviewer}'s REJECT` : ''}${r.reason ? ` ("${r.reason}")` : ''}${next}`;
+  const scope = r.paths.length > 0 ? ` on ${r.paths.slice(0, 10).map((p) => inert(p, 80)).join(', ')}` : '';
+  const who = ids(effectiveLocked(r)).join(', ');
+  const [reviewer] = ids([r.reviewer]);
+  const [successor] = ids([r.successor]);
+  const next = successor ? `; revision assigned to ${successor}` : '';
+  // The reason is quoted as data (JSON string), so it reads as the reviewer's words, not as instructions.
+  const reason = r.reason ? ` (reason, as recorded: ${JSON.stringify(inert(r.reason, 200))})` : '';
+  return `${inert(r.subject, 80)} (${inert(r.state, 24)})${scope}: ${who} locked out${reviewer ? ` after ${reviewer}'s REJECT` : ''}${reason}${next}`;
 }
 
 function activeLockouts(teamAbs: string): LockoutRecord[] {
@@ -310,7 +332,7 @@ export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, no
     }
     if (hits.length === 0) return null;
     const subjects = hits.map(describeLockout).join('; ');
-    const next = hits.map((h) => h.successor).filter(Boolean);
+    const next = ids(hits.map((h) => h.successor));
     const warning =
       `Squad reviewer lockout (advisory): ${agent} is locked out of ${subjects}. ` +
       `Under governance-review §6 a locked-out author may not revise the rejected work. ` +
