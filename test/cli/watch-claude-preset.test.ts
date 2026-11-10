@@ -179,6 +179,15 @@ describe('Claude preset: watch config', () => {
     expect(loadWatchConfig(root, { agentPreset: 'copilot' }).agentPreset).toBe('copilot');
   });
 
+  it('limits watch.claudeFlags from the repository file to safe flags; the CLI flag is unrestricted', () => {
+    for (const bad of ['--mcp-config .mcp.json', '--model sonnet --mcp-config=.mcp.json', '--settings x.json', '--agent other', '--add-dir /', '--plugin-dir p', '--dangerously-skip-permissions', '--allowedTools Read --strict-mcp-config', '--permission-mode yolo', '--max-turns 0']) {
+      expect(() => loadWatchConfig(withConfig(`bad-${bad.replace(/\W+/g, '')}`, { agentPreset: 'claude', claudeFlags: bad }), {}), bad).toThrow(/watch\.claudeFlags/);
+    }
+    const ok = '--permission-mode acceptEdits --model claude-sonnet-5-5 --effort high --max-turns 40 --allowedTools Read Grep Bash(npm test:*) --disallowed-tools=WebFetch';
+    expect(loadWatchConfig(withConfig('good-flags', { agentPreset: 'claude', claudeFlags: ok }), {}).claudeFlags).toBe(ok);
+    expect(loadWatchConfig(withConfig('cli-flags', { agentPreset: 'claude' }), { claudeFlags: '--mcp-config extra.json' }).claudeFlags).toBe('--mcp-config extra.json');
+  });
+
   it('rejects an unknown preset instead of silently using Copilot', () => {
     expect(() => loadWatchConfig(withConfig('bad', { agentPreset: 'gemini' }), {})).toThrow(/agentPreset must be "copilot" or "claude"/);
   });

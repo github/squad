@@ -290,7 +290,12 @@ this applies to monitor, retro and decision-hygiene runs too.
 Execute mode adds `--permission-mode bypassPermissions` by default, the
 counterpart of Copilot's `--yolo`. Pass your own flags with
 `--claude-flags "--permission-mode acceptEdits --model sonnet"` (or
-`watch.claudeFlags`) to replace that default. `--agent-cmd` still overrides the
+`watch.claudeFlags`) to replace that default. Because `.squad/config.json`
+belongs to the repository, `watch.claudeFlags` may only set
+`--permission-mode`, `--model`, `--fallback-model`, `--effort`, `--max-turns`
+and the allowed or disallowed tool lists; flags that change MCP servers,
+settings, plugins, directories or the agent are refused there and must come
+from `--claude-flags`. `--agent-cmd` still overrides the
 preset, and `--dispatch-mode fleet` stays Copilot-only.
 
 ### Advanced: `--agent-cmd` (Hidden Flag)
