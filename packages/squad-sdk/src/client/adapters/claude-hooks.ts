@@ -198,15 +198,18 @@ function realish(abs: string): string {
   }
 }
 
+const MEMBER_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 function cap(s: string): string {
   return s.length > MAX_CONTEXT ? `${s.slice(0, MAX_CONTEXT - 1)}…` : s;
 }
 
+/** Member IDs (directories under `agents/` with a charter); names outside `a-z0-9-` are ignored. */
 function memberIdsWithCharters(teamAbs: string): string[] {
   try {
     return fs
       .readdirSync(path.join(teamAbs, 'agents'), { withFileTypes: true })
-      .filter((e) => e.isDirectory() && fs.existsSync(path.join(teamAbs, 'agents', e.name, 'charter.md')))
+      .filter((e) => e.isDirectory() && MEMBER_ID_RE.test(e.name) && fs.existsSync(path.join(teamAbs, 'agents', e.name, 'charter.md')))
       .map((e) => e.name)
       .sort();
   } catch {
@@ -229,7 +232,7 @@ function inert(value: unknown, max = 120): string {
 
 /** Member IDs only (`a-z0-9-`); anything else in the file is dropped. */
 function ids(values: readonly unknown[]): string[] {
-  return values.filter((v): v is string => typeof v === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v));
+  return values.filter((v): v is string => typeof v === 'string' && MEMBER_ID_RE.test(v));
 }
 
 function describeLockout(r: LockoutRecord): string {
