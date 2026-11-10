@@ -11,6 +11,10 @@
  *   previous one has fully stopped, including an in-flight interrupt (so late events from an aborted turn can't
  *   be attributed to the next one).
  * - **Conversation-scoped approvals** through {@link TurnApprovals}.
+ * - **Durability across restarts** through {@link HarnessState}: accepted deliveries are remembered so a restarted
+ *   harness doesn't re-run them, and each conversation's runtime session id is kept so it can be resumed.
+ * - **Failed interrupts stay retryable**: a later cancel tries again, and the subclass hears about the failure
+ *   (`interruptFailed`) so it can stop reusing a runtime session that may still be busy.
  * - **Bounded memory** for long-running bridges: a finished turn is dropped (a late cancel or decision for it is a
  *   no-op anyway), idle conversation tails are dropped, and the record of accepted deliveries keeps the most
  *   recent {@link MAX_ACCEPTED}, which is what makes redelivery of a finished turn a no-op.
@@ -29,6 +33,7 @@ import type {
 } from '../types.js';
 import { partsToText } from '../types.js';
 import { TurnApprovals } from './approval-queue.js';
+import { HarnessState } from './harness-state.js';
 
 export interface TurnRun {
   readonly conversationId: string;
@@ -40,6 +45,8 @@ export interface TurnRun {
   readonly approvals: TurnApprovals;
   /** Settles when an interrupt has finished (the runtime is quiet). */
   quiesce: Promise<void>;
+  /** The last interrupt failed; a later cancel retries it. */
+  interruptFailed?: boolean;
   done: Promise<void>;
 }
 
@@ -61,12 +68,16 @@ export abstract class TurnHarness implements HarnessAdapter {
   private readonly runs = new Map<string, TurnRun>();
   private readonly tails = new Map<string, Promise<void>>();
 
+  constructor(protected readonly state: HarnessState = new HarnessState()) {}
+
   /** Start the runtime (idempotent; may be called concurrently). Rejecting fails the delivery. */
   protected abstract init(): Promise<void>;
   /** Run one turn; resolves with a failure message, or undefined on success. Call `checkpoint` after awaits. */
   protected abstract runTurn(run: TurnRun, prompt: string): Promise<string | undefined>;
   /** Stop the runtime's work for this turn; resolves once it is quiet. */
   protected abstract interrupt(run: TurnRun): Promise<void>;
+  /** The interrupt for this turn failed: stop reusing whatever runtime state it may still be using. */
+  protected interruptFailed(_run: TurnRun, _error: unknown): void {}
 
   describe(): HarnessDescriptor {
     return { id: this.id, displayName: this.displayName, capabilities: this.capabilities };
@@ -85,6 +96,8 @@ export abstract class TurnHarness implements HarnessAdapter {
     const key = submission.operationId ?? `${submission.conversationId}:${submission.runId}:${submission.seq}`;
     const existing = this.accepted.get(key);
     if (existing) return existing; // at-least-once delivery, including concurrent duplicates
+    // Accepted before a restart: never run it again.
+    if (this.state.hasAccepted(key)) return Promise.resolve();
     const runKey = this.runKey(submission.conversationId, submission.runId, submission.seq);
     const run = this.runs.get(runKey) ?? this.createRun(submission);
     this.runs.set(runKey, run);
@@ -96,6 +109,7 @@ export abstract class TurnHarness implements HarnessAdapter {
         if (!run.abort.signal.aborted) this.runs.delete(runKey);
         throw err;
       }
+      this.state.addAccepted(key);
       this.schedule(run, submission);
     })();
     this.accepted.set(key, acceptance);
@@ -166,10 +180,15 @@ export abstract class TurnHarness implements HarnessAdapter {
   }
 
   private stop(run: TurnRun): void {
-    if (run.abort.signal.aborted) return;
+    if (run.abort.signal.aborted && !run.interruptFailed) return;
     run.abort.abort();
     run.approvals.close('Turn cancelled');
-    run.quiesce = this.interrupt(run).catch(() => undefined);
+    run.interruptFailed = false;
+    run.quiesce = this.interrupt(run).catch((err) => {
+      // Not quiet: keep the cancel retryable and let the subclass stop reusing the runtime state.
+      run.interruptFailed = true;
+      this.interruptFailed(run, err);
+    });
   }
 
   private schedule(run: TurnRun, s: HarnessSubmission): void {

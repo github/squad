@@ -35,8 +35,21 @@ const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[-_]?key|access[-_]?key|au
  */
 const SECRET_NAME =
   '(?:[A-Za-z0-9]+[-_])*(?:pass(?:word|wd)?|secret(?:[-_]access)?(?:[-_]?key)?|access[-_]?key|api[-_]?key|apikey|token|auth[-_]?token|authorization|cookie|credentials?|private[-_]?key|session[-_]?id)';
-/** `name: value` / `name=value`; the value stops at whitespace, quotes and `&`, so surrounding syntax survives. */
-const INLINE_SECRET = new RegExp(`(\\b${SECRET_NAME}\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s"'&]+)`, 'gi');
+/**
+ * Characters that make a value executable (expansion, command substitution, chaining, redirection, grouping). A
+ * masked value stops at the first of them, and a quoted value containing any of them is not masked at all: the
+ * approver must always see code that would run (`TOKEN="$(rm -rf ./src)"` stays readable).
+ */
+const SHELL_SYNTAX = /[$`;|&<>(){}\\]/;
+const PLAIN_VALUE = '[^\\s"\'`$;|&<>(){}\\\\]+';
+/** `name: value`, `name=value`, and JSON-style `"name": "value"`. */
+const INLINE_SECRET = new RegExp(`(\\b${SECRET_NAME}["']?\\s*[=:]\\s*)("[^"]*"|'[^']*'|${PLAIN_VALUE})`, 'gi');
+/** `--password x`, `--token=x`, `--client-secret x` (a flag name ending in a credential word). */
+const SECRET_FLAG = new RegExp(`(--(?:[a-z0-9]+-)*(?:password|passwd|secret|token|api-?key|access-?key|auth-token|client-secret)(?:=|\\s+))(${PLAIN_VALUE})`, 'gi');
+/** `curl -u name:password` / `--user name:password`. */
+const USER_PASSWORD = new RegExp(`((?:^|\\s)(?:-u|--user)(?:=|\\s+)[^\\s:"']+:)(${PLAIN_VALUE})`, 'g');
+/** `Authorization: <scheme> <value>` for any scheme (`token`, `Bearer`, `Basic`, …). */
+const AUTH_HEADER = new RegExp(`(\\b(?:proxy-)?authorization["']?\\s*:\\s*[A-Za-z][A-Za-z0-9-]*\\s+)(${PLAIN_VALUE})`, 'gi');
 const BEARER = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 /**
  * Secrets with no name in front of them (positional arguments such as `gh auth login --with-token ghp_…`):
@@ -63,15 +76,26 @@ const OPAQUE = /(?<![A-Za-z0-9+/=_-])(?=[A-Za-z0-9+=_-]*[a-z])(?=[A-Za-z0-9+=_-]
 const URL_PASSWORD = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi;
 const MAX_STRING = 1000;
 
-/** Mask credentials in free text: named (`token=…`, `X-API-Key: …`), bearer/basic, URL passwords and bare tokens. */
+/**
+ * Mask credentials in free text: named (`token=…`, `X-API-Key: …`, JSON keys), `Authorization` schemes, credential
+ * flags, `-u user:password`, URL passwords and bare tokens. Executable syntax is never masked.
+ */
 export function redactText(text: string): string {
-  // Bearer/basic tokens first, so `Authorization: Bearer <token>` loses the token rather than the scheme word.
+  const keep = (value: string) => value.startsWith('[redacted]') || SHELL_SYNTAX.test(value);
+  // Scheme-aware forms first, so `Authorization: Bearer <token>` loses the token rather than the scheme word.
   return text
     .replace(URL_PASSWORD, '$1[redacted]@')
     .replace(BARE_TOKEN, '[redacted]')
     .replace(OPAQUE, '[redacted]')
+    .replace(AUTH_HEADER, (m, head: string, value: string) => (keep(value) ? m : `${head}[redacted]`))
     .replace(BEARER, '$1 [redacted]')
-    .replace(INLINE_SECRET, (m, key: string, value: string) => (value === 'Bearer' || value === 'Basic' || value.startsWith('[redacted]') ? m : `${key}[redacted]`));
+    .replace(SECRET_FLAG, (m, head: string, value: string) => (keep(value) ? m : `${head}[redacted]`))
+    .replace(USER_PASSWORD, (m, head: string, value: string) => (keep(value) ? m : `${head}[redacted]`))
+    .replace(INLINE_SECRET, (m, key: string, value: string) => {
+      const inner = value.replace(/^["']|["']$/g, '');
+      // Scheme words are left for AUTH_HEADER/BEARER; quoted values with executable syntax stay visible.
+      return /^(bearer|basic|token)$/i.test(inner) || keep(inner) ? m : `${key}[redacted]`;
+    });
 }
 
 /** A copy of an approval payload safe to record: secret-looking keys masked, strings truncated, depth bounded. */
@@ -162,12 +186,21 @@ export class TurnApprovals {
     for (const p of this.queue.splice(0)) p.resolve({ approved: false, reason });
   }
 
-  /** Drop one request whose call was aborted by the runtime itself. */
+  /**
+   * Drop one request whose call was aborted by the runtime itself. A request the broker already holds as pending
+   * can't be withdrawn from it, so dropping an offered request ends the turn instead of offering the next one into
+   * an occupied slot (the broker would discard it and the call would wait forever).
+   */
   drop(approvalId: string, reason: string): void {
     const i = this.queue.findIndex((p) => p.approvalId === approvalId);
     if (i === -1) return;
     const [p] = this.queue.splice(i, 1);
     p!.resolve({ approved: false, reason });
+    if (p!.offered) {
+      this.close(reason);
+      this.onDeny();
+      return;
+    }
     this.offerNext();
   }
 

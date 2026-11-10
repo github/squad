@@ -77,14 +77,18 @@ export function scriptedCopilotClient(script: ContractScript, count: { n: number
         async abort() { aborted = true; },
         async send() {
           count.n++;
+          const messageId = `msg-${count.n}`;
+          // As the real runtime does: our user.message, then permission requests, the reply and idle.
+          queueMicrotask(() => fire({ type: 'user.message', data: { messageId } }));
           void (async () => {
+            await Promise.resolve();
             const results = await Promise.all((script.tools ?? []).map((t, i) =>
               config.onPermissionRequest({ kind: 'shell', toolCallId: `call_${i}`, fullCommandText: String(t.input['command'] ?? t.name), ...t.input }, { sessionId: id })));
             if (aborted || results.some((r) => r.kind === 'reject')) { fire({ type: 'session.idle' }); return; }
             fire({ type: 'assistant.message', data: { content: script.reply } });
             fire({ type: 'session.idle' });
           })();
-          return 'message-id';
+          return messageId;
         },
       };
     },

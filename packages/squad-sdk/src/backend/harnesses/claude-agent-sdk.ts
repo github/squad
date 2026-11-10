@@ -15,13 +15,19 @@
  *   original input unchanged.
  * - A deny ends the turn, as the broker does (`cancelled`): the call and any queued ones are denied and the query
  *   is aborted. `cancel` does the same.
+ * - Credentials: the real SDK only starts with an API key or Bedrock/Vertex/Foundry settings, never a claude.ai login.
+ * - Deny rules from user and project settings are kept (as `disallowedTools`) although no settings are loaded.
  * - Permission settings: `permissionMode: 'default'` and `settingSources: []`, so no repository or user allow
  *   rule approves a call the broker never sees. Endpoint-managed policy still applies (it always loads).
  *
  * Not durable across harness restarts: a pending callback lives in this process. On restart the broker's
  * pending approval should be cancelled and the session resumed (see the #2441 notes).
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { HarnessCapabilities } from '../types.js';
+import { HarnessState } from './harness-state.js';
 import { canonicalApprovalHash, summarizeAction } from './approval-queue.js';
 import { TurnHarness, type TurnRun } from './turn-harness.js';
 
@@ -49,6 +55,7 @@ export interface ClaudeQueryOptions {
   canUseTool?: ClaudeCanUseTool;
   permissionMode?: 'default';
   settingSources?: string[];
+  disallowedTools?: string[];
   env?: Record<string, string | undefined>;
   systemPrompt?: string | { type: 'preset'; preset: 'claude_code'; append?: string };
 }
@@ -80,12 +87,49 @@ export interface ClaudeAgentSdkHarnessOptions {
   env?: Record<string, string | undefined>;
   /** Loads the SDK. Defaults to a lazy `import('@anthropic-ai/claude-agent-sdk')`. */
   loadSdk?: () => Promise<ClaudeAgentSdkModule>;
+  /** Where accepted deliveries and session ids survive restarts (see HarnessState). In-memory when unset. */
+  stateDir?: string;
+  /** Home directory whose `.claude/settings.json` deny rules apply (defaults to the OS home). */
+  homeDir?: string;
 }
 
 /**
  * Whether the optional `@anthropic-ai/claude-agent-sdk` peer resolves from this package, without loading it.
  * Used to register the harness only where it can run.
  */
+/**
+ * Whether the environment names a supported API credential: an Anthropic API key or auth token, or Bedrock,
+ * Vertex or Foundry settings. Without one the Agent SDK would fall back to a saved claude.ai login, which this
+ * harness must not use (#2441).
+ */
+export function claudeApiCredentialsConfigured(env: Record<string, string | undefined> = process.env): boolean {
+  const on = (v: string | undefined) => v === '1' || v?.toLowerCase() === 'true';
+  return !!(env['ANTHROPIC_API_KEY'] || env['ANTHROPIC_AUTH_TOKEN'] || on(env['CLAUDE_CODE_USE_BEDROCK']) || on(env['CLAUDE_CODE_USE_VERTEX']) || on(env['CLAUDE_CODE_USE_FOUNDRY']));
+}
+
+/**
+ * `permissions.deny` rules from the user, project and local settings files. The harness loads no settings
+ * (`settingSources: []`) so that allow rules can't bypass the broker; their deny rules are carried over as
+ * `disallowedTools`, which applies them in every permission mode.
+ */
+export function claudeDenyRules(cwd: string, homeDir: string = os.homedir()): string[] {
+  const files = [
+    path.join(homeDir, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.json'),
+    path.join(cwd, '.claude', 'settings.local.json'),
+  ];
+  const rules = new Set<string>();
+  for (const file of files) {
+    try {
+      const deny = (JSON.parse(fs.readFileSync(file, 'utf8')) as { permissions?: { deny?: unknown } }).permissions?.deny;
+      if (Array.isArray(deny)) for (const r of deny) if (typeof r === 'string' && r.trim()) rules.add(r.trim());
+    } catch {
+      // missing or unreadable settings: no rules from this file
+    }
+  }
+  return [...rules];
+}
+
 export function isClaudeAgentSdkAvailable(): boolean {
   try {
     import.meta.resolve(SDK_MODULE);
@@ -119,15 +163,19 @@ export class ClaudeAgentSdkHarness extends TurnHarness {
   };
   protected readonly displayName = 'Claude Agent SDK';
 
-  /** Claude session per conversation, resumed by later turns. */
-  private readonly sessions = new Map<string, string>();
   private sdk?: Promise<ClaudeAgentSdkModule>;
 
   constructor(private readonly options: ClaudeAgentSdkHarnessOptions) {
-    super();
+    super(new HarnessState(options.stateDir));
   }
 
   protected async init(): Promise<void> {
+    // Never run the real SDK on a saved claude.ai login (an injected SDK, as in tests, brings its own transport).
+    if (!this.options.loadSdk && !claudeApiCredentialsConfigured(this.options.env ?? process.env)) {
+      throw new Error(
+        `The ${CLAUDE_AGENT_SDK_HARNESS_ID} harness needs ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN, or Bedrock, Vertex or Foundry settings); it does not use a claude.ai login`,
+      );
+    }
     await this.loadSdk();
   }
 
@@ -137,13 +185,15 @@ export class ClaudeAgentSdkHarness extends TurnHarness {
   protected async runTurn(run: TurnRun, prompt: string): Promise<string | undefined> {
     const sdk = await this.loadSdk();
     this.checkpoint(run);
-    const resume = this.sessions.get(run.conversationId);
+    const resume = this.state.session(run.conversationId);
+    const disallowedTools = claudeDenyRules(this.options.cwd, this.options.homeDir);
     const stream = sdk.query({
       prompt,
       options: {
         cwd: this.options.cwd,
         permissionMode: 'default',
         settingSources: [],
+        ...(disallowedTools.length ? { disallowedTools } : {}),
         abortController: run.abort,
         canUseTool: this.canUseTool(run),
         ...(this.options.model ? { model: this.options.model } : {}),
@@ -157,7 +207,7 @@ export class ClaudeAgentSdkHarness extends TurnHarness {
     });
     let failure: string | undefined;
     for await (const message of stream) {
-      if (message.session_id) this.sessions.set(run.conversationId, message.session_id);
+      if (message.session_id) this.state.setSession(run.conversationId, message.session_id);
       if (message.type === 'assistant' && !message.parent_tool_use_id) {
         const text = (message.message?.content ?? [])
           .filter((b) => b.type === 'text' && b.text)

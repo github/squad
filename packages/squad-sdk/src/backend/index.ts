@@ -17,7 +17,8 @@ export type { LocalSquadBackendOptions, FileStateStoreOptions } from './local-ba
 export { createStateBackendStore } from './state-backend-store.js';
 export type { StateBackendLike, StateBackendStoreOptions } from './state-backend-store.js';
 export { DurableHttpSquadBackend, validateBaseUrl } from './durable-http-backend.js';
-export { ClaudeAgentSdkHarness, CLAUDE_AGENT_SDK_HARNESS_ID, claudeApprovalHash, isClaudeAgentSdkAvailable } from './harnesses/claude-agent-sdk.js';
+export { ClaudeAgentSdkHarness, CLAUDE_AGENT_SDK_HARNESS_ID, claudeApprovalHash, claudeApiCredentialsConfigured, claudeDenyRules, isClaudeAgentSdkAvailable } from './harnesses/claude-agent-sdk.js';
+export { HarnessState, MAX_REMEMBERED } from './harnesses/harness-state.js';
 export { CopilotSdkHarness, COPILOT_SDK_HARNESS_ID } from './harnesses/copilot-sdk.js';
 export type { CopilotSdkHarnessOptions, CopilotClientLike, CopilotSessionLike, CopilotSessionConfig, CopilotSessionEvent, CopilotPermissionRequest, CopilotPermissionResult } from './harnesses/copilot-sdk.js';
 export { TurnApprovals, canonicalApprovalHash, redactApprovalPayload, redactText, summarizeAction } from './harnesses/approval-queue.js';

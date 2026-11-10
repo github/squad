@@ -92,6 +92,8 @@ class McpStdioClient {
     delete baseEnv['SQUAD_BACKEND_URL'];
     delete baseEnv['SQUAD_BACKEND_TOKEN'];
     delete baseEnv['SQUAD_EXPERIMENTAL_BACKEND'];
+    // No execution harness here, whatever is installed or inherited: these tests cover the transcript-only bridge.
+    baseEnv['SQUAD_BACKEND_HARNESSES'] = 'none';
     this.proc = spawn(spec.command, spec.args, { cwd, env: { ...baseEnv, ...spec.env }, stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (d: string) => this.onData(d));

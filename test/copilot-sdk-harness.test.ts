@@ -42,15 +42,18 @@ function client(turn: (ctx: {
       on(h: (e: CopilotSessionEvent) => void) { handlers.add(h); return () => handlers.delete(h); },
       async abort() { aborted = true; log.aborts++; },
       async send() {
+        const messageId = `msg-${++sent}`;
+        handlers.forEach((h) => h({ type: 'user.message', data: { messageId } }));
         void turn({
           fire: (e) => handlers.forEach((h) => h(e)),
           ask: async (r) => { const d = await config.onPermissionRequest(r, { sessionId: id }); log.decisions.push(d); return d; },
           aborted: () => aborted,
         });
-        return 'msg';
+        return messageId;
       },
     };
   }
+  let sent = 0;
   return { client: c, log };
 }
 
@@ -159,8 +162,8 @@ describe('copilot-sdk harness', () => {
         async resumeSession(_id, config) { return this.createSession(config); },
         async createSession(config) {
           seen.push(config.configDirectory);
-          let idle: (e: CopilotSessionEvent) => void = () => undefined;
-          return { sessionId: 's', on(h) { idle = h; return () => undefined; }, async abort() {}, async send() { setTimeout(() => idle({ type: 'session.idle' }), 0); return 'm'; } };
+          let emit: (e: CopilotSessionEvent) => void = () => undefined;
+          return { sessionId: 's', on(h) { emit = h; return () => undefined; }, async abort() {}, async send() { setTimeout(() => { emit({ type: 'user.message', data: { messageId: 'm' } }); emit({ type: 'session.idle' }); }, 0); return 'm'; } };
         },
       }),
     });
@@ -209,7 +212,7 @@ describe('copilot-sdk harness: review regressions (#2451)', () => {
         return {
           sessionId: 's-1',
           on(h: (e: CopilotSessionEvent) => void) { handlers.add(h); return () => handlers.delete(h); },
-          async send(prompt: string) { sends.push(prompt); return 'm'; },
+          async send(prompt: string) { sends.push(prompt); const messageId = `m-${sends.length}`; queueMicrotask(() => fire({ type: 'user.message', data: { messageId } })); return messageId; },
           async abort() { if (abortHeld) await new Promise<void>((r) => (releaseAbort = r)); },
         };
       },

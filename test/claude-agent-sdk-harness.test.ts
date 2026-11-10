@@ -289,13 +289,17 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK)', () => 
 describe('claude-agent-sdk harness: state-mcp registration', () => {
   it('registers only when the SDK is installed, and SQUAD_BACKEND_HARNESSES=none turns it off', async () => {
     const { createLocalHarnesses } = await import('../packages/squad-cli/src/cli/core/backend-mcp.js');
-    expect(createLocalHarnesses('/repo', {}, () => true).list().map((h) => h.id)).toEqual([HARNESS]);
-    expect(createLocalHarnesses('/repo', {}, () => false).list()).toEqual([]);
-    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'none' }, () => true).list()).toEqual([]);
-    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'other' }, () => true).list()).toEqual([]);
-    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'copilot-sdk' }, () => true).list().map((h) => h.id)).toEqual(['copilot-sdk']);
-    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'copilot-sdk, claude-agent-sdk' }, () => true).list().map((h) => h.id)).toEqual([HARNESS, 'copilot-sdk']);
-    expect(createLocalHarnesses('/repo', {}, () => false).list()).toEqual([]); // copilot-sdk is never a default
+    const key = { ANTHROPIC_API_KEY: 'test-key' };
+    const yes = { claudeSdkAvailable: () => true };
+    expect(createLocalHarnesses('/repo', key, yes).list().map((h) => h.id)).toEqual([HARNESS]);
+    expect(createLocalHarnesses('/repo', key, { claudeSdkAvailable: () => false }).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', {}, yes).list()).toEqual([]); // no API credential: never a claude.ai login
+    expect(createLocalHarnesses('/repo', { CLAUDE_CODE_USE_BEDROCK: '1' }, yes).list().map((h) => h.id)).toEqual([HARNESS]);
+    expect(createLocalHarnesses('/repo', { ...key, SQUAD_BACKEND_HARNESSES: 'none' }, yes).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', { ...key, SQUAD_BACKEND_HARNESSES: 'other' }, yes).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'copilot-sdk' }, yes).list().map((h) => h.id)).toEqual(['copilot-sdk']);
+    expect(createLocalHarnesses('/repo', { ...key, SQUAD_BACKEND_HARNESSES: 'copilot-sdk, claude-agent-sdk' }, yes).list().map((h) => h.id)).toEqual([HARNESS, 'copilot-sdk']);
+    expect(createLocalHarnesses('/repo', {}, { claudeSdkAvailable: () => false }).list()).toEqual([]); // copilot-sdk is never a default
   });
 
   it('createMcpBackend wires the registry into the local backend', async () => {

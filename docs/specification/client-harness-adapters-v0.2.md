@@ -237,6 +237,11 @@ Approvals are scoped to their conversation, since runtime tool-call ids are
 not globally unique. The broker's approval record carries only a short,
 redacted action summary and the hash: the tool input itself is never sent as
 `payload`, so it stays out of backend state. The hash covers the full input.
+Redaction masks credentials (named values, JSON keys, `Authorization`
+schemes, credential flags, `-u user:password`, URL passwords, known token
+formats) but never masks executable syntax: a value containing shell
+expansion, substitution, chaining or redirection stays visible, so the
+approver always sees what would run.
 
 Both also share one turn lifecycle (`TurnHarness`). Concurrent deliveries of
 an operation share one acceptance, and a failed start forgets it so the retry
@@ -244,7 +249,12 @@ runs. A run is registered before its runtime starts, so a cancel during
 startup or session creation is kept and the turn never reaches the runtime.
 `cancel` acknowledges once the stop is requested; the conversation's next turn
 starts only after the interrupt has finished, so late events from an aborted
-turn are never attributed to the next one.
+turn are never attributed to the next one. An interrupt that fails stays
+retryable, and the harness stops reusing the runtime session it may still be
+using. With a state directory (`stateDir`; `squad state-mcp` always passes one)
+accepted deliveries and each conversation's runtime session id survive a
+restart: a redelivered turn is not run again, and the next turn resumes the
+session instead of starting without context.
 
 `claude-agent-sdk` (`ClaudeAgentSdkHarness`) runs each admitted turn as a
 Claude Agent SDK `query()`, resuming the conversation's session, and maps
@@ -253,30 +263,41 @@ is a sha256 of the canonical tool name and input, parallel tool calls are
 offered one at a time (the broker holds one pending approval per turn), and a
 deny ends the turn. It runs with `permissionMode: 'default'` and
 `settingSources: []`, so no repository or user allow rule approves a call the
-broker never sees. Claude Code still runs some read-only commands (such as
+broker never sees; the `permissions.deny` rules from user, project and local
+settings are carried over as `disallowedTools`, so they still apply. The real
+SDK starts only with an API credential (`ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, or Bedrock, Vertex or Foundry settings), never a saved
+claude.ai login. Claude Code still runs some read-only commands (such as
 `echo`) without calling `canUseTool`, so those never reach the broker; anything
 that writes does (live-verified 2026-11-10: a `touch` was offered, denied, and
 not run). The SDK is an optional peer dependency; `squad state-mcp
---experimental-backend` registers the harness only when it is installed
-(`SQUAD_BACKEND_HARNESSES=none` turns it off), and otherwise refuses
+--experimental-backend` registers the harness only when it is installed and
+such a credential is configured (`SQUAD_BACKEND_HARNESSES=none` turns it off),
+and otherwise refuses
 `squad_backend_send_message`.
 
 `copilot-sdk` (`CopilotSdkHarness`) keeps one Copilot session per conversation
 (created on the first turn, resumed by id afterwards). A turn is `send()`
 followed by `session.idle` (completed) or `session.error` (failed); only
-main-agent `assistant.message` content enters the transcript.
+main-agent `assistant.message` content enters the transcript. A turn reacts
+only to events after its own `user.message` (matched to the id `send()`
+returns), so an idle or answer from an earlier, aborted turn can't complete or
+join it. A session whose send failed, whose interrupt failed or whose turn
+timed out (`turnTimeoutMs`, default 30 minutes) is dropped and resumed fresh.
 `onPermissionRequest` goes through the same queue, with `toolCallId` as the
-`approvalId`; approve answers `approve-once`, and deny answers `reject` and
+`approvalId` (`#2`, `#3` … when one tool call asks for several permissions); approve answers `approve-once`, and deny answers `reject` and
 aborts the turn. The harness never answers with a remembered approval, but the
 Copilot runtime can keep "approve permanently" decisions (URL prompts) in its
 config directory; the `configDirectory` option points sessions at a
 harness-only directory so approvals made in the user's own Copilot CLI don't
-apply. Because `@github/copilot-sdk` is always installed, the MCP
+apply; the MCP bridge always sets one. Because `@github/copilot-sdk` is always installed, the MCP
 bridge registers this harness only when `SQUAD_BACKEND_HARNESSES` lists
 `copilot-sdk`.
 
 The shared contract suite (`test/harness-contract.ts`) runs the same
-assertions against both harnesses (§15 item 1).
+assertions against both harnesses (§15 item 1). Both run in the
+worktree-aware repository root, so a linked worktree's turns edit that
+worktree even when its squad state resolves to the main checkout.
 
 `describe` and `projectWorkspace` on `ClientAdapter`
 let the broker reason about host capabilities and file projection without

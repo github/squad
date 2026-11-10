@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 import { resolveSquadState } from '@bradygaster/squad-sdk';
 import {
@@ -7,6 +9,7 @@ import {
   ClaudeAgentSdkHarness,
   CopilotSdkHarness,
   DefaultHarnessRegistry,
+  claudeApiCredentialsConfigured,
   isClaudeAgentSdkAvailable,
   type HarnessRegistry,
   createSquadBackend,
@@ -144,24 +147,58 @@ export function isExperimentalBackendEnabled(
  * `copilot-sdk` is opt-in: its SDK is always installed, so registering it by default would make every
  * experimental bridge run Copilot sessions.
  */
+export interface LocalHarnessOptions {
+  /** Directory each harness keeps its durable state under (accepted deliveries, session ids). */
+  stateDir?: string;
+  /** Override for tests: whether the optional Claude Agent SDK resolves. */
+  claudeSdkAvailable?: () => boolean;
+}
+
+/**
+ * Execution harnesses for the local backend. `SQUAD_BACKEND_HARNESSES` is a comma-separated list of harness
+ * ids, or `none`. The default is `claude-agent-sdk`, registered only when its optional SDK is installed **and**
+ * an API credential is configured (an Anthropic API key or Bedrock/Vertex/Foundry settings; never a claude.ai
+ * login). `copilot-sdk` is opt-in, since its SDK is always installed; it gets its own Copilot config directory so
+ * approvals remembered in the user's own Copilot CLI don't apply to bridge turns.
+ */
 export function createLocalHarnesses(
   repoRoot: string,
   env: NodeJS.ProcessEnv = process.env,
-  claudeSdkAvailable: () => boolean = isClaudeAgentSdkAvailable,
+  options: LocalHarnessOptions = {},
 ): HarnessRegistry {
   const registry = new DefaultHarnessRegistry();
   const wanted = (env['SQUAD_BACKEND_HARNESSES'] ?? 'claude-agent-sdk').split(',').map((h) => h.trim()).filter(Boolean);
   if (wanted.includes('none')) return registry;
-  if (wanted.includes('claude-agent-sdk') && claudeSdkAvailable()) registry.register(new ClaudeAgentSdkHarness({ cwd: repoRoot }));
-  if (wanted.includes('copilot-sdk')) registry.register(new CopilotSdkHarness({ cwd: repoRoot }));
+  const dir = (id: string) => (options.stateDir ? path.join(options.stateDir, id) : undefined);
+  const claudeAvailable = options.claudeSdkAvailable ?? isClaudeAgentSdkAvailable;
+  if (wanted.includes('claude-agent-sdk') && claudeAvailable() && claudeApiCredentialsConfigured(env)) {
+    registry.register(new ClaudeAgentSdkHarness({ cwd: repoRoot, env, ...(dir('claude-agent-sdk') ? { stateDir: dir('claude-agent-sdk')! } : {}) }));
+  }
+  if (wanted.includes('copilot-sdk')) {
+    const copilotDir = dir('copilot-sdk');
+    registry.register(new CopilotSdkHarness({
+      cwd: repoRoot,
+      ...(copilotDir ? { stateDir: copilotDir, configDirectory: path.join(copilotDir, 'copilot-config') } : {}),
+    }));
+  }
   return registry;
+}
+
+/**
+ * Where harness state lives. The local backend keeps it beside its conversations (`<team>/backend/harnesses`); a
+ * configured backend keeps its data outside the working tree, so harness state goes to a per-user cache instead.
+ */
+export function harnessStateDir(context: { paths: { teamSquadDir: string }; backend: { name: string } }): string {
+  if (context.backend.name === 'local') return path.join(context.paths.teamSquadDir, 'backend', 'harnesses');
+  const id = createHash('sha256').update(path.resolve(context.paths.teamSquadDir)).digest('hex').slice(0, 16);
+  return path.join(os.homedir(), '.cache', 'squad', 'harnesses', id);
 }
 
 export function createMcpBackend(
   startDir: string,
   env: NodeJS.ProcessEnv = process.env,
-  resolveState: (dir: string) => Pick<NonNullable<ReturnType<typeof resolveSquadState>>, 'paths' | 'backend'> | null = resolveSquadState,
-  harnessesFor: (repoRoot: string) => HarnessRegistry = (root) => createLocalHarnesses(root, env),
+  resolveState: (dir: string) => (Pick<NonNullable<ReturnType<typeof resolveSquadState>>, 'paths' | 'backend'> & { repoRoot?: string }) | null = resolveSquadState,
+  harnessesFor: (repoRoot: string, stateDir: string) => HarnessRegistry = (root, stateDir) => createLocalHarnesses(root, env, { stateDir }),
 ): SquadBackend {
   if (env['SQUAD_BACKEND_URL']) {
     return createSquadBackend({ kind: 'durable-http', baseUrl: env['SQUAD_BACKEND_URL'], token: env['SQUAD_BACKEND_TOKEN'] });
@@ -174,8 +211,10 @@ export function createMcpBackend(
   const state = context.backend.name === 'local'
     ? undefined
     : createStateBackendStore(context.backend, { lockAnchor: context.paths.teamSquadDir });
-  // The repository root is the parent of the project's squad directory (the team dir in local mode).
-  const harnesses = harnessesFor(path.dirname(context.paths.projectDir ?? context.paths.teamSquadDir));
+  // Turns run in the worktree-aware repository root: a linked worktree without its own .squad resolves to the
+  // main checkout's squad directory, but its edits belong in the worktree.
+  const repoRoot = context.repoRoot ?? path.dirname(context.paths.projectDir ?? context.paths.teamSquadDir);
+  const harnesses = harnessesFor(repoRoot, harnessStateDir(context));
   return createSquadBackend({ kind: 'mcp', squadDir: context.paths.teamSquadDir, state, harnesses });
 }
 
