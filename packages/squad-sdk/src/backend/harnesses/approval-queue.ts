@@ -26,8 +26,16 @@ export function canonicalApprovalHash(payload: unknown): string {
   return `sha256:${createHash('sha256').update(JSON.stringify(canonical(payload))).digest('hex')}`;
 }
 
-const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[-_]?key|auth(orization)?|cookie|credential|private[-_]?key|session[-_]?id/i;
-const INLINE_SECRET = /((?:pass(?:word|wd)?|secret|token|api[-_]?key|authorization)\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi;
+const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[-_]?key|access[-_]?key|auth(orization)?|cookie|credential|private[-_]?key|session[-_]?id/i;
+/**
+ * A credential name in free text: optional prefix segments (`X-`, `GITHUB_`, `AWS_SECRET_`) and then a sensitive
+ * word, so `X-API-Key`, `X-Auth-Token`, `Cookie`, `GITHUB_TOKEN` and `AWS_SECRET_ACCESS_KEY` all match, while
+ * words that merely start the same way (`author`, `tokenizer`) don't.
+ */
+const SECRET_NAME =
+  '(?:[A-Za-z0-9]+[-_])*(?:pass(?:word|wd)?|secret(?:[-_]access)?(?:[-_]?key)?|access[-_]?key|api[-_]?key|apikey|token|auth[-_]?token|authorization|cookie|credentials?|private[-_]?key|session[-_]?id)';
+/** `name: value` / `name=value`; the value stops at whitespace, quotes and `&`, so surrounding syntax survives. */
+const INLINE_SECRET = new RegExp(`(\\b${SECRET_NAME}\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s"'&]+)`, 'gi');
 const BEARER = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const MAX_STRING = 1000;
 

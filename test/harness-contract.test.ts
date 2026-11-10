@@ -1,6 +1,7 @@
 /**
  * Runs the shared HarnessAdapter contract against every harness in the repository.
  */
+import { describe, it, expect } from 'vitest';
 import { harnessContract, type ContractScript } from './harness-contract.js';
 import {
   ClaudeAgentSdkHarness,
@@ -101,4 +102,25 @@ harnessContract('copilot-sdk', {
   },
   dispatches: (h) => dispatched.get(h)!.n,
   settled: (h: HarnessAdapter, c, r, s) => (h as CopilotSdkHarness).settled(c, r, s),
+});
+
+describe('approval record redaction (TurnApprovals)', () => {
+  it('masks header-style and env-style credentials, keeping the surrounding syntax', async () => {
+    const { redactText } = await import('../packages/squad-sdk/src/backend/index.js');
+    expect(redactText('curl -H "X-API-Key: abc123secret" https://x')).toBe('curl -H "X-API-Key: [redacted]" https://x');
+    expect(redactText('curl -H "X-Auth-Token: tok987654321" https://x')).toBe('curl -H "X-Auth-Token: [redacted]" https://x');
+    expect(redactText('curl -H "Cookie: session=deadbeefcafe" https://x')).toBe('curl -H "Cookie: [redacted]" https://x');
+    expect(redactText('curl -H "Authorization: Bearer sk-live-0123456789abcdef" x')).toBe('curl -H "Authorization: Bearer [redacted]" x');
+    expect(redactText('curl -H "Proxy-Authorization: Basic dXNlcjpwYXNzd29yZA==" x')).toBe('curl -H "Proxy-Authorization: Basic [redacted]" x');
+    expect(redactText('export GITHUB_TOKEN=ghp_abcdefghijklmnop')).toBe('export GITHUB_TOKEN=[redacted]');
+    expect(redactText('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG aws s3 ls')).toBe('AWS_SECRET_ACCESS_KEY=[redacted] aws s3 ls');
+    expect(redactText('https://api.example.com?token=s3cr3t&page=2')).toBe('https://api.example.com?token=[redacted]&page=2');
+  });
+
+  it('leaves look-alike words alone', async () => {
+    const { redactText } = await import('../packages/squad-sdk/src/backend/index.js');
+    for (const s of ['git log --author=brady --since=1.week', 'mkdir -p build/out', 'python tokenizer.py --input a.txt', 'npm test -- --run', 'session: started']) {
+      expect(redactText(s)).toBe(s);
+    }
+  });
 });

@@ -20,7 +20,7 @@ export { DurableHttpSquadBackend, validateBaseUrl } from './durable-http-backend
 export { ClaudeAgentSdkHarness, CLAUDE_AGENT_SDK_HARNESS_ID, claudeApprovalHash, isClaudeAgentSdkAvailable } from './harnesses/claude-agent-sdk.js';
 export { CopilotSdkHarness, COPILOT_SDK_HARNESS_ID } from './harnesses/copilot-sdk.js';
 export type { CopilotSdkHarnessOptions, CopilotClientLike, CopilotSessionLike, CopilotSessionConfig, CopilotSessionEvent, CopilotPermissionRequest, CopilotPermissionResult } from './harnesses/copilot-sdk.js';
-export { TurnApprovals, canonicalApprovalHash, redactApprovalPayload, summarizeAction } from './harnesses/approval-queue.js';
+export { TurnApprovals, canonicalApprovalHash, redactApprovalPayload, redactText, summarizeAction } from './harnesses/approval-queue.js';
 export { TurnHarness, TurnCancelled } from './harnesses/turn-harness.js';
 export type { TurnRun } from './harnesses/turn-harness.js';
 export type { ApprovalOutcome } from './harnesses/approval-queue.js';
