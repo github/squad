@@ -167,21 +167,17 @@ export const CLAUDE_DEFAULT_EXECUTE_FLAGS = '--permission-mode bypassPermissions
 
 /**
  * Flags `watch.claudeFlags` may set from `.squad/config.json`. That file belongs to the repository,
- * so it may tune the model, permission mode, turn limit and tool lists, but never MCP servers,
- * settings, plugins, extra directories or the agent (which would undo the squad_state-only MCP
- * config of the Claude preset). `--claude-flags` on the command line is the user's own and is
- * not restricted.
+ * so it may tune the model, permission mode, effort and turn limit, but never tool lists (which
+ * could widen what Claude may run), MCP servers, settings, plugins, extra directories or the agent
+ * (which would undo the squad_state-only MCP config of the Claude preset). `--claude-flags` on the
+ * command line is the user's own and is not restricted.
  */
-const CLAUDE_FILE_FLAGS: Record<string, ((value: string) => boolean) | 'list'> = {
+const CLAUDE_FILE_FLAGS: Record<string, (value: string) => boolean> = {
   '--permission-mode': (v) => ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'].includes(v),
   '--model': (v) => /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/.test(v),
   '--fallback-model': (v) => /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/.test(v),
   '--effort': (v) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(v),
   '--max-turns': (v) => /^[1-9][0-9]{0,4}$/.test(v),
-  '--allowedTools': 'list',
-  '--allowed-tools': 'list',
-  '--disallowedTools': 'list',
-  '--disallowed-tools': 'list',
 };
 
 /** Validate repository-supplied Claude flags; throws {@link WatchConfigError} naming the first bad one. */
@@ -195,11 +191,6 @@ export function validateClaudeFileFlags(flags: string): string {
         `.squad/config.json watch.claudeFlags may not set ${JSON.stringify(name)}. Allowed: ${Object.keys(CLAUDE_FILE_FLAGS).join(', ')}. ` +
           'Pass other flags with --claude-flags on the command line.',
       );
-    }
-    if (rule === 'list') {
-      // Tool names (no leading dash) until the next flag.
-      if (inline === undefined) while (i + 1 < tokens.length && !tokens[i + 1]!.startsWith('-')) i++;
-      continue;
     }
     const value = inline ?? tokens[++i];
     if (value === undefined || !rule(value)) {
