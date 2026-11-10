@@ -29,7 +29,7 @@ Files below marked as **"Derived / append-only"** are **mutable state** — agen
 | `.squad/agents/{name}/history.md` | **Derived / append-only.** Personal learnings. Never authoritative for enforcement. | Owning agent (append only); `squad nap` compresses it | Owning agent only |
 | `.squad/agents/{name}/history-archive.md` | **Derived / append-only.** Archived history entries. Preserved for reference. | `squad nap` (history compression) | Owning agent (read-only) |
 | `.squad/orchestration-log/` | **Derived / append-only.** Agent routing evidence. Never edited after write. | Legacy; no default writer (not Scribe) | All agents (read-only) |
-| `.squad/log/` | **Derived / append-only.** Session logs. Diagnostic archive. Never edited after write. | Runtime and `squad watch` capabilities (not Scribe) | All agents (read-only) |
+| `.squad/log/` | **Derived / append-only.** Session logs. Diagnostic archive. Never edited after write. | Runtime, `squad watch` capabilities, and the retrospective facilitator (retro logs only); not Scribe | All agents (read-only) |
 | `.squad/templates/` | **Reference.** Format guides for runtime files. Not authoritative for enforcement. | Squad (Coordinator) at init | Squad (Coordinator) |
 | `.squad/rai/policy.md` | **Authoritative RAI policy.** Check categories, terminology standards, and opt-out rules. | Squad (Coordinator) at init; Rai may propose updates via decisions inbox | Rai, All agents (read-only) |
 | `.squad/rai/audit-trail.md` | **Derived / append-only.** RAI review evidence log. Redacted — never contains raw secrets or harmful content. | Rai (append only) | Rai, Squad (Coordinator) |

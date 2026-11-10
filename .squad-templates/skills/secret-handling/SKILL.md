@@ -8,7 +8,7 @@ source: earned (issue #267 — credential leak incident)
 
 ## Context
 
-Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to `.squad/` files (decisions, logs, history), Scribe auto-commits them to git, exposing them in remote history. This skill codifies absolute prohibitions and safe alternatives.
+Spawned agents have read access to the entire repository, including `.env` files containing live credentials. If an agent reads secrets and writes them to `.squad/` files (decisions, logs, history), they get committed with the team state or persisted by the state backend, exposing them in remote history. This skill codifies absolute prohibitions and safe alternatives.
 
 ## Patterns
 
@@ -55,9 +55,11 @@ Spawned agents have read access to the entire repository, including `.env` files
 - Architecture notes: "App uses JWT auth — token stored in session"
 - Schema documentation: "Requires OPENAI_API_KEY, GITHUB_TOKEN (see .env.example for format)"
 
-### Scribe Pre-Commit Validation
+### Pre-Commit Validation for `.squad/`
 
-**Before committing `.squad/` changes, Scribe MUST:**
+Scribe never commits (see its charter). This applies to whoever commits `.squad/` changes, an agent or the coordinator.
+
+**Before committing `.squad/` changes, the committer MUST:**
 
 1. **Scan all staged files** for secret patterns (use regex table above)
 2. **Check for prohibited file names** (don't commit `.env` even if manually staged)
@@ -79,7 +81,7 @@ Spawned agents have read access to the entire repository, including `.env` files
 4. **If no secrets detected:**
    - Proceed with commit as normal
 
-**Implementation note for Scribe:**
+**Implementation note:**
 - Run validation AFTER staging files, BEFORE calling `git commit`
 - Use PowerShell `Select-String` or `git diff --cached` to scan staged content
 - Fail loud — secret leaks are unacceptable, blocking the commit is correct behavior
@@ -152,9 +154,9 @@ User: "It's a Postgres database, schema is in migrations/"
     "Database: Postgres (connection configured in .env). Schema defined in db/migrations/."
 ```
 
-### ✓ Correct: Scribe Pre-Commit Validation
+### ✓ Correct: Pre-Commit Validation
 
-**Scribe is about to commit:**
+**An agent is about to commit `.squad/` changes:**
 
 ```powershell
 # Stage files
@@ -196,5 +198,5 @@ git commit -F $msgFile
 - ❌ Committing first, scanning later — validation MUST happen before commit
 - ❌ Silently skipping secret detection — fail loud, never silent
 - ❌ Trusting agents to "know better" — enforce at multiple layers (prompt, hook, architecture)
-- ❌ Writing secrets to "temporary" files in `.squad/` — Scribe commits ALL `.squad/` changes
+- ❌ Writing secrets to "temporary" files in `.squad/` — `.squad/` changes get committed or persisted with the team state
 - ❌ Extracting "just the host" from a connection string — still leaks infrastructure topology

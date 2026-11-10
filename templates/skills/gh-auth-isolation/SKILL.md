@@ -177,7 +177,7 @@ git push https://personaluser:$token@github.com/personaluser/repo.git main
 - ❌ **Hardcoding tokens** in scripts, environment variables, or committed files. Use `gh auth token --user` to extract at runtime.
 - ❌ **Assuming the default `gh` auth works** for all repos. EMU accounts can't access personal repos and vice versa.
 - ❌ **Switching `gh auth login`** globally mid-session. This changes the default for ALL processes and can break parallel agents.
-- ❌ **Storing personal tokens in `.env`** or `.squad/` files. These get committed by Scribe. Use `gh`'s credential store.
+- ❌ **Storing personal tokens in `.env`** or `.squad/` files. These get committed with the team state. Use `gh`'s credential store.
 - ❌ **Ignoring token cleanup** after inline HTTPS pushes. Always reset the remote URL to avoid persisting tokens.
 - ❌ **Using `gh auth switch`** in multi-agent sessions. One agent switching affects all others sharing the shell.
 - ❌ **Mixing EMU and personal operations** in the same git clone. Use separate clones or explicit remote URLs per operation.

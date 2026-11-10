@@ -92,6 +92,14 @@ describe('Scribe contract — every prompt surface agrees with the charter', () 
       'cross-agent context sharing',
       'Scribe / Logger',
       'Scribe or designated',
+      // The charter forbids Scribe from committing state; commits belong to whoever commits the work.
+      'Scribe commits',
+      'Scribe auto-commits',
+      'committed by Scribe',
+      'Scribe Pre-Commit',
+      'Scribe is about to commit',
+      'Scribe merge-and-commit',
+      'Implementation note for Scribe',
     ];
     const files = (readdirSync(resolve(ROOT, '.squad-templates'), { recursive: true }) as string[])
       .map((f) => `.squad-templates/${f.replace(/\\/g, '/')}`)
@@ -101,6 +109,16 @@ describe('Scribe contract — every prompt surface agrees with the charter', () 
       const text = read(file);
       for (const phrase of retired) expect(text, `${file}: ${phrase}`).not.toContain(phrase);
     }
+  });
+
+  it('lets the retrospective facilitator write the retro log the retro gate waits for', () => {
+    // retro-enforcement blocks work until the facilitator (never Scribe) writes to .squad/log/,
+    // so the source-of-truth writer table must allow that facilitator to write there.
+    expect(read('.squad-templates/skills/retro-enforcement/SKILL.md')).toMatch(/facilitator agent\*\* \(the Lead or a designated member, never Scribe\)[\s\S]*Wait for the log file\*\* to be written to `\.squad\/log\/`/);
+    const logRow = read('.squad-templates/skills/coordinator-source-of-truth/SKILL.md')
+      .split(/\r?\n/).find((line) => line.startsWith('| `.squad/log/` |')) ?? '';
+    expect(logRow).toContain('retrospective facilitator');
+    expect(logRow).toContain('not Scribe');
   });
 
   it('the gh-aw builtin charter matches the template charter', () => {
