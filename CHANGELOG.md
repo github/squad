@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### Claude Code as a first-class host (#2438)
 
+Planned as the headline of `v2.0.0-preview.5`.
+
 Claude Code is the first host after GitHub Copilot where Squad uses the host's own features (subagents, hooks, skills, plugins and the Claude Agent SDK) instead of the shared minimum. Every addition goes through the host projection contract in `squad-client-harness-adapters/v0.2` (§4–§5, §13) and the charter extension rules, and the same `.squad/` team still drives Copilot and the other hosts unchanged. It also ships the SDK's first real `HarnessAdapter`, which makes Claude the non-Copilot host that the two v0.2 profiles (harness-adapters §15.1, backend-decoupling §14.4) need before they can be promoted. Promoting them is still pending.
 
 #### Added
