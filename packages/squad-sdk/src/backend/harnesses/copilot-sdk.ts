@@ -15,17 +15,9 @@
  * Like `claude-agent-sdk`, a pending approval lives in process memory and is lost if the harness restarts.
  */
 import { randomUUID } from 'node:crypto';
-import type {
-  ApprovalResponse,
-  HarnessAdapter,
-  HarnessCapabilities,
-  HarnessDescriptor,
-  HarnessEventEnvelope,
-  HarnessSubmission,
-  LeaseEpoch,
-} from '../types.js';
-import { partsToText } from '../types.js';
-import { TurnApprovals } from './approval-queue.js';
+import type { HarnessCapabilities } from '../types.js';
+import { summarizeAction } from './approval-queue.js';
+import { TurnHarness, type TurnRun } from './turn-harness.js';
 
 export const COPILOT_SDK_HARNESS_ID = 'copilot-sdk';
 
@@ -72,25 +64,12 @@ export interface CopilotSdkHarnessOptions {
   createClient?: () => Promise<CopilotClientLike>;
 }
 
-interface Run {
-  conversationId: string;
-  runId: string;
-  seq: number;
-  epoch?: LeaseEpoch;
-  cancelled: boolean;
-  approvals: TurnApprovals;
-  done: Promise<void>;
-  /** Ends the wait for `session.idle` (cancel doesn't rely on the runtime sending one after abort). */
-  wake?: () => void;
+/** The most telling field of a permission request, for the approval summary (the full request stays in the hash). */
+function requestDetail(r: CopilotPermissionRequest): unknown {
+  return r['fullCommandText'] ?? r['fileName'] ?? r['path'] ?? r['url'] ?? r['toolName'];
 }
 
-/** A short, readable description of a permission request for the broker's approval record. */
-function describeRequest(r: CopilotPermissionRequest): string {
-  const detail = r['fullCommandText'] ?? r['fileName'] ?? r['path'] ?? r['url'] ?? r['toolName'] ?? '';
-  return `${r.kind}${detail ? `: ${String(detail).slice(0, 400)}` : ''}`;
-}
-
-export class CopilotSdkHarness implements HarnessAdapter {
+export class CopilotSdkHarness extends TurnHarness {
   readonly id = COPILOT_SDK_HARNESS_ID;
   readonly capabilities: HarnessCapabilities = {
     streaming: true,
@@ -99,83 +78,60 @@ export class CopilotSdkHarness implements HarnessAdapter {
     tools: true,
     extensionNamespaces: ['x-copilot'],
   };
+  protected readonly displayName = 'GitHub Copilot SDK';
 
-  private readonly listeners = new Map<string, Set<(e: HarnessEventEnvelope) => void>>();
-  private readonly seen = new Set<string>();
-  private readonly runs = new Map<string, Run>();
   /** The live session per conversation, and the session id to resume when the object is gone. */
   private readonly sessions = new Map<string, Promise<CopilotSessionLike>>();
   private readonly sessionIds = new Map<string, string>();
+  /** Sessions that finished creating (only these can be aborted). */
+  private readonly ready = new Map<string, CopilotSessionLike>();
   /** The run currently executing per conversation (permission requests are routed to it). */
-  private readonly active = new Map<string, Run>();
-  private readonly tails = new Map<string, Promise<void>>();
+  private readonly active = new Map<string, TurnRun>();
   private client?: Promise<CopilotClientLike>;
 
-  constructor(private readonly options: CopilotSdkHarnessOptions) {}
-
-  describe(): HarnessDescriptor {
-    return { id: this.id, displayName: 'GitHub Copilot SDK', capabilities: this.capabilities };
+  constructor(private readonly options: CopilotSdkHarnessOptions) {
+    super();
   }
 
-  subscribe(conversationId: string, listener: (event: HarnessEventEnvelope) => void): () => void {
-    let set = this.listeners.get(conversationId);
-    if (!set) this.listeners.set(conversationId, (set = new Set()));
-    set.add(listener);
-    return () => {
-      set!.delete(listener);
-    };
+  protected async init(): Promise<void> {
+    await this.getClient();
   }
 
-  async submit(submission: HarnessSubmission): Promise<void> {
-    const key = submission.operationId ?? `${submission.conversationId}:${submission.runId}:${submission.seq}`;
-    if (this.seen.has(key)) return;
-    await this.getClient(); // a client that can't start fails the delivery, so the broker retries
-    this.seen.add(key);
-    const run: Run = {
-      conversationId: submission.conversationId,
-      runId: submission.runId,
-      seq: submission.seq,
-      epoch: submission.epoch,
-      cancelled: false,
-      approvals: undefined as unknown as TurnApprovals,
-      done: Promise.resolve(),
-    };
-    run.approvals = new TurnApprovals(
-      run.seq,
-      (request) => this.emit(run, { type: 'approval-requested', request }),
-      () => this.emit(run, { type: 'state', state: 'running' }),
-      () => void this.stop(run),
-    );
-    this.runs.set(this.runKey(run.conversationId, run.runId, run.seq), run);
-    const prompt = submission.messages
-      .filter((m) => m.role === 'user')
-      .map((m) => (m.parts?.length ? partsToText(m.parts) : m.content))
-      .join('\n\n');
-    const previous = this.tails.get(run.conversationId) ?? Promise.resolve();
-    run.done = previous.then(() => this.execute(run, prompt));
-    this.tails.set(run.conversationId, run.done.catch(() => undefined));
+  /** Abort the session's turn and wait for the runtime to acknowledge it; the next turn waits on this. */
+  protected async interrupt(run: TurnRun): Promise<void> {
+    if (this.active.get(run.conversationId) !== run) return;
+    // A session still being created has nothing to abort; runTurn's checkpoint keeps the turn from sending.
+    await this.ready.get(run.conversationId)?.abort();
   }
 
-  async cancel(conversationId: string, runId: string, seq: number): Promise<void> {
-    const run = this.runs.get(this.runKey(conversationId, runId, seq));
-    if (!run || run.cancelled) return;
-    await this.stop(run);
-  }
-
-  async respondApproval(_conversationId: string, response: ApprovalResponse): Promise<void> {
-    for (const run of this.runs.values()) if (run.approvals.respond(response)) return;
-    // Unknown or already decided: a redelivered decision is a no-op.
-  }
-
-  /** Waits for a submitted turn to finish (tests and orderly shutdown). */
-  async settled(conversationId: string, runId: string, seq: number): Promise<void> {
-    await this.runs.get(this.runKey(conversationId, runId, seq))?.done.catch(() => undefined);
-  }
-
-  // ── internals ─────────────────────────────────────────────────────────────────────────────────
-
-  private runKey(conversationId: string, runId: string, seq: number): string {
-    return `${conversationId}\u0000${runId}\u0000${seq}`;
+  protected async runTurn(run: TurnRun, prompt: string): Promise<string | undefined> {
+    this.active.set(run.conversationId, run);
+    let off: (() => void) | undefined;
+    try {
+      const session = await this.session(run.conversationId);
+      this.checkpoint(run); // a cancel during session creation never reaches send()
+      const finished = new Promise<string | undefined>((resolve) => {
+        // Cancel ends the wait without relying on an idle event after abort.
+        if (run.abort.signal.aborted) resolve(undefined);
+        run.abort.signal.addEventListener('abort', () => resolve(undefined), { once: true });
+        off = session.on((event) => {
+          // Sub-agent events (agentId) never complete or fail the main turn, and stay out of the transcript.
+          if (event.agentId) return;
+          if (event.type === 'assistant.message' && !event.data?.parentToolCallId && event.data?.content) {
+            this.emit(run, { type: 'message', message: { runId: run.runId, seq: run.seq, role: 'assistant', content: event.data.content } });
+          } else if (event.type === 'session.idle') {
+            resolve(undefined);
+          } else if (event.type === 'session.error') {
+            resolve(event.data?.message || event.data?.errorType || 'Copilot session error');
+          }
+        });
+      });
+      await session.send(prompt);
+      return await finished;
+    } finally {
+      off?.();
+      if (this.active.get(run.conversationId) === run) this.active.delete(run.conversationId);
+    }
   }
 
   private getClient(): Promise<CopilotClientLike> {
@@ -200,7 +156,7 @@ export class CopilotSdkHarness implements HarnessAdapter {
         const run = this.active.get(conversationId);
         if (!run) return { kind: 'reject', feedback: 'No Squad turn is running' };
         const { kind, toolCallId, ...detail } = request;
-        const outcome = await run.approvals.request(toolCallId ?? `copilot-${randomUUID()}`, describeRequest(request), { kind, ...detail });
+        const outcome = await run.approvals.request(toolCallId ?? `copilot-${randomUUID()}`, summarizeAction(kind, requestDetail(request)), { kind, ...detail });
         return outcome.approved ? { kind: 'approve-once' } : { kind: 'reject', feedback: outcome.reason };
       },
     };
@@ -216,63 +172,12 @@ export class CopilotSdkHarness implements HarnessAdapter {
           ? await client.resumeSession(id, this.sessionConfig(conversationId))
           : await client.createSession(this.sessionConfig(conversationId));
         this.sessionIds.set(conversationId, session.sessionId);
+        this.ready.set(conversationId, session);
         return session;
       })();
       this.sessions.set(conversationId, s);
       s.catch(() => this.sessions.delete(conversationId));
     }
     return s;
-  }
-
-  private emit(run: Run, event: Record<string, unknown>): void {
-    const envelope = { ...event, runId: run.runId, seq: run.seq, ...(run.epoch !== undefined ? { epoch: run.epoch } : {}) } as HarnessEventEnvelope;
-    for (const l of this.listeners.get(run.conversationId) ?? []) l(envelope);
-  }
-
-  private async stop(run: Run): Promise<void> {
-    run.cancelled = true;
-    run.approvals.close('Turn cancelled');
-    run.wake?.();
-    if (this.active.get(run.conversationId) === run) {
-      const session = await this.sessions.get(run.conversationId)?.catch(() => undefined);
-      await session?.abort().catch(() => undefined);
-    }
-  }
-
-  private async execute(run: Run, prompt: string): Promise<void> {
-    if (run.cancelled) {
-      this.emit(run, { type: 'state', state: 'cancelled' });
-      return;
-    }
-    this.emit(run, { type: 'state', state: 'running' });
-    this.active.set(run.conversationId, run);
-    let off: (() => void) | undefined;
-    try {
-      const session = await this.session(run.conversationId);
-      const finished = new Promise<string | undefined>((resolve) => {
-        run.wake = () => resolve(undefined);
-        off = session.on((event) => {
-          if (event.type === 'assistant.message' && !event.agentId && !event.data?.parentToolCallId && event.data?.content) {
-            this.emit(run, { type: 'message', message: { runId: run.runId, seq: run.seq, role: 'assistant', content: event.data.content } });
-          } else if (event.type === 'session.idle') {
-            resolve(undefined);
-          } else if (event.type === 'session.error') {
-            resolve(event.data?.message || event.data?.errorType || 'Copilot session error');
-          }
-        });
-      });
-      await session.send(prompt);
-      const failure = await finished;
-      if (run.cancelled) this.emit(run, { type: 'state', state: 'cancelled' });
-      else if (failure) this.emit(run, { type: 'state', state: 'failed', error: failure.slice(0, 500) });
-      else this.emit(run, { type: 'state', state: 'completed' });
-    } catch (err) {
-      if (run.cancelled) this.emit(run, { type: 'state', state: 'cancelled' });
-      else this.emit(run, { type: 'state', state: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
-    } finally {
-      off?.();
-      run.approvals.close('Turn ended');
-      if (this.active.get(run.conversationId) === run) this.active.delete(run.conversationId);
-    }
   }
 }

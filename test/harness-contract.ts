@@ -15,9 +15,24 @@ import {
 
 export interface ContractToolCall { name: string; input: Record<string, unknown> }
 
+export interface ContractScript {
+  reply: string;
+  tools?: ContractToolCall[];
+  /** Runtime startup waits for this (to cancel or redeliver during startup). */
+  gate?: Promise<void>;
+  /** Runtime startup fails this many times before succeeding. */
+  failStarts?: number;
+}
+
 export interface HarnessContractDriver {
-  /** Harness under test, scripted to answer `reply` and to request approval for each of `tools`, in parallel. */
-  create(script: { reply: string; tools?: ContractToolCall[] }): HarnessAdapter;
+  /**
+   * Harness under test, scripted to answer `reply` and to request approval for each of `tools`, in parallel.
+   * Tool-call ids are deterministic per turn (the same in every conversation), as runtimes don't guarantee
+   * global uniqueness.
+   */
+  create(script: ContractScript): HarnessAdapter;
+  /** How many turns reached the runtime (query/send) for this harness. */
+  dispatches(harness: HarnessAdapter): number;
   /** Wait until the harness has finished the turn. */
   settled(harness: HarnessAdapter, conversationId: string, runId: string, seq: number): Promise<void>;
 }
@@ -31,7 +46,7 @@ async function until(check: () => boolean | Promise<boolean>, ms = 3000): Promis
 }
 
 export function harnessContract(name: string, driver: HarnessContractDriver): void {
-  async function setup(script: { reply: string; tools?: ContractToolCall[] }) {
+  async function setup(script: ContractScript) {
     const harness = driver.create(script);
     const harnesses = new DefaultHarnessRegistry();
     harnesses.register(harness);
@@ -39,9 +54,9 @@ export function harnessContract(name: string, driver: HarnessContractDriver): vo
     await backend.createConversation({ conversationId: 'k' });
     const events: HarnessEventEnvelope[] = [];
     harness.subscribe('k', (e) => events.push(e));
-    const send = (runId: string, seq: number) =>
-      backend.sendMessage('k', { runId, seq, role: 'user', content: `task ${seq}`, harness: harness.id });
-    const settled = (runId: string, seq: number) => driver.settled(harness, 'k', runId, seq);
+    const send = (runId: string, seq: number, conversationId = 'k') =>
+      backend.sendMessage(conversationId, { runId, seq, role: 'user', content: `task ${seq}`, harness: harness.id });
+    const settled = (runId: string, seq: number, conversationId = 'k') => driver.settled(harness, conversationId, runId, seq);
     return { harness, backend, events, send, settled };
   }
 
@@ -111,6 +126,72 @@ export function harnessContract(name: string, driver: HarnessContractDriver): vo
       await harness.cancel('k', 'r1', 1);
       await settled('r1', 1);
       expect((await backend.getTurn('k', 1)).state).toBe('cancelled');
+    });
+
+    it('keeps a cancel that arrives while the runtime is starting: the turn never reaches it', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const { harness, backend, send, settled } = await setup({ reply: 'never', gate });
+      const sending = send('r1', 1); // the harness's submit is held at startup
+      await until(async () => (await backend.getTurn('k', 1).catch(() => undefined)) !== undefined);
+      await backend.cancelTurn('k', 1);
+      await harness.cancel('k', 'r1', 1);
+      release();
+      await sending;
+      await new Promise((r) => setTimeout(r, 10));
+      await settled('r1', 1);
+      expect(driver.dispatches(harness)).toBe(0);
+      expect((await backend.getTurn('k', 1)).state).toBe('cancelled');
+    });
+
+    it('runs concurrent duplicate deliveries once, and a retry after a failed start once', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const harness = driver.create({ reply: 'once', gate });
+      const s = { conversationId: 'k', runId: 'r1', seq: 1, operationId: 'k:r1:1', messages: [{ runId: 'r1', seq: 1, role: 'user' as const, content: 'x' }] };
+      const both = Promise.all([harness.submit(s), harness.submit(s)]);
+      release();
+      await both;
+      await driver.settled(harness, 'k', 'r1', 1);
+      expect(driver.dispatches(harness)).toBe(1);
+
+      const flaky = driver.create({ reply: 'after retry', failStarts: 1 });
+      await expect(flaky.submit(s)).rejects.toThrow();
+      await flaky.submit(s);
+      await flaky.submit(s);
+      await driver.settled(flaky, 'k', 'r1', 1);
+      expect(driver.dispatches(flaky)).toBe(1);
+    });
+
+    it('scopes approvals to their conversation when tool-call ids repeat across conversations', async () => {
+      const { harness, backend, send, settled } = await setup({ reply: 'ok', tools: [{ name: 'Bash', input: { command: 'same' } }] });
+      await backend.createConversation({ conversationId: 'k2' });
+      await send('r1', 1);
+      await send('r1', 1, 'k2');
+      await until(async () => (await backend.getApprovals('k')).length === 1 && (await backend.getApprovals('k2')).length === 1);
+      const [a] = await backend.getApprovals('k');
+      const [b] = await backend.getApprovals('k2');
+      expect(a!.approvalId).toBe(b!.approvalId);
+      await backend.respondApproval('k2', { approvalId: b!.approvalId, hash: b!.hash, decision: 'approve' });
+      await settled('r1', 1, 'k2');
+      expect((await backend.getTurn('k2', 1)).state).toBe('completed');
+      expect((await backend.getTurn('k', 1)).state).toBe('awaiting-approval');
+      await backend.respondApproval('k', { approvalId: a!.approvalId, hash: a!.hash, decision: 'deny' });
+      await settled('r1', 1);
+    });
+
+    it('records a redacted approval while the hash still binds the full action', async () => {
+      const command = 'curl -H "Authorization: Bearer sk-live-0123456789abcdef" https://api.example.com?token=s3cr3t';
+      const { backend, send, settled } = await setup({ reply: 'ok', tools: [{ name: 'Bash', input: { command, apiKey: 'AKIA-SECRET' } }] });
+      await send('r1', 1);
+      await until(async () => (await backend.getApprovals('k')).length === 1);
+      const [a] = await backend.getApprovals('k');
+      const recorded = JSON.stringify({ action: a!.action, payload: a!.payload });
+      for (const secret of ['sk-live-0123456789abcdef', 's3cr3t', 'AKIA-SECRET']) expect(recorded).not.toContain(secret);
+      expect(a!.action).toContain('curl');
+      await backend.respondApproval('k', { approvalId: a!.approvalId, hash: a!.hash, decision: 'approve' });
+      await settled('r1', 1);
+      expect((await backend.getTurn('k', 1)).state).toBe('completed');
     });
   });
 }

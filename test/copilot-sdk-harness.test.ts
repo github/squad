@@ -168,3 +168,91 @@ describe.skipIf(process.env['SQUAD_REAL_CLI_TESTS'] !== '1')('copilot-sdk harnes
     expect((await backend.getTranscript('live')).at(-1)?.content.toLowerCase()).toContain('pong');
   }, 180_000);
 });
+
+describe('copilot-sdk harness: review regressions (#2451)', () => {
+  /** A client whose session creation and abort the test controls, recording every send. */
+  function controlled() {
+    let releaseCreate!: () => void;
+    const created = new Promise<void>((r) => (releaseCreate = r));
+    let releaseAbort!: () => void;
+    let abortHeld = false;
+    const sends: string[] = [];
+    let fire: (e: CopilotSessionEvent) => void = () => undefined;
+    const c: CopilotClientLike = {
+      async start() {},
+      async resumeSession(id, config) { return c.createSession(config); },
+      async createSession() {
+        await created;
+        const handlers = new Set<(e: CopilotSessionEvent) => void>();
+        fire = (e) => handlers.forEach((h) => h(e));
+        return {
+          sessionId: 's-1',
+          on(h: (e: CopilotSessionEvent) => void) { handlers.add(h); return () => handlers.delete(h); },
+          async send(prompt: string) { sends.push(prompt); return 'm'; },
+          async abort() { if (abortHeld) await new Promise<void>((r) => (releaseAbort = r)); },
+        };
+      },
+    };
+    return {
+      client: c, sends, releaseCreate,
+      holdAbort: () => { abortHeld = true; },
+      releaseAbort: () => releaseAbort(),
+      fire: (e: CopilotSessionEvent) => fire(e),
+    };
+  }
+
+  it('a cancel while the session is being created never reaches send()', async () => {
+    const k = controlled();
+    const { harness, backend, send } = await setup(k.client);
+    await send('r1', 1);
+    await new Promise((r) => setTimeout(r, 5));
+    await backend.cancelTurn('c', 1);
+    await harness.cancel('c', 'r1', 1);
+    k.releaseCreate();
+    await harness.settled('c', 'r1', 1);
+    expect(k.sends).toEqual([]);
+    expect((await backend.getTurn('c', 1)).state).toBe('cancelled');
+  });
+
+  it('the next turn waits for a slow abort, and late events from the aborted turn are not attributed to it', async () => {
+    const k = controlled();
+    k.releaseCreate();
+    const { harness, backend, send } = await setup(k.client);
+    await send('r1', 1, 'first');
+    await until(() => k.sends.length === 1);
+    await send('r2', 2, 'second');
+    k.holdAbort();
+    await backend.cancelTurn('c', 1);
+    const cancelling = harness.cancel('c', 'r1', 1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(k.sends).toEqual(['first']); // r2 must not start while r1 is still aborting
+    k.fire({ type: 'assistant.message', data: { content: 'late answer from r1' } });
+    k.fire({ type: 'session.idle' });
+    k.releaseAbort();
+    await cancelling;
+    await until(() => k.sends.length === 2);
+    k.fire({ type: 'assistant.message', data: { content: 'answer for r2' } });
+    k.fire({ type: 'session.idle' });
+    await harness.settled('c', 'r2', 2);
+    const turn2 = await backend.getTurn('c', 2);
+    expect(turn2.state).toBe('completed');
+    expect(turn2.messages.map((m) => m.content)).toEqual(['second', 'answer for r2']);
+    expect((await backend.getTranscript('c')).map((m) => m.content)).not.toContain('late answer from r1');
+  });
+
+  for (const childEvent of [{ type: 'session.idle' }, { type: 'session.error', data: { message: 'child failed' } }] as CopilotSessionEvent[]) {
+    it(`a sub-agent's ${childEvent.type} does not end the main turn`, async () => {
+      const { client: c } = client(async ({ fire }) => {
+        fire({ ...childEvent, agentId: 'child-agent' });
+        await new Promise((r) => setTimeout(r, 10));
+        fire({ type: 'assistant.message', data: { content: 'main answer' } });
+        fire({ type: 'session.idle' });
+      });
+      const { harness, backend, send } = await setup(c);
+      await send('r1', 1);
+      await harness.settled('c', 'r1', 1);
+      expect((await backend.getTurn('c', 1)).state).toBe('completed');
+      expect((await backend.getTranscript('c')).at(-1)?.content).toBe('main answer');
+    });
+  }
+});

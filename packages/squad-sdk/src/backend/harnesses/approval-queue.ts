@@ -5,6 +5,10 @@
  * calls are queued and offered one at a time. Each request is bound to a hash of its canonical action; a
  * response with a different hash never resolves it. A deny ends the turn, as the broker marks it
  * `cancelled`: the call and every queued call are denied and `onDeny` fires so the harness can stop.
+ *
+ * What reaches the broker's approval record is minimized: the payload is redacted (secret-looking keys and
+ * inline credentials masked, long strings truncated) and the action is a short summary. The hash is still taken
+ * over the full, unredacted action, so a decision stays bound to exactly what will run.
  */
 import { createHash } from 'node:crypto';
 import type { ApprovalResponse, HarnessApprovalRequest } from '../types.js';
@@ -20,6 +24,38 @@ export function canonicalApprovalHash(payload: unknown): string {
         ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])]))
         : v;
   return `sha256:${createHash('sha256').update(JSON.stringify(canonical(payload))).digest('hex')}`;
+}
+
+const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[-_]?key|auth(orization)?|cookie|credential|private[-_]?key|session[-_]?id/i;
+const INLINE_SECRET = /((?:pass(?:word|wd)?|secret|token|api[-_]?key|authorization)\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi;
+const BEARER = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+const MAX_STRING = 1000;
+
+/** Mask inline credentials (`token=…`, `Authorization: Bearer …`) in free text. */
+export function redactText(text: string): string {
+  // Bearer/basic tokens first, so `Authorization: Bearer <token>` loses the token rather than the scheme word.
+  return text.replace(BEARER, '$1 [redacted]').replace(INLINE_SECRET, (m, key: string, value: string) => (value === 'Bearer' || value === 'Basic' || value.startsWith('[redacted]') ? m : `${key}[redacted]`));
+}
+
+/** A copy of an approval payload safe to record: secret-looking keys masked, strings truncated, depth bounded. */
+export function redactApprovalPayload(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') {
+    const t = redactText(value);
+    return t.length > MAX_STRING ? `${t.slice(0, MAX_STRING)}… [${t.length - MAX_STRING} chars truncated]` : t;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (depth >= 6) return '[truncated]';
+  if (Array.isArray(value)) return value.slice(0, 50).map((v) => redactApprovalPayload(v, depth + 1));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, SENSITIVE_KEY.test(k) ? '[redacted]' : redactApprovalPayload(v, depth + 1)]),
+  );
+}
+
+/** A one-line, redacted summary of an action for the approval record. */
+export function summarizeAction(label: string, detail: unknown): string {
+  const text = typeof detail === 'string' ? detail : detail === undefined ? '' : JSON.stringify(redactApprovalPayload(detail));
+  const flat = redactText(text).replace(/\s+/g, ' ').trim();
+  return flat ? `${label}: ${flat.length > 300 ? `${flat.slice(0, 299)}…` : flat}` : label;
 }
 
 interface Pending {
@@ -103,6 +139,12 @@ export class TurnApprovals {
     const next = this.queue[0];
     if (!next) return;
     next.offered = true;
-    this.offer({ approvalId: next.approvalId, turnSeq: this.turnSeq, action: next.action, hash: next.hash, payload: next.payload });
+    this.offer({
+      approvalId: next.approvalId,
+      turnSeq: this.turnSeq,
+      action: next.action,
+      hash: next.hash,
+      payload: redactApprovalPayload(next.payload),
+    });
   }
 }

@@ -233,6 +233,18 @@ Two `HarnessAdapter`s ship, in `packages/squad-sdk/src/backend/harnesses/`.
 Both route approvals through one shared queue (`TurnApprovals`): requests are
 hash-bound (sha256 of the canonical action), offered one at a time because the
 broker holds one pending approval per turn, and a deny ends the turn.
+Approvals are scoped to their conversation, since runtime tool-call ids are
+not globally unique. The broker's approval record carries a short action
+summary and a redacted payload (secret-looking keys and inline credentials
+masked, long strings truncated); the hash still covers the full action.
+
+Both also share one turn lifecycle (`TurnHarness`). Concurrent deliveries of
+an operation share one acceptance, and a failed start forgets it so the retry
+runs. A run is registered before its runtime starts, so a cancel during
+startup or session creation is kept and the turn never reaches the runtime.
+`cancel` acknowledges once the stop is requested; the conversation's next turn
+starts only after the interrupt has finished, so late events from an aborted
+turn are never attributed to the next one.
 
 `claude-agent-sdk` (`ClaudeAgentSdkHarness`) runs each admitted turn as a
 Claude Agent SDK `query()`, resuming the conversation's session, and maps
