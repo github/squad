@@ -41,6 +41,7 @@ export const CATEGORY_RULES = Object.freeze([
   { category: 'env-gated', file: /squad-20-preview-tarball-matrix\.test\.ts$/, reason: 'SQUAD_PREVIEW_TARBALL_MATRIX=1 not set (exact-tarball matrix runs only in the attested preview workflow mode)' },
   { category: 'env-gated', file: /clients-real-cli\.test\.ts$/, reason: 'SQUAD_REAL_CLI_TESTS=1 not set / host CLI binaries absent' },
   { category: 'env-gated', file: /squad-20-real-clients-stdio\.e2e\.test\.ts$/, reason: 'SQUAD_REAL_CLI_TESTS=1 not set / host CLI binaries absent' },
+  { category: 'env-gated', file: /(claude-agent-sdk|copilot-sdk)-harness\.test\.ts$/, title: /live \(real (Agent|Copilot) SDK\)/, reason: 'SQUAD_REAL_CLI_TESTS=1 not set / execution-harness credentials absent (Anthropic API key or Bedrock/Vertex for Claude; a signed-in Copilot user for Copilot)' },
   { category: 'env-gated', file: /squad-20-host-feature-matrix\.test\.ts$/, reason: 'live host evidence requires the real CLI binaries' },
   { category: 'env-gated', file: /mcp-spec-init\.test\.ts$/, title: /squad\.exe/, reason: 'it.runIf(win32): Windows-only PATH/.exe resolution' },
   {
