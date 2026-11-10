@@ -11,7 +11,7 @@ import { upsertTomlTable } from './apply.js';
 import { buildCoordinatorInstructions, dispatchStrategy } from './coordinator.js';
 import { projectClaudeMembers } from './claude-members.js';
 import { projectClaudeSkills } from './claude-skills.js';
-import { projectClaudeHooks } from './claude-hooks.js';
+import { projectClaudeHooks, readClaudePluginSettingsOwnership } from './claude-hooks.js';
 import { CLAUDE_MARKETPLACE_NAME, CLAUDE_PLUGIN_AGENT, CLAUDE_PLUGIN_MCP_PREFIX, CLAUDE_PLUGIN_NAME, readClaudePluginMode } from './claude-plugin.js';
 import type { HostProjection, ClientContext, ClientId, ProjectionFile } from './types.js';
 import { CLIENT_IDS } from './types.js';
@@ -78,7 +78,7 @@ function yamlString(s: string): string {
   return JSON.stringify(s);
 }
 
-function mcpJson(ctx: ClientContext, withTools: boolean): ProjectionFile {
+function mcpJson(ctx: ClientContext, withTools: boolean): Extract<ProjectionFile, { kind: 'json' }> {
   return {
     kind: 'json',
     path: '.mcp.json',
@@ -113,6 +113,11 @@ const claude: HostProjection = {
     const squadDir = ctx.squadDir ?? '.squad';
     // Plugin mode (v3): the Squad plugin carries the coordinator, skills, hooks and MCP server.
     const plugin = readClaudePluginMode(path.resolve(ctx.root, squadDir));
+    const coordinator = path.join(ctx.root, CLAUDE_COORDINATOR_PATH);
+    const ownsProjectMcp = plugin && (
+      readClaudePluginSettingsOwnership(ctx.root)?.projectMcp ||
+      (fs.existsSync(coordinator) && fs.readFileSync(coordinator, 'utf8').includes(GENERATED_NOTE_TEXT))
+    );
     return [
       plugin
         ? { kind: 'obsolete', path: CLAUDE_COORDINATOR_PATH, ownedMarker: GENERATED_NOTE_TEXT }
@@ -131,7 +136,9 @@ const claude: HostProjection = {
           },
       // Plugin mode leaves `.mcp.json` alone: the Copilot bootstrap owns its squad_state entry, and
       // `.claude/settings.json` turns that entry off for Claude Code.
-      ...(plugin ? [] : [mcpJson(ctx, false)]),
+      ...(plugin
+        ? ownsProjectMcp ? [{ ...mcpJson(ctx, false), update: (existing: Json) => existing }] : []
+        : [mcpJson(ctx, false)]),
       {
         kind: 'block',
         path: 'CLAUDE.md',

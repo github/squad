@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { WatchCapability, WatchContext, PreflightResult, CapabilityResult } from '../types.js';
 import type { MachineCapabilities } from '@bradygaster/squad-sdk/ralph/capabilities';
-import { SquadClient } from '@bradygaster/squad-sdk/client';
+import { SquadClient, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
 import { createVerboseLogger } from '../verbose.js';
 import { loadAgentCharter } from '../../../shell/spawn.js';
 import {
@@ -300,7 +300,7 @@ async function estimateContextUtilization(
 
 /** The Claude preset needs the `claude` CLI and the projected coordinator subagent. */
 export async function claudePreflight(teamRoot: string): Promise<PreflightResult> {
-  if (!existsSync(path.join(teamRoot, '.claude', 'agents', 'squad.md'))) {
+  if (!readClaudePluginMode(path.join(teamRoot, '.squad')) && !existsSync(path.join(teamRoot, '.claude', 'agents', 'squad.md'))) {
     return { ok: false, reason: 'Claude preset: .claude/agents/squad.md not found. Run `squad upgrade --client claude` first.' };
   }
   return checkClaudeCli();

@@ -79,7 +79,7 @@ export function toolText(name: string, input: unknown): string {
 /** Follows one JSONL file, returning complete lines appended since the last read. */
 export class JsonlTail {
   private offset = 0;
-  private buf = '';
+  private buf: Buffer = Buffer.alloc(0);
   constructor(readonly file: string) {}
 
   read(): Json[] {
@@ -92,22 +92,23 @@ export class JsonlTail {
     if (size < this.offset) {
       // Truncated or replaced: start over.
       this.offset = 0;
-      this.buf = '';
+      this.buf = Buffer.alloc(0);
     }
     if (size === this.offset) return [];
     const fd = fs.openSync(this.file, 'r');
     try {
       const chunk = Buffer.alloc(size - this.offset);
-      fs.readSync(fd, chunk, 0, chunk.length, this.offset);
-      this.offset = size;
-      this.buf += chunk.toString('utf8');
+      const read = fs.readSync(fd, chunk, 0, chunk.length, this.offset);
+      this.offset += read;
+      this.buf = Buffer.concat([this.buf, chunk.subarray(0, read)]);
     } finally {
       fs.closeSync(fd);
     }
-    const lines = this.buf.split('\n');
-    this.buf = lines.pop() ?? '';
     const out: Json[] = [];
-    for (const line of lines) {
+    let start = 0;
+    for (let end = this.buf.indexOf(10); end !== -1; end = this.buf.indexOf(10, start)) {
+      const line = this.buf.subarray(start, end).toString('utf8');
+      start = end + 1;
       if (!line.trim()) continue;
       try {
         const v: unknown = JSON.parse(line);
@@ -116,6 +117,7 @@ export class JsonlTail {
         // a corrupt line: skip it
       }
     }
+    this.buf = Buffer.from(this.buf.subarray(start));
     return out;
   }
 }

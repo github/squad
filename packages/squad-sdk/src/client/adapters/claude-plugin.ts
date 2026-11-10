@@ -124,6 +124,40 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ownBin = path.join(root, 'bin');
 const win = process.platform === 'win32';
 
+function canonical(file) {
+  const resolved = fs.realpathSync(file);
+  return win ? resolved.toLowerCase() : resolved;
+}
+
+// Hooks must be cheap no-ops outside an opted-in team, before CLI or npx resolution.
+function hooksEnabled() {
+  let project = path.resolve(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  for (;;) {
+    for (const name of ['.squad', '.ai-team']) {
+      const local = path.join(project, name);
+      if (!fs.existsSync(local)) continue;
+      try {
+        let config = JSON.parse(fs.readFileSync(path.join(local, 'config.json'), 'utf8'));
+        if (typeof config.version === 'number' && typeof config.teamRoot === 'string' && config.teamRoot !== '.') {
+          const team = path.resolve(project, config.teamRoot);
+          const candidates = [path.join(team, name), path.join(team, name === '.squad' ? '.ai-team' : '.squad'), team];
+          const dir = candidates.find((candidate) => fs.existsSync(path.join(candidate, 'config.json')));
+          if (!dir) return false;
+          config = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+        }
+        return config.claudeHooks === 'advisory';
+      } catch {
+        return false;
+      }
+    }
+    const parent = path.dirname(project);
+    if (parent === project) return false;
+    project = parent;
+  }
+}
+
+if (process.argv[2] === 'hook' && process.argv[3] === 'claude' && !hooksEnabled()) process.exit(0);
+
 function pluginVersion() {
   try {
     return JSON.parse(fs.readFileSync(path.join(root, '.claude-plugin', 'plugin.json'), 'utf8')).version;
@@ -199,7 +233,10 @@ function recentEnough(entry, version) {
 function onPath(name) {
   const exts = win ? (process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';') : [''];
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-    if (!dir || path.resolve(dir) === ownBin) continue;
+    if (!dir) continue;
+    try {
+      if (canonical(dir) === canonical(ownBin)) continue;
+    } catch { continue; }
     for (const ext of exts) {
       const file = path.join(dir, name + ext);
       try {
@@ -224,10 +261,29 @@ function resolveCli() {
   return [win ? 'npx.cmd' : 'npx', ['-y', version ? \`\${PKG}@\${version}\` : PKG]];
 }
 
-const [command, prefix] = resolveCli();
+// npm's .cmd shims cannot safely forward arbitrary argv through cmd.exe. Run their JS entry instead.
+function withoutShell(command, prefix) {
+  if (!win || !/\\.(cmd|bat)$/i.test(command)) return [command, prefix];
+  const shim = path.isAbsolute(command) ? command : onPath(path.basename(command, path.extname(command)));
+  const dir = shim ? path.dirname(shim) : path.dirname(process.execPath);
+  const candidates = path.basename(command).toLowerCase() === 'npx.cmd'
+    ? [path.join(dir, 'node_modules/npm/bin/npx-cli.js'), path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npx-cli.js')]
+    : [path.join(dir, 'node_modules', ...PKG.split('/'), 'dist/cli-entry.js')];
+  const entry = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!entry) throw new Error(\`Cannot resolve the JavaScript entry for \${command}; set SQUAD_CLI to cli-entry.js\`);
+  return [process.execPath, [entry, ...prefix]];
+}
+
+let command, prefix;
+try {
+  [command, prefix] = withoutShell(...resolveCli());
+} catch (err) {
+  process.stderr.write(\`squad plugin: \${err.message}\\n\`);
+  process.exit(1);
+}
 const child = spawn(command, [...prefix, ...process.argv.slice(2)], {
   stdio: 'inherit',
-  shell: win && /\\.(cmd|bat)$/i.test(command),
+  shell: false,
 });
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal));
 child.on('error', (err) => {
@@ -372,12 +428,15 @@ claude plugin install squad@${CLAUDE_MARKETPLACE_NAME} --scope project
 
 Then, in the repository:
 
+Install the Squad CLI in your terminal first (the plugin's Bash PATH is available only inside Claude Code):
+
 \`\`\`bash
+npm install -g ${CLI_PACKAGE}
 squad init --client claude --claude-plugin
 claude
 \`\`\`
 
-\`--claude-plugin\` records \`"claudePlugin": true\` in \`.squad/config.json\`. \`squad init\` and \`squad upgrade\` then write only the per-repository files: member subagents in \`.claude/agents/\`, the \`CLAUDE.md\` block, and two keys in \`.claude/settings.json\` (\`agent\`, so a plain \`claude\` starts the coordinator, and \`disabledMcpjsonServers\`, so the project's \`.mcp.json\` copy of \`squad_state\` does not prompt or duplicate the plugin's tools).
+\`--claude-plugin\` records \`"claudePlugin": true\` in \`.squad/config.json\`. \`squad init\` and \`squad upgrade\` then write only the per-repository files: member subagents in \`.claude/agents/\`, the \`CLAUDE.md\` block, and two keys in \`.claude/settings.json\` (\`agent\`, so a plain \`claude\` starts the coordinator, and \`disabledMcpjsonServers\`, so the project's \`.mcp.json\` copy of \`squad_state\` does not prompt or duplicate the plugin's tools). Keep the generated \`.claude/.squad-plugin-settings.json\` ownership record with these files: it restores pre-existing settings when switching modes or uninstalling.
 
 Requires Node.js 22.5 or later on PATH.
 `;

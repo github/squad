@@ -221,7 +221,16 @@ fetch('/meta').then((r) => r.json()).then((m) => {
 const es = new EventSource('/events');
 // The dashboard moved to a newer Claude Code session: start the page over.
 es.addEventListener('reset', () => location.reload());
-es.onopen = () => setState('', 'Live');
+let opened = false;
+es.onopen = () => {
+  if (opened) {
+    es.close();
+    location.reload();
+    return;
+  }
+  opened = true;
+  setState('', 'Live');
+};
 es.onerror = () => setState('', 'Reconnecting');
 es.onmessage = (msg) => {
   const ev = JSON.parse(msg.data);

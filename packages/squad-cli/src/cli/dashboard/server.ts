@@ -36,6 +36,8 @@ export interface DashboardServerOptions {
   /** Extra fields for /health (pid, root, session). */
   health?: () => Record<string, unknown>;
   pollMs?: number;
+  /** Shut down after this long without transcript events or browser clients (default: five minutes). */
+  idleMs?: number;
 }
 
 export interface DashboardServer {
@@ -78,6 +80,7 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
   let current: DashboardSource | undefined;
   const clients = new Set<http.ServerResponse>();
   let port = opts.port;
+  let activeAt = Date.now();
 
   const send = (res: http.ServerResponse, e: Seq) => res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`);
 
@@ -102,6 +105,7 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
       return;
     }
     for (const e of events) {
+      activeAt = Date.now();
       const s = { seq: ++seq, ...e };
       history.push(s);
       for (const c of clients) send(c, s);
@@ -120,6 +124,7 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
       return;
     }
     const url = new URL(req.url ?? '/', `http://${DASHBOARD_HOST}:${port}`);
+    if (url.pathname !== '/health') activeAt = Date.now();
     if (url.pathname === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', ...SECURITY_HEADERS });
       res.write('retry: 2000\n\n');
@@ -158,7 +163,19 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
       server.off('error', reject);
       port = (server.address() as AddressInfo).port;
       tick();
-      const timer = setInterval(tick, opts.pollMs ?? 500);
+      const close = () => new Promise<void>((done) => {
+        clearInterval(timer);
+        clearInterval(keepAlive);
+        for (const c of clients) c.end();
+        clients.clear();
+        server.close(() => done());
+        server.closeAllConnections?.();
+      });
+      const timer = setInterval(() => {
+        tick();
+        if (clients.size > 0) activeAt = Date.now();
+        if (Date.now() - activeAt >= (opts.idleMs ?? 5 * 60_000)) void close();
+      }, opts.pollMs ?? 500);
       timer.unref();
       const keepAlive = setInterval(() => {
         for (const c of clients) c.write(': keep-alive\n\n');
@@ -168,15 +185,7 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
         url: `http://${DASHBOARD_HOST}:${port}/`,
         port,
         tick,
-        close: () =>
-          new Promise<void>((done) => {
-            clearInterval(timer);
-            clearInterval(keepAlive);
-            for (const c of clients) c.end();
-            clients.clear();
-            server.close(() => done());
-            server.closeAllConnections?.();
-          }),
+        close,
       });
     });
   });

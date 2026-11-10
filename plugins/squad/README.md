@@ -24,11 +24,14 @@ claude plugin install squad@squad --scope project
 
 Then, in the repository:
 
+Install the Squad CLI in your terminal first (the plugin's Bash PATH is available only inside Claude Code):
+
 ```bash
+npm install -g @bradygaster/squad-cli
 squad init --client claude --claude-plugin
 claude
 ```
 
-`--claude-plugin` records `"claudePlugin": true` in `.squad/config.json`. `squad init` and `squad upgrade` then write only the per-repository files: member subagents in `.claude/agents/`, the `CLAUDE.md` block, and two keys in `.claude/settings.json` (`agent`, so a plain `claude` starts the coordinator, and `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` does not prompt or duplicate the plugin's tools).
+`--claude-plugin` records `"claudePlugin": true` in `.squad/config.json`. `squad init` and `squad upgrade` then write only the per-repository files: member subagents in `.claude/agents/`, the `CLAUDE.md` block, and two keys in `.claude/settings.json` (`agent`, so a plain `claude` starts the coordinator, and `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` does not prompt or duplicate the plugin's tools). Keep the generated `.claude/.squad-plugin-settings.json` ownership record with these files: it restores pre-existing settings when switching modes or uninstalling.
 
 Requires Node.js 22.5 or later on PATH.

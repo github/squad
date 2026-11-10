@@ -505,7 +505,7 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
     // best-effort: .mcp.json write failure does not block init
   }
 
-  if (options.clients && options.clients.length > 0) {
+  if ((options.clients && options.clients.length > 0) || options.claudePlugin !== undefined) {
     try {
       const synced = await applyClientProjectionsForInit(dest, squadDir, {
         clients: options.clients,

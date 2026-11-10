@@ -3,13 +3,16 @@
 Squad ships as a Claude Code plugin. The plugin carries the coordinator, the `squad_state` MCP server, Squad's skills, its slash commands and its governance hooks, so a repository only needs its own team: the member subagents, the `CLAUDE.md` block and two settings.
 
 ```bash
+npm install -g @bradygaster/squad-cli
 claude plugin marketplace add github/squad
 claude plugin install squad@squad --scope project
 squad init --client claude --claude-plugin
 claude
 ```
 
-Requires Node.js 22.5 or later on PATH.
+Requires Node.js 22.5 or later on PATH and the Squad CLI installed in your terminal. The plugin's Bash PATH is available only inside Claude Code.
+
+The dashboard shuts down after five minutes without transcript activity or a connected browser. A shared dashboard stays alive while another browser is connected; close the page or use `squad dashboard stop` to release it.
 
 ---
 
@@ -35,6 +38,7 @@ Requires Node.js 22.5 or later on PATH.
    - the member subagents in `.claude/agents/`
    - the managed block in `CLAUDE.md`
    - two keys in `.claude/settings.json`: `agent`, so a plain `claude` starts the coordinator, and `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` neither prompts nor duplicates the plugin's tools
+   - `.claude/.squad-plugin-settings.json`, the ownership record used to restore pre-existing settings and former project MCP ownership on rollback; keep it with the projection
 
    The coordinator agent, skills and hooks come from the plugin instead of `.claude/`. `squad upgrade --no-claude-plugin` switches back to the full projection.
 
