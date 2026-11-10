@@ -221,12 +221,12 @@ describe('Claude plugin: launcher', () => {
     }
     const go = (env: Record<string, string> = {}) => run({ PATH: `${bin}:/usr/bin:/bin`, ...env }, dir).stdout.trim();
 
-    it('falls through an older global squad to npx of the plugin version', () => {
+    it('falls through an older squad on PATH to npx of the plugin version', () => {
       globalCli('2.0.0-preview.3');
       expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
     });
 
-    it('uses a global squad at or past the plugin version, or one whose version is unknown', () => {
+    it('uses a squad on PATH at or past the plugin version, or one whose version is unknown', () => {
       globalCli(committedVersion);
       expect(go()).toBe(`global@${committedVersion}:one two words`);
       fs.rmSync(path.join(bin, 'squad'));
