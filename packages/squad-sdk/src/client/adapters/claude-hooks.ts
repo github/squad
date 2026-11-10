@@ -54,7 +54,14 @@ export function readClaudeHooksMode(squadAbs: string): ClaudeHooksMode {
   }
 }
 
-/** The hook launch command: the MCP launcher with its trailing `state-mcp` replaced. */
+/**
+ * The hook launch command: the MCP launcher with its trailing `state-mcp` replaced.
+ *
+ * No command allowlist on purpose. `mcp` is resolved by the running CLI from its own install
+ * (standalone launcher, `node <abs>/cli-entry.js`, or `npx` with the exact package version), never
+ * from repository content, and the same command is already projected into `.mcp.json` as the
+ * `squad_state` server. Hooks therefore add no new executable.
+ */
 export function claudeHookLaunch(mcp: McpLaunchSpec, event: ClaudeHookEvent): McpLaunchSpec | null {
   if (mcp.args[mcp.args.length - 1] !== 'state-mcp') return null;
   return { command: mcp.command, args: [...mcp.args.slice(0, -1), 'hook', 'claude', event] };
@@ -316,6 +323,8 @@ export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, no
     const toolInput = isObject(input['tool_input']) ? input['tool_input'] : {};
     const member = str(toolInput['subagent_type'])?.toLowerCase();
     if (!member || !memberIdsWithCharters(env.teamAbs).includes(member)) return null;
+    // Structured fields only: free text from the tool call (its `description`) is not reflected
+    // back into the coordinator's context, so the hook cannot become an instruction channel.
     const envelope = {
       profile: 'squad-coordination-handoff/v0.1',
       type: 'result',
@@ -323,7 +332,6 @@ export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, no
       correlationId: str(input['session_id']) ?? null,
       sender: member,
       recipient: COORDINATOR,
-      task: str(toolInput['description']) ?? null,
       createdAt: new Date(now).toISOString(),
     };
     const locks = activeLockouts(env.teamAbs).filter((r) => r.successor === member || effectiveLocked(r).includes(member));

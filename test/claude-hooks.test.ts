@@ -277,6 +277,9 @@ describe('Claude hook runtime (advisory)', () => {
     expect(ctx).toContain('"profile":"squad-coordination-handoff/v0.1"');
     expect(ctx).toContain('"type":"result"');
     expect(ctx).toContain('"sender":"lambert"');
+    // The tool call's free-text description is not reflected back into coordinator context.
+    expect(ctx).not.toContain('Fix auth tests');
+    expect(ctx).not.toContain('"task"');
     expect(runClaudeHook('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore' } }, env)).toBeNull();
   });
 

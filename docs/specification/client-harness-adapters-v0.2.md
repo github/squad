@@ -306,7 +306,7 @@ Projection versions are per host. The Claude Code projection is at **v2**
 the template and coordinator skills, and the opt-in `settings.json` hooks.
 Every generated Claude Markdown file states its version in the generated-file
 note (`… Claude projection v2.`). The note keeps the v1 wording as a prefix, so
-`squad upgrade` still recognises v1 files as Squad-owned and replaces them in
+`squad upgrade` still recognizes v1 files as Squad-owned and replaces them in
 place. `settings.json` handlers are identified by their `hook claude <Event>`
 args instead, because JSON has no comments.
 
