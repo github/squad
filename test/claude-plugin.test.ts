@@ -117,6 +117,14 @@ describe('Claude plugin: contents', () => {
     expect(dashboard).toContain('`$0`');
     // Ralph's free-text scope is fenced as data.
     expect(files.get('commands/ralph.md')).toMatch(/<ralph-scope>\n\$ARGUMENTS\n<\/ralph-scope>/);
+    expect(files.get('commands/cast.md')).toMatch(/<cast-request>\n\$ARGUMENTS\n<\/cast-request>/);
+    expect(files.get('commands/ceremony.md')).toMatch(/<ceremony-name>\n\$ARGUMENTS\n<\/ceremony-name>/);
+    // No command passes the arguments outside its fence, and only the dashboard pre-approves any tool.
+    for (const [p, c] of files) {
+      if (!p.startsWith('commands/')) continue;
+      expect(c.replace(/<([a-z-]+)>\n\$ARGUMENTS\n<\/\1>/g, ''), p).not.toContain('$ARGUMENTS');
+      if (p !== 'commands/dashboard.md') expect(c, p).not.toMatch(/^allowed-tools:/m);
+    }
     // Commands go through the plugin's own launcher: a bare `squad` can be an older global CLI earlier on PATH.
     for (const [p, c] of files) {
       if (!p.startsWith('commands/')) continue;
