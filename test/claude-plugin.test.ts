@@ -115,8 +115,11 @@ describe('Claude plugin: contents', () => {
     expect(dashboard).toContain(`allowed-tools: Bash(${L} stop), Bash(${L} status), Bash(${L} --detach --open)\n`);
     expect(dashboard).not.toContain('$ARGUMENTS');
     expect(dashboard).toContain('`$0`');
-    // Ralph's free-text scope is fenced as data.
-    expect(files.get('commands/ralph.md')).toMatch(/<ralph-scope>\n\$ARGUMENTS\n<\/ralph-scope>/);
+    // Ralph takes two argument words, each matched against a fixed list; no free text reaches the prompt.
+    const ralph = files.get('commands/ralph.md')!;
+    expect(ralph).not.toContain('$ARGUMENTS');
+    expect(ralph).toContain('`$0` and `$1`');
+    for (const word of ['go', 'status', 'idle', 'issues', 'prs', 'skip-ci']) expect(ralph, word).toContain(`- \`${word}\`:`.replace('- `go`:', 'or `go`:'));
     expect(files.get('commands/cast.md')).toMatch(/<cast-request>\n\$ARGUMENTS\n<\/cast-request>/);
     expect(files.get('commands/ceremony.md')).toMatch(/<ceremony-name>\n\$ARGUMENTS\n<\/ceremony-name>/);
     // No command passes the arguments outside its fence, and only the dashboard pre-approves any tool.
