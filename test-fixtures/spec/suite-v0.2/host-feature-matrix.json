@@ -4404,7 +4404,7 @@
             "validated-manual:lab:claude-agent-sdk-harness@2026-11-10",
             "validated-test:test/claude-agent-sdk-harness.test.ts::runs G1–G9 on claude-agent-sdk: approve after reconnect, then cancel"
           ],
-          "notes": "Live (2026-11-10): a plain turn and a write denied through the broker (not run). The original golden-trace smoke run approved a real tool call after reconnect, but did not prove replay continuity or prompt harness cancellation. The strengthened trace (exact command allowlist, cursor suffix and replay checks, 10-second cancellation deadline) awaits a new credentialed live run and is not yet promotion evidence. Claude Code runs some read-only commands without asking, so those never reach the broker."
+          "notes": "Live (2026-11-10): a plain turn and a write denied through the broker (not run). The original golden-trace smoke run approved a real tool call after reconnect, but did not prove replay continuity or prompt harness cancellation. The strengthened trace (exact command and full hashed Bash input validation, explicit 120-second foreground tool timeout, cursor suffix and replay checks, 10-second cancellation deadline) awaits a new credentialed live run and is not yet promotion evidence. Deterministic negatives reject short-timeout/abort-ignoring transport, background execution and implicit timeouts before approval. Claude Code runs some read-only commands without asking, so those never reach the broker."
         },
         "kiro": {
           "capability": "supported",

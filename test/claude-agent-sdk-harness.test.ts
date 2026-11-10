@@ -14,6 +14,7 @@ import {
   LocalSquadBackend,
   MemoryStateStore,
   claudeApprovalHash,
+  claudeApiCredentialsConfigured,
   type ClaudeAgentSdkModule,
   type ClaudeQueryOptions,
   type ClaudeSdkMessage,
@@ -45,6 +46,48 @@ async function within<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 interface ToolCall { name: string; input: Record<string, unknown>; id: string }
+
+const GOLDEN_COMMAND = 'touch squad-golden-marker.txt && exec sleep 60';
+const GOLDEN_TOOL_TIMEOUT = 120_000;
+
+function goldenToolGuard() {
+  const requests = new Map<string, ToolCall>();
+  return {
+    wrap(sdk: ClaudeAgentSdkModule): ClaudeAgentSdkModule {
+      return {
+        query({ prompt, options = {} }) {
+          const canUseTool = options.canUseTool!;
+          return sdk.query({
+            prompt,
+            options: {
+              ...options,
+              canUseTool(name, input, context) {
+                requests.set(context.toolUseID, { name, input: structuredClone(input), id: context.toolUseID });
+                return canUseTool(name, input, context);
+              },
+            },
+          });
+        },
+      };
+    },
+    async approve(client: LocalSquadBackend, conversationId: string, approval: { approvalId: string; hash: string }, decision: 'approve') {
+      const request = requests.get(approval.approvalId);
+      if (request?.name !== 'Bash' || request.input['command'] !== GOLDEN_COMMAND) {
+        throw new Error('golden trace requires the exact Bash command input');
+      }
+      if (request.input['run_in_background'] !== false) {
+        throw new Error('golden trace requires explicit foreground execution');
+      }
+      if (request.input['timeout'] !== GOLDEN_TOOL_TIMEOUT) {
+        throw new Error(`golden trace requires an explicit ${GOLDEN_TOOL_TIMEOUT} ms tool timeout`);
+      }
+      if (approval.hash !== claudeApprovalHash(request.name, request.input)) {
+        throw new Error('golden trace approval hash does not match the captured input');
+      }
+      return client.respondApproval(conversationId, { approvalId: approval.approvalId, hash: approval.hash, decision });
+    },
+  };
+}
 
 /**
  * Replays one recorded exchange: optional tool calls (each through `canUseTool`, concurrently, as Claude
@@ -242,6 +285,79 @@ describe('claude-agent-sdk harness: deterministic protocol checks', () => {
   });
 });
 
+describe('claude-agent-sdk harness: golden execution guard', () => {
+  function timedTool(input: Record<string, unknown>, ignoresAbort = false) {
+    const decisions: string[] = [];
+    let started = false;
+    const sdk: ClaudeAgentSdkModule = {
+      query({ options = {} }) {
+        return (async function* () {
+          const result = await options.canUseTool!('Bash', input, { signal: options.abortController!.signal, toolUseID: 'golden-tool' });
+          decisions.push(result.behavior);
+          if (result.behavior === 'allow') {
+            started = true;
+            await new Promise<void>((resolve) => {
+              const timeout = setTimeout(resolve, input['timeout'] as number);
+              if (!ignoresAbort) {
+                const stop = () => { clearTimeout(timeout); resolve(); };
+                options.abortController!.signal.addEventListener('abort', stop, { once: true });
+                if (options.abortController!.signal.aborted) stop();
+              }
+            });
+          }
+          yield { type: 'result', subtype: 'success', is_error: false };
+        })();
+      },
+    };
+    return { sdk, decisions, started: () => started };
+  }
+
+  it.each([
+    { name: 'short timeout even when the transport ignores abort', input: { command: GOLDEN_COMMAND, timeout: 1000, run_in_background: false }, ignoresAbort: true, error: /explicit 120000 ms tool timeout/ },
+    { name: 'background execution', input: { command: GOLDEN_COMMAND, timeout: GOLDEN_TOOL_TIMEOUT, run_in_background: true }, ignoresAbort: false, error: /explicit foreground/ },
+    { name: 'implicit timeout defaults', input: { command: GOLDEN_COMMAND, run_in_background: false }, ignoresAbort: false, error: /explicit 120000 ms tool timeout/ },
+  ])('refuses $name before approval', async ({ input, ignoresAbort, error }) => {
+    const transport = timedTool(input, ignoresAbort);
+    const guard = goldenToolGuard();
+    const { harness, backend, send } = await setup(guard.wrap(transport.sdk));
+    try {
+      await send('r1', 1);
+      await until(async () => (await backend.getApprovals('c')).length === 1);
+      const [approval] = await backend.getApprovals('c');
+      expect(approval!.action).toBe(`Bash: ${GOLDEN_COMMAND}`);
+      await expect(guard.approve(backend, 'c', approval!, 'approve')).rejects.toThrow(error);
+      expect((await backend.getTurn('c', 1)).state).toBe('awaiting-approval');
+      expect(transport.started()).toBe(false);
+    } finally {
+      await harness.cancel('c', 'r1', 1);
+      await harness.settled('c', 'r1', 1);
+    }
+    expect(transport.decisions).toEqual(['deny']);
+  });
+
+  it('approves the long foreground input and settles on cancellation, not tool timeout', async () => {
+    const transport = timedTool({ command: GOLDEN_COMMAND, timeout: GOLDEN_TOOL_TIMEOUT, run_in_background: false });
+    const guard = goldenToolGuard();
+    const { harness, backend, send } = await setup(guard.wrap(transport.sdk));
+    try {
+      await send('r1', 1);
+      await until(async () => (await backend.getApprovals('c')).length === 1);
+      const [approval] = await backend.getApprovals('c');
+      await guard.approve(backend, 'c', approval!, 'approve');
+      await until(transport.started);
+      await within((async () => {
+        await backend.cancelRun('c', 'r1');
+        await harness.settled('c', 'r1', 1);
+      })(), 2000);
+      expect((await backend.getTurn('c', 1)).state).toBe('cancelled');
+      expect(transport.decisions).toEqual(['allow']);
+    } finally {
+      await harness.cancel('c', 'r1', 1);
+      await harness.settled('c', 'r1', 1);
+    }
+  });
+});
+
 // Opting in without credentials or the optional SDK must fail, not silently skip.
 const live = process.env['SQUAD_REAL_CLI_TESTS'] === '1';
 
@@ -318,9 +434,17 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
     const ev = (name: string) => golden.events.find((e) => e.event === name)!;
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-golden-'));
     const marker = path.join(cwd, 'squad-golden-marker.txt');
-    const command = 'touch squad-golden-marker.txt && exec sleep 60';
-    const expectedApprovedAction = `Bash: ${command}`;
-    const harness = new ClaudeAgentSdkHarness({ cwd, maxTurns: 6 });
+    const expectedApprovedAction = `Bash: ${GOLDEN_COMMAND}`;
+    const guard = goldenToolGuard();
+    const harness = new ClaudeAgentSdkHarness({
+      cwd, maxTurns: 6,
+      loadSdk: async () => {
+        // A test-owned SDK wrapper must retain the real harness's API-only authentication guard.
+        if (!claudeApiCredentialsConfigured()) throw new Error('golden trace needs API credentials, not a claude.ai login');
+        const module = '@anthropic-ai/claude-agent-sdk';
+        return guard.wrap(await import(module) as ClaudeAgentSdkModule);
+      },
+    });
     const registry = new DefaultHarnessRegistry();
     registry.register(harness);
     const state = new MemoryStateStore();
@@ -332,7 +456,7 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
       await client.createConversation({ conversationId });
       const adm = await client.sendMessage(conversationId, {
         runId, seq, role: 'user', harness: HARNESS,
-        content: `Use the Bash tool exactly once to run this single command, exactly as written, with no background execution: ${command}`,
+        content: `Use the Bash tool exactly once with timeout: ${GOLDEN_TOOL_TIMEOUT} and run_in_background: false. Run this single command exactly as written: ${GOLDEN_COMMAND}`,
       });
       expect(adm).toMatchObject({ runId, seq, duplicate: false });
 
@@ -357,7 +481,7 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
       expect(await client.getApprovals(conversationId)).toEqual([v1]);
 
       const decided = ev('approval.resolved');
-      const turn = await client.respondApproval(conversationId, { approvalId: v1!.approvalId, hash: v1!.hash, decision: decided['decision'] as 'approve' });
+      const turn = await guard.approve(client, conversationId, v1!, decided['decision'] as 'approve');
       expect(turn.state).toBe('running');
       // One approved foreground command signals startup before its 60-second sleep.
       await until(() => fs.existsSync(marker), 10_000);
