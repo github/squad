@@ -170,7 +170,7 @@ describe('host-feature-matrix.json integrity', () => {
         const gapName = title!.slice(PREFIX.length);
         expect(src.includes(`['${gapName}', `), `${e.featureId}: gap "${gapName}" is not registered in ${file}`).toBe(true);
         expect(src.includes(`it.fails(\`${PREFIX}\${name} [\${id}]\``), `${file}: per-host it.fails template changed; update the matrix`).toBe(true);
-        expect(src.includes('for (const id of CLIENT_IDS) {\n      it.fails('), `${file}: per-host it.fails must iterate CLIENT_IDS`).toBe(true);
+        expect(src.includes('for (const id of CLIENT_IDS.filter((h) => !closed.includes(h))) {\n      it.fails('), `${file}: per-host it.fails must iterate CLIENT_IDS minus the gap's closed hosts`).toBe(true);
         for (const h of hosts) expect(CLIENT_IDS, `${e.featureId}: host ${h} is not a client id`).toContain(h);
       } else {
         expect(src.includes(title!), `${e.featureId}: it.fails title "${title}" not found in ${file}`).toBe(true);

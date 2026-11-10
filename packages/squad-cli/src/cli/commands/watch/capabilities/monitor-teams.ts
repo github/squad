@@ -4,7 +4,7 @@
 
 import { execFile } from 'node:child_process';
 import type { WatchCapability, WatchContext, PreflightResult, CapabilityResult } from '../types.js';
-import { buildAgentCommand, spawnWithTimeout, IS_WINDOWS } from '../agent-spawn.js';
+import { buildAgentCommand, checkClaudeCli, spawnWithTimeout, IS_WINDOWS } from '../agent-spawn.js';
 
 export class MonitorTeamsCapability implements WatchCapability {
   readonly name = 'monitor-teams';
@@ -16,6 +16,7 @@ export class MonitorTeamsCapability implements WatchCapability {
   async preflight(context: WatchContext): Promise<PreflightResult> {
     // If using custom agentCmd, skip copilot check
     if (context.agentCmd) return { ok: true };
+    if (context.agentPreset === 'claude') return checkClaudeCli();
     return new Promise((resolve) => {
       execFile('copilot', ['--version'], { shell: IS_WINDOWS, timeout: 5000 }, (err) => {
         if (err) {
@@ -41,8 +42,8 @@ export class MonitorTeamsCapability implements WatchCapability {
         'First check existing open issues with label "teams-bridge" to avoid duplicates. ' +
         'If WorkIQ is not available, just report that and exit.';
 
-      const { cmd, args } = buildAgentCommand(prompt, context);
-      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000);
+      const { cmd, args, checkStdout } = buildAgentCommand(prompt, context);
+      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000, checkStdout);
       return { success: true, summary: 'Teams scan complete' };
     } catch (e) {
       return { success: false, summary: `Teams monitor: ${(e as Error).message}` };

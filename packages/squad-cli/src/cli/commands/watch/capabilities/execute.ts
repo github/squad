@@ -12,6 +12,8 @@ import { createVerboseLogger } from '../verbose.js';
 import { loadAgentCharter } from '../../../shell/spawn.js';
 import {
   buildCopilotCommand,
+  checkClaudeCli,
+  parseClaudeStreamResult,
   spawnAgent,
   withCopilotUsageOutput,
 } from '../agent-spawn.js';
@@ -217,20 +219,24 @@ async function executeAll(
 ): Promise<AgentSpawnResult> {
   const prompt = buildAgentPrompt(issues, context.teamRoot, context.stateRoot, { claimsActive });
 
-  // Load Ralph's charter to give the spawned session full specialist context.
+  // The Claude preset runs the projected coordinator, which treats "Ralph, Go!" as its Ralph-mode
+  // trigger; other runners get Ralph's charter for full specialist context.
+  const claudeSession = !context.agentCmd && context.agentPreset === 'claude';
   let charterPrefix = '';
-  try {
-    const charter = await loadAgentCharter('ralph', context.teamRoot);
-    charterPrefix = `You are an AI agent on a software development team.\n\nYOUR CHARTER:\n${charter}\n\nADDITIONAL CONTEXT:\n`;
-  } catch {
-    // Fall back gracefully if no charter exists (e.g., fresh setup)
+  if (!claudeSession) {
+    try {
+      const charter = await loadAgentCharter('ralph', context.teamRoot);
+      charterPrefix = `You are an AI agent on a software development team.\n\nYOUR CHARTER:\n${charter}\n\nADDITIONAL CONTEXT:\n`;
+    } catch {
+      // Fall back gracefully if no charter exists (e.g., fresh setup)
+    }
   }
 
   const fullPrompt = charterPrefix + prompt;
   const { cmd, args: baseArgs } = buildCopilotCommand(fullPrompt, context);
   let usageCapture: ReturnType<typeof withCopilotUsageOutput> | undefined;
   let usageSetupError: string | undefined;
-  if (!context.agentCmd) {
+  if (!context.agentCmd && !claudeSession) {
     try {
       usageCapture = withCopilotUsageOutput(baseArgs, context.stateRoot);
     } catch (error) {
@@ -242,7 +248,7 @@ async function executeAll(
   // Track child PID for cleanup on exit/crash
   const issueNums = issues.map(i => `#${i.number}`).join(',');
   const pidTracking = context.pidTracker
-    ? { tracker: context.pidTracker, label: `copilot-session-${issueNums}` }
+    ? { tracker: context.pidTracker, label: `${claudeSession ? 'claude' : 'copilot'}-session-${issueNums}` }
     : undefined;
 
   const result = await spawnAgent(
@@ -253,6 +259,7 @@ async function executeAll(
     pidTracking,
     usageCapture?.filePath,
     signal,
+    claudeSession ? parseClaudeStreamResult : undefined,
   );
   return usageSetupError ? { ...result, usageError: usageSetupError } : result;
 }
@@ -291,6 +298,14 @@ async function estimateContextUtilization(
   }
 }
 
+/** The Claude preset needs the `claude` CLI and the projected coordinator subagent. */
+export async function claudePreflight(teamRoot: string): Promise<PreflightResult> {
+  if (!existsSync(path.join(teamRoot, '.claude', 'agents', 'squad.md'))) {
+    return { ok: false, reason: 'Claude preset: .claude/agents/squad.md not found. Run `squad upgrade --client claude` first.' };
+  }
+  return checkClaudeCli();
+}
+
 export class ExecuteCapability implements WatchCapability {
   readonly name = 'execute';
   readonly description = 'Spawn Copilot sessions to work on eligible issues';
@@ -298,12 +313,14 @@ export class ExecuteCapability implements WatchCapability {
   readonly requires = ['gh'];
   readonly phase = 'post-execute' as const;
 
-  async preflight(_context: WatchContext): Promise<PreflightResult> {
-    return new Promise<PreflightResult>((resolve) => {
+  async preflight(context: WatchContext): Promise<PreflightResult> {
+    const gh = await new Promise<PreflightResult>((resolve) => {
       execFile('gh', ['--version'], (err) => {
         resolve(err ? { ok: false, reason: 'gh CLI not found' } : { ok: true });
       });
     });
+    if (!gh.ok || context.agentCmd || context.agentPreset !== 'claude') return gh;
+    return claudePreflight(context.teamRoot);
   }
 
   async execute(context: WatchContext): Promise<CapabilityResult> {
@@ -312,7 +329,7 @@ export class ExecuteCapability implements WatchCapability {
     try {
       const timeout = ((context.config['timeout'] as number) ?? 30) * 60_000;
 
-      vlog.log(`Execute: agentCmd=${context.agentCmd ?? 'copilot'}, timeout=${timeout / 60_000}m`);
+      vlog.log(`Execute: agentCmd=${context.agentCmd ?? context.agentPreset ?? 'copilot'}, timeout=${timeout / 60_000}m`);
 
       // Fetch open issues with squad label
       const sdkItems = await context.adapter.listWorkItems({ tags: ['squad'], state: 'open', limit: 50 });

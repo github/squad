@@ -32,6 +32,7 @@ import {
   assertPortableClients,
   getClientAdapter,
   buildCoordinatorInstructions,
+  claudeCoordinatorSkills,
   createClientAdapter,
   installClients,
   uninstallClients,
@@ -1253,9 +1254,17 @@ describe('coordinator prompt (found with real models)', () => {
     expect(text).toMatch(/state tools? reject|reject writes/i);
   });
 });
+/**
+ * What the coordinator follows once it loads the guidance it needs. Claude Code keeps Init Mode and
+ * the other on-demand sections in skills (#2442 Phase 4), so its text includes those skill bodies.
+ */
+function loadedCoordinatorText(id: ClientId): string {
+  const text = buildCoordinatorInstructions(id);
+  return id === 'claude' ? [text, ...claudeCoordinatorSkills().map((k) => k.body)].join('\n\n') : text;
+}
 describe('field findings from the live demo: Init Mode, scratch files, casting registry', () => {
   it.each(CLIENT_IDS)('%s: non-interactive Init Mode casts immediately and registers the roster with squad cast --name', (id) => {
-    const text = buildCoordinatorInstructions(id);
+    const text = loadedCoordinatorText(id);
     // live finding: `claude -p "... proceed ..."` still paused to ask for confirmation
     expect(text).toMatch(/Auto-confirm \(default\)/);
     expect(text).toMatch(/Do NOT stop to ask questions in Init Mode/);
@@ -1267,7 +1276,7 @@ describe('field findings from the live demo: Init Mode, scratch files, casting r
   });
 
   it.each(CLIENT_IDS)('%s: keeps scratch files inside the workspace', (id) => {
-    const text = buildCoordinatorInstructions(id);
+    const text = loadedCoordinatorText(id);
     // live finding: OpenCode rejected a subagent call that touched OS %TEMP%
     expect(text).toMatch(/Scratch space/);
     expect(text).toMatch(/never write outside the workspace directory/);
@@ -1275,7 +1284,7 @@ describe('field findings from the live demo: Init Mode, scratch files, casting r
   });
 
   it.each(CLIENT_IDS)('%s: casts through the CLI and forbids hand-written casting files', (id) => {
-    const text = buildCoordinatorInstructions(id);
+    const text = loadedCoordinatorText(id);
     // live finding: LLM-handwritten casting/registry.json broke `squad upgrade`
     expect(text).toMatch(/npx squad cast --name <Name> --role/);
     expect(text).toMatch(/NEVER hand-write or edit anything under .{0,20}casting\//);

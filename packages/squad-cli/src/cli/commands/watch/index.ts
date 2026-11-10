@@ -42,6 +42,7 @@ import { createVerboseLogger, type VerboseLogger } from './verbose.js';
 import { flattenClaimCounters, formatClaimRoundLines, hasClaimActivity, type ClaimCounters } from './claim-counters.js';
 import { updatePidFileClaims } from './health.js';
 import { buildCustomAgentCommand } from './agent-spawn.js';
+import { writeClaudeWatchMcpConfig } from './claude-mcp.js';
 
 const storage = new FSStorageProvider();
 const execFileAsync = promisify(execFile);
@@ -782,7 +783,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     verbose: config.verbose ?? false,
     interval: `${config.interval}m`,
     execute: config.execute ?? false,
-    agentCmd: config.agentCmd ?? '(default: copilot)',
+    agentCmd: config.agentCmd ?? `(preset: ${config.agentPreset ?? 'copilot'})`,
     dispatchMode: config.capabilities['wave-dispatch'] ? 'wave' : 'task',
     maxConcurrent: config.maxConcurrent ?? 1,
   });
@@ -925,6 +926,8 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   })}${RESET}`);
   vlog.log(`Claim holder: ${executor.machineId}/${executor.instanceId}; work repo: ${workRepo ?? '(unknown)'}`);
 
+  // The Claude preset gets squad_state from this CLI, never the repository's whole .mcp.json.
+  const claudeMcpConfig = !config.agentCmd && config.agentPreset === 'claude' ? await writeClaudeWatchMcpConfig() : undefined;
   const baseContext: WatchContext = {
     teamRoot,
     stateRoot: stateDir,
@@ -933,7 +936,10 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     roster: roster.map(r => ({ name: r.name, label: r.label, expertise: [] as string[] })),
     config: {},
     agentCmd: config.agentCmd,
+    ...(config.agentPreset ? { agentPreset: config.agentPreset } : {}),
     copilotFlags: config.copilotFlags,
+    ...(config.claudeFlags ? { claudeFlags: config.claudeFlags } : {}),
+    ...(claudeMcpConfig ? { claudeMcpConfig } : {}),
     verbose: config.verbose,
     pidTracker,
     claims: claimProvider,
@@ -949,7 +955,9 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   const platformTag = ` [${adapter.type}]`;
   console.log(`\n${BOLD}🔄 Ralph — Watch Mode${RESET}${modeTag}${platformTag}`);
   console.log(`${DIM}Polling every ${interval} minute(s) for squad work. Ctrl+C to stop.${RESET}`);
-  if (config.execute && config.copilotFlags) {
+  if (config.execute && !config.agentCmd && config.agentPreset === 'claude') {
+    console.log(`${DIM}Runner: Claude Code (claude -p --agent squad)${config.claudeFlags ? ` | flags: ${config.claudeFlags}` : ''}${RESET}`);
+  } else if (config.execute && config.copilotFlags) {
     console.log(`${DIM}Copilot flags: ${config.copilotFlags}${RESET}`);
   }
   if (config.execute) {

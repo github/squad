@@ -156,7 +156,11 @@ Spawn each specialist with the \`task\` tool (Copilot CLI), \`create_session\` (
     summary: 'Claude Code Agent subagent',
     section: `## Dispatch adapter: Claude Code
 
-Spawn each specialist with the \`Agent\` tool, using a general-purpose subagent with the member's charter (\`.squad/agents/<member>/charter.md\`) inlined in the prompt. Launch independent \`Agent\` calls in one message to run them in parallel; \`run_in_background: true\` lets long or non-blocking work (Scribe, Rai) run while you continue, and \`isolation: "worktree"\` gives an implementer its own git worktree under \`.claude/worktrees/\`. Squad dispatches specialists only from the coordinator: members never spawn subagents of their own. The \`squad_state\` MCP tools are available as \`mcp__squad_state__*\` from \`.mcp.json\`.`,
+Spawn each specialist with the \`Agent\` tool. Each member has a Squad-generated subagent in \`.claude/agents/<member>.md\` (model, reasoning effort and tool settings come from its charter and \`.squad/config.json\`): pass \`subagent_type: "<member>"\`; the subagent reads its own charter, so give it the task, decisions and context rather than the charter text. If a member has no subagent file, use a general-purpose subagent with the member's charter (\`.squad/agents/<member>/charter.md\`) inlined in the prompt. Launch independent \`Agent\` calls in one message to run them in parallel; \`run_in_background: true\` lets long or non-blocking work (Scribe, Rai) run while you continue, and \`isolation: "worktree"\` gives an implementer its own git worktree under \`.claude/worktrees/\`. Squad dispatches specialists only from the coordinator: members never spawn subagents of their own. The \`squad_state\` MCP tools are available as \`mcp__squad_state__*\` from \`.mcp.json\`.
+
+**Model selection per spawn** (first match wins): a user directive for this spawn, then \`.squad/config.json\` \`agentModelOverrides.<member>\`, then \`defaultModel\`, then a model the user chose for this session, then the charter's \`Preferred\`. Omit \`model\` when the charter (or nothing) decides: the member's frontmatter already applies it. Otherwise pass \`model\` on the \`Agent\` call as a Claude alias (\`sonnet\`, \`opus\`, \`haiku\`, \`fable\`; map a full Claude model ID to its family). \`auto\` means no preference. A non-Claude model cannot run here: say so in the spawn acknowledgment and use the next layer. **Reasoning effort** (\`agentReasoningEffortOverrides\`, \`defaultReasoningEffort\`, charter) is fixed in the frontmatter by \`squad upgrade\`; the \`Agent\` tool has no per-call effort, so tell the user when a per-spawn effort directive cannot be applied, and to re-run \`squad upgrade\` after changing effort config. A \`long_context\` context tier needs a long-context Claude model; otherwise report it as not applied. Show the model and its source in every spawn acknowledgment.
+
+**Reviewer lockout record.** On a REJECT, also record it with Bash: \`squad lockout reject <subject> --author <member> --reviewer <member> --reason "<requirement and clearing condition>" --paths <glob,...>\`; then \`squad lockout assign <subject> --successor <member>\` when you reassign, \`squad lockout submit\` when the revision is handed in, and \`squad lockout approve\` after re-review (\`squad lockout status\` lists eligible successors; \`deadlocked\` means escalate). Only the user or a listed authority may \`squad lockout override\`. When the project opts in (\`claudeHooks\` in \`.squad/config.json\`), Squad's Claude Code hooks read this record and warn when a locked-out member edits the subject's files.`,
   },
   kiro: {
     summary: 'Kiro subagent + steering, MCP backend',
@@ -199,5 +203,94 @@ export function buildCoordinatorInstructions(client: ClientId, squadDir = '.squa
   const caps = CAPABILITIES[client];
   const transports = `## Transport\n\nThis host connects to the backend via: ${caps.transportModes.join(", ")} (subagents: ${caps.supportsSubagents ? "yes" : "no"}).\n`;
   const dispatch = STRATEGIES[client].section.split('.squad/').join(`${squadDir}/`);
-  return `${coreCoordinatorProtocol(squadDir, repoRoot)}\n${dispatch}\n\n${transports}`;
+  let core = coreCoordinatorProtocol(squadDir, repoRoot);
+  if (client === 'claude') core = splitOnDemandSections(core, squadDir).core;
+  return `${core}\n${dispatch}\n\n${transports}`;
+}
+
+/**
+ * Core-protocol items the Claude Code coordinator loads on demand as skills (#2438 Phase 4). The digest
+ * keeps a stub per item with its trigger and any rule that must hold before the skill is loaded; the full
+ * item text moves verbatim into a `.claude/skills/<name>/SKILL.md`. Other hosts keep the full digest.
+ */
+interface OnDemandSection {
+  /** Item marker at the start of the line, e.g. `9. **Ralph mode`. */
+  marker: string;
+  skill: string;
+  title: string;
+  /** Claude Code skill description: when to load it. */
+  description: string;
+  stub: (skill: string, S: string) => string;
+}
+
+const ON_DEMAND: readonly OnDemandSection[] = [
+  {
+    marker: '0. **Init Mode',
+    skill: 'squad-coordinator-init-mode',
+    title: 'Init Mode and casting',
+    description: 'Squad coordinator only: Init Mode, proposing and casting a new team. Load when team.md is missing or has an empty roster, or when asked to set up or cast a team.',
+    stub: (k, S) => `0. **Init Mode (only when there is truly no team).** Decide this with \`squad_state_read\` of \`team.md\` (or \`squad_state_list\`), NEVER with glob/grep/search tools (they skip dot-directories like \`${S}/\`). If \`team.md\` is readable and lists members, a team exists: NEVER overwrite or re-cast it. Only if \`team.md\` does not exist or has an empty roster, load the \`${k}\` skill and follow it before doing anything else.`,
+  },
+  {
+    marker: '9. **Ralph mode',
+    skill: 'squad-coordinator-ralph-mode',
+    title: 'Ralph mode (work monitor)',
+    description: 'Squad coordinator only: Ralph mode, the backlog work monitor loop. Load when the user says "Ralph, go" or asks to work the backlog or keep the board moving.',
+    stub: (k) => `9. **Ralph mode (work monitor).** When the user says "Ralph, go" (or asks you to work the backlog / keep the board moving), load the \`${k}\` skill and run its loop yourself: never delegate the loop itself.`,
+  },
+  {
+    marker: '15. **Ceremonies.',
+    skill: 'squad-coordinator-ceremonies',
+    title: 'Ceremonies',
+    description: 'Squad coordinator only: running team ceremonies (design review, retro, manual ceremonies). Load before spawning work when ceremonies.md defines a before or after trigger, or when a ceremony is requested.',
+    stub: (k, S) => `15. **Ceremonies.** If \`${S}/ceremonies.md\` defines ceremonies, load the \`${k}\` skill before spawning work (for \`before\` triggers), after work completes (for \`after\` triggers), or when the user asks for one.`,
+  },
+  {
+    marker: '18. **GitHub Issues mode.',
+    skill: 'squad-coordinator-issues-mode',
+    title: 'GitHub Issues mode',
+    description: 'Squad coordinator only: GitHub Issues mode (connecting a repo, listing, routing and working issues with gh). Load when the user mentions issues, connecting a repo, or squad labels.',
+    stub: (k) => `18. **GitHub Issues mode.** When the user asks to connect a repository or work GitHub issues, load the \`${k}\` skill and follow it.`,
+  },
+  {
+    marker: '19. **PRD mode.',
+    skill: 'squad-coordinator-prd-mode',
+    title: 'PRD mode',
+    description: 'Squad coordinator only: PRD mode (decomposing a product requirements document into owned work items). Load when the user provides or points to a PRD or spec to break down.',
+    stub: (k) => `19. **PRD mode.** When given a PRD (file or pasted), load the \`${k}\` skill and follow it.`,
+  },
+];
+
+export interface CoordinatorSkill {
+  name: string;
+  description: string;
+  /** Markdown body without frontmatter. */
+  body: string;
+}
+
+/** Item boundary: the next numbered item or section heading. */
+const ITEM_START = /^(?:\d+a?\. \*\*|## )/;
+
+function splitOnDemandSections(core: string, squadDir: string): { core: string; skills: CoordinatorSkill[] } {
+  const lines = core.split('\n');
+  const skills: CoordinatorSkill[] = [];
+  for (const sec of ON_DEMAND) {
+    const start = lines.findIndex((l) => l.startsWith(sec.marker));
+    if (start === -1) throw new Error(`coordinator digest: on-demand item "${sec.marker}" not found`);
+    let end = start + 1;
+    while (end < lines.length && !ITEM_START.test(lines[end]!) && lines[end] !== '') end++;
+    const item = lines.slice(start, end).join('\n');
+    skills.push({
+      name: sec.skill,
+      description: sec.description,
+      body: `# ${sec.title}\n\nThis is the full text of core-protocol item ${sec.marker.split('.')[0]} of the Squad coordinator, loaded on demand. It applies only to the Squad coordinator, never to team members.\n\n${item.replace(/^\d+\. /, '')}\n`,
+    });
+    lines.splice(start, end - start, sec.stub(sec.skill, squadDir));
+  }
+  return { core: lines.join('\n'), skills };
+}
+
+/** The `squad-coordinator-*` skills the Claude Code coordinator loads on demand. */
+export function claudeCoordinatorSkills(squadDir = '.squad', repoRoot?: string): CoordinatorSkill[] {
+  return splitOnDemandSections(coreCoordinatorProtocol(squadDir, repoRoot), squadDir).skills;
 }

@@ -54,8 +54,8 @@ export class DecisionHygieneCapability implements WatchCapability {
         'git-tracked first (git ls-files --error-unmatch), append and verify before trimming, ' +
         'and report entry counts moved rather than file sizes.';
 
-      const { cmd, args } = buildAgentCommand(prompt, context);
-      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000);
+      const { cmd, args, checkStdout } = buildAgentCommand(prompt, context);
+      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000, checkStdout);
       return { success: true, summary: `decision inbox merged (${fileCount} files)` };
     } catch (e) {
       return { success: false, summary: `decision hygiene: ${(e as Error).message}` };

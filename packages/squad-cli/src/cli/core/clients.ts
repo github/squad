@@ -168,6 +168,7 @@ export async function syncClients(
 export function reportClientResults(results: readonly ApplyResult[], log: (m: string) => void = console.log): void {
   for (const r of results) {
     if (r.action === 'error') log(`⚠ ${r.path}: ${r.error}`);
+    else if (r.action === 'skipped') log(`⚠ skipped ${r.path}: ${r.error}`);
     else if (r.action !== 'unchanged') log(`✓ ${r.action} ${r.path}`);
   }
 }

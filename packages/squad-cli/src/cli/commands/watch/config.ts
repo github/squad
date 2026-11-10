@@ -129,6 +129,10 @@ export interface WatchConfig {
   copilotFlags?: string;
   /** Hidden — fully override the agent command. */
   agentCmd?: string;
+  /** Built-in runner: `copilot` (default) or `claude`. Ignored when `agentCmd` is set. */
+  agentPreset?: 'copilot' | 'claude';
+  /** Extra flags for the Claude preset. Execute mode defaults to `--permission-mode bypassPermissions`. */
+  claudeFlags?: string;
   /** Dispatch mode: 'task' (default 1:1), 'fleet' (batch read-only), 'hybrid' (auto-classify). */
   dispatchMode?: DispatchMode;
   /** Optional path to a log file. When set, console output is tee'd to the file with timestamps. */
@@ -153,6 +157,47 @@ export interface WatchConfig {
   stateContext?: SquadStateContext | null;
   /** Work claim provider for execute/fleet-dispatch (ADR-002). Default: none. */
   claims?: WatchClaimsConfig;
+}
+
+/**
+ * Permission flags the Claude preset uses in execute mode when `claudeFlags` is unset: the
+ * counterpart of Copilot's `--yolo` default.
+ */
+export const CLAUDE_DEFAULT_EXECUTE_FLAGS = '--permission-mode bypassPermissions';
+
+/**
+ * Flags `watch.claudeFlags` may set from `.squad/config.json`. That file belongs to the repository,
+ * so it may tune the model, permission mode, effort and turn limit, but never tool lists (which
+ * could widen what Claude may run), MCP servers, settings, plugins, extra directories or the agent
+ * (which would undo the squad_state-only MCP config of the Claude preset). `--claude-flags` on the
+ * command line is the user's own and is not restricted.
+ */
+const CLAUDE_FILE_FLAGS: Record<string, (value: string) => boolean> = {
+  '--permission-mode': (v) => ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'].includes(v),
+  '--model': (v) => /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/.test(v),
+  '--fallback-model': (v) => /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/.test(v),
+  '--effort': (v) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(v),
+  '--max-turns': (v) => /^[1-9][0-9]{0,4}$/.test(v),
+};
+
+/** Validate repository-supplied Claude flags; throws {@link WatchConfigError} naming the first bad one. */
+export function validateClaudeFileFlags(flags: string): string {
+  const tokens = flags.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    const [name, inline] = tokens[i]!.split(/=(.*)/s, 2) as [string, string | undefined];
+    const rule = CLAUDE_FILE_FLAGS[name];
+    if (!rule) {
+      throw new WatchConfigError(
+        `.squad/config.json watch.claudeFlags may not set ${JSON.stringify(name)}. Allowed: ${Object.keys(CLAUDE_FILE_FLAGS).join(', ')}. ` +
+          'Pass other flags with --claude-flags on the command line.',
+      );
+    }
+    const value = inline ?? tokens[++i];
+    if (value === undefined || !rule(value)) {
+      throw new WatchConfigError(`.squad/config.json watch.claudeFlags: invalid value for ${name}: ${JSON.stringify(value ?? '')}`);
+    }
+  }
+  return flags;
 }
 
 const DEFAULTS: WatchConfig = {
@@ -213,6 +258,8 @@ export function loadWatchConfig(
     timeout: cliOverrides.timeout ?? fileConfig.timeout ?? DEFAULTS.timeout,
     copilotFlags: cliOverrides.copilotFlags ?? fileConfig.copilotFlags ?? DEFAULTS.copilotFlags,
     agentCmd: cliOverrides.agentCmd ?? fileConfig.agentCmd ?? DEFAULTS.agentCmd,
+    agentPreset: cliOverrides.agentPreset ?? fileConfig.agentPreset,
+    claudeFlags: cliOverrides.claudeFlags ?? fileConfig.claudeFlags,
     dispatchMode: cliOverrides.dispatchMode ?? fileConfig.dispatchMode ?? DEFAULTS.dispatchMode,
     logFile: cliOverrides.logFile ?? fileConfig.logFile ?? DEFAULTS.logFile,
     capabilities: {
@@ -236,6 +283,10 @@ export function loadWatchConfig(
   if (merged.execute && !merged.copilotFlags && !merged.agentCmd) {
     merged.copilotFlags = '--yolo';
   }
+  // Same for the Claude preset: headless `claude -p` stops at the first tool needing approval.
+  if (merged.execute && merged.agentPreset === 'claude' && !merged.claudeFlags && !merged.agentCmd) {
+    merged.claudeFlags = CLAUDE_DEFAULT_EXECUTE_FLAGS;
+  }
 
   return merged;
 }
@@ -258,6 +309,14 @@ function normalizeFileConfig(raw: Record<string, unknown>, warn: (message: strin
   if (typeof raw['timeout'] === 'number') result.timeout = raw['timeout'];
   if (typeof raw['copilotFlags'] === 'string') result.copilotFlags = raw['copilotFlags'];
   if (typeof raw['agentCmd'] === 'string') result.agentCmd = raw['agentCmd'];
+  if ('agentPreset' in raw) {
+    const preset = raw['agentPreset'];
+    if (preset !== 'copilot' && preset !== 'claude') {
+      throw new WatchConfigError(`.squad/config.json watch.agentPreset must be "copilot" or "claude" (got ${JSON.stringify(preset)})`);
+    }
+    result.agentPreset = preset;
+  }
+  if (typeof raw['claudeFlags'] === 'string') result.claudeFlags = validateClaudeFileFlags(raw['claudeFlags']);
   if (typeof raw['verbose'] === 'boolean') result.verbose = raw['verbose'];
   if (typeof raw['dispatchMode'] === 'string') {
     const mode = raw['dispatchMode'] as string;
@@ -295,7 +354,7 @@ function normalizeFileConfig(raw: Record<string, unknown>, warn: (message: strin
 
   // Everything else is a capability key
   const caps: Record<string, boolean | Record<string, unknown>> = {};
-  const reserved = new Set(['interval', 'maxRounds', 'maxDuration', 'execute', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend', 'claims']);
+  const reserved = new Set(['interval', 'maxRounds', 'maxDuration', 'execute', 'maxConcurrent', 'timeout', 'copilotFlags', 'agentCmd', 'agentPreset', 'claudeFlags', 'verbose', 'dispatchMode', 'logFile', 'authUser', 'notifyLevel', 'overnightStart', 'overnightEnd', 'sentinelFile', 'stateBackend', 'claims']);
   for (const [key, value] of Object.entries(raw)) {
     if (reserved.has(key)) continue;
     if (typeof value === 'boolean' || (typeof value === 'object' && value !== null && !Array.isArray(value))) {

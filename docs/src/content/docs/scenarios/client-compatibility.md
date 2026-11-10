@@ -193,9 +193,12 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 ### What Squad projects
 
 - `.claude/agents/squad.md` — the coordinator, as a Claude Code subagent named `squad`
+- `.claude/agents/<member>.md` — one subagent per team member, built-ins included, generated from `.squad/agents/<member>/charter.md`. `squad cast` adds the new member's file. If you already have your own file at one of these paths, Squad leaves it alone and reports it as skipped.
+- `.claude/skills/<name>/SKILL.md` — Squad's skills as native Claude Code skills, plus `squad-coordinator-*` skills the coordinator loads on demand (Init Mode, Ralph, ceremonies, GitHub Issues and PRD modes), which keeps its always-loaded prompt smaller. A team skill of the same name in `.squad/skills/` takes precedence, so that template isn't projected. Your own skills in `.claude/skills/` are left alone.
 - `.mcp.json` — the `squad_state` MCP server, merged without touching your other servers
 - `CLAUDE.md` — a Squad-managed marker block
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
+- `.claude/settings.json` — Squad's governance hooks, only if you opt in (see below). Your other settings and hooks are kept.
 
 ### Starting a session
 
@@ -209,14 +212,37 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Sub-agent spawning** | ✅ `Agent` tool | Each member runs as a general-purpose subagent with its charter inlined. Squad dispatches specialists only from the coordinator; members don't spawn subagents of their own. This is Squad's dispatch policy and doesn't depend on whether your Claude Code version allows nested subagents. |
+| **Sub-agent spawning** | ✅ `Agent` tool | Each member runs as its own subagent (`subagent_type: "<member>"`), which reads its charter. Squad dispatches specialists only from the coordinator; members don't spawn subagents of their own. This is Squad's dispatch policy and doesn't depend on whether your Claude Code version allows nested subagents. |
 | **Parallel fan-out** | ✅ | Independent `Agent` calls in one message run in parallel. |
 | **Background/async execution** | ✅ `run_in_background` | Validated in live runs. |
 | **Worktree isolation** | ✅ `isolation: "worktree"` | Claude Code creates worktrees under `.claude/worktrees/`, which Squad ignores in git. |
-| **Per-spawn model selection** | ❌ Not used yet | Claude Code supports it (a per-call `model`, plus `model` and `effort` in subagent frontmatter), but the Squad coordinator doesn't use it yet. Tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **Per-spawn model selection** | ✅ | A member's subagent uses the Claude model in its charter's `Preferred` field, and the reasoning effort from `.squad/config.json` or the charter. The coordinator passes a per-call `model` when your request, `agentModelOverrides`, `defaultModel` or the session's model takes precedence. Re-run `squad upgrade` after changing reasoning-effort config. A non-Claude model, a one-off effort request and `long_context` without a long-context Claude model are reported rather than applied. |
 | **MCP server access** | ✅ | `squad_state` tools appear as `mcp__squad_state__*`; subagents inherit them. |
-| **Hooks** | ❌ Not projected yet | Tracked in [#2442](https://github.com/github/squad/issues/2442). |
-| **`squad watch --execute`** | ⚠️ Limited | Runs through the Copilot CLI unless you pass `--agent-cmd` with a `claude -p …` command. A built-in preset is tracked in [#2442](https://github.com/github/squad/issues/2442). |
+| **Hooks** | ✅ Opt-in, advisory | Off by default. See [Governance hooks](#governance-hooks). |
+| **`squad watch --execute`** | ✅ Preset | `squad watch --execute --agent-preset claude` (or `"agentPreset": "claude"` under `watch` in `.squad/config.json`) runs each round as `claude -p … --agent squad` with a `squad_state`-only MCP config written by the `squad` CLI (never the repository's `.mcp.json`, whose other servers keep Claude Code's approval). Execute mode defaults to `--permission-mode bypassPermissions`, the counterpart of Copilot's `--yolo`; override it with `--claude-flags`. Fleet dispatch (`--dispatch-mode fleet`) stays Copilot-only. |
+
+### Governance hooks
+
+To turn the hooks on, add `"claudeHooks": "advisory"` to `.squad/config.json` and run `squad upgrade --client claude`. Squad then adds these hooks to `.claude/settings.json`:
+
+- **Session start:** the coordinator starts with the roster, routing, active reviewer lockouts and the CLI version its `squad_state` bridge must match.
+- **Before an edit:** a member who is locked out of a review subject gets a warning when it edits a file that subject covers. You see the warning too.
+- **After a member finishes:** the coordinator gets a handoff summary and a reminder to record decisions and run the reviewer gate.
+- **When the coordinator stops:** it's reminded to run Scribe if `.squad/decisions/inbox/` has entries, and you're told if Ralph's circuit breaker is open.
+
+The hooks only warn. They never block a tool call or permission, and they print nothing when hooks are off. To turn them off, set `"claudeHooks": "off"` and run `squad upgrade --client claude` again. Squad removes its hooks and leaves the rest of `.claude/settings.json` as it was.
+
+Reviewer lockouts come from `squad lockout`. For example, after Ripley rejects Dallas's work on issue 42:
+
+```bash
+squad lockout reject issue-42 --author dallas --reviewer ripley --reason "no tests for the auth path" --paths "src/auth/**"
+```
+
+```bash
+squad lockout assign issue-42 --successor lambert
+```
+
+`squad lockout status` lists each subject with its state and who can take the next revision. `submit` and `approve` record the revision and its approval, which ends the lockout. `override` lets you, or a member listed in `governance.authorities` in `.squad/config.json`, let a locked-out author back in, with a reason. If no eligible member is left, the subject is marked deadlocked until someone records an override.
 
 ---
 

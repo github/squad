@@ -26,6 +26,7 @@ import {
   upsertTomlTable,
   BLOCK_BEGIN,
   type ClientContext,
+  type ClientId,
 } from '../packages/squad-sdk/src/client/index.js';
 import {
   persistClients,
@@ -38,6 +39,7 @@ import { runInit } from '../packages/squad-cli/src/cli/core/init.js';
 import * as clientEntry from '../packages/squad-sdk/src/client/index.js';
 
 import * as canonical from '../packages/squad-sdk/src/client/adapters/index.js';
+import { claudeCoordinatorSkills } from '../packages/squad-sdk/src/client/adapters/coordinator.js';
 import * as deprecatedClients from '../packages/squad-sdk/src/clients/index.js';
 import {
   AdapterUnboundError,
@@ -221,10 +223,19 @@ describe('shared files and TOML helper', () => {
   });
 });
 
+/**
+ * Everything a host's coordinator can load: the digest, plus (Claude Code only) the on-demand
+ * `squad-coordinator-*` skills its digest points to (#2438 Phase 4).
+ */
+function coordinatorContract(id: ClientId, squadDir?: string): string {
+  const digest = buildCoordinatorInstructions(id, squadDir);
+  return id === 'claude' ? [digest, ...claudeCoordinatorSkills(squadDir).map((k) => k.body)].join('\n') : digest;
+}
+
 describe('coordinator Ralph mode', () => {
   it('coordinator prompt includes host-agnostic Ralph mode driven by the coordinator', () => {
     for (const id of CLIENT_IDS) {
-      const t = buildCoordinatorInstructions(id);
+      const t = coordinatorContract(id);
       expect(t).toMatch(/Ralph mode/);
       expect(t).toMatch(/squad:<member>/);
       expect(t).toMatch(/subagents cannot spawn subagents/);
@@ -253,7 +264,7 @@ describe('coordinator behavioral-contract parity', () => {
   ];
   for (const id of CLIENT_IDS) {
     it(`${id} prompt carries the full coordinator contract`, () => {
-      const text = buildCoordinatorInstructions(id);
+      const text = coordinatorContract(id);
       for (const [name, pats] of sections) {
         for (const p of pats) expect(text, `${id}: ${name} ${p}`).toMatch(p);
       }
@@ -263,7 +274,7 @@ describe('coordinator behavioral-contract parity', () => {
     for (const id of CLIENT_IDS) expect(Buffer.byteLength(buildCoordinatorInstructions(id), 'utf8')).toBeLessThan(24_000);
   });
   it('honors a custom squad dir in every referenced path', () => {
-    const t = buildCoordinatorInstructions('claude', '.team');
+    const t = coordinatorContract('claude', '.team');
     expect(t).toContain('.team/skills/');
     expect(t).toContain('.team/casting/');
     expect(t).not.toContain('.squad/skills/');
@@ -295,15 +306,22 @@ describe('coordinator digest vs. host feature matrix', () => {
     });
   }
 
-  const gaps: Array<[string, RegExp, string]> = [
+  // The optional fourth entry lists hosts whose digest has closed the gap: they assert it instead of `it.fails`.
+  const gaps: Array<[string, RegExp, string, ClientId[]?]> = [
     ['team-root resolution (teamRoot / stateLocation / TEAM_ROOT)', /teamRoot|stateLocation|TEAM_ROOT/, 'monorepo-team-root, dual-root-remote-mode'],
     ['Azure DevOps issue tracking (az boards / ADO)', /az boards|Azure DevOps/, 'azure-devops (F3)'],
     ['GitLab issue tracking (glab)', /glab|GitLab/, 'gitlab-issues (F2)'],
-    ['per-agent model / reasoning / context-tier selection', /reasoning[- ]effort|context[- ]tier|defaultModel/, 'model-selection'],
+    // Claude (#2442): member subagent frontmatter plus the per-spawn `model` rules in its dispatch section.
+    ['per-agent model / reasoning / context-tier selection', /reasoning[- ]effort|context[- ]tier|defaultModel/, 'model-selection', ['claude']],
     ['plugin marketplace browse on cast', /marketplace/, 'marketplace-plugins'],
   ];
-  for (const [name, pat, cells] of gaps) {
-    for (const id of CLIENT_IDS) {
+  for (const [name, pat, cells, closed = []] of gaps) {
+    for (const id of closed) {
+      it(`digest carries: ${name} [${id}]`, () => {
+        expect(buildCoordinatorInstructions(id), `${id}: ${name} (matrix cells: ${cells})`).toMatch(pat);
+      });
+    }
+    for (const id of CLIENT_IDS.filter((h) => !closed.includes(h))) {
       it.fails(`digest gap (expected until the stack adds it): ${name} [${id}]`, () => {
         expect(buildCoordinatorInstructions(id), `${id}: ${name} (matrix cells: ${cells})`).toMatch(pat);
       });
@@ -452,8 +470,16 @@ describe('config merging', () => {
     expect(exists('.cursor/rules/squad.mdc')).toBe(true);
   });
 
-  it('upsertBlock appends with spacing', () => {
-    expect(upsertBlock('a', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->\n`);
+  it('upsertBlock appends after one blank line and keeps a missing final newline missing', () => {
+    expect(upsertBlock('a', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->`);
+    expect(upsertBlock('a\n', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->\n`);
+  });
+
+  it('removeBlock restores the exact original bytes however the file ended (§15.7)', () => {
+    for (const original of ['', 'a', 'a\n', 'a\n\n', 'a\n\n\n', '# T\n\nbody', '\n', 'x\n  ']) {
+      expect(removeBlock(upsertBlock(original, 'x')), JSON.stringify(original)).toBe(original);
+      expect(removeBlock(upsertBlock(upsertBlock(original, 'x'), 'x-v2')), JSON.stringify(original)).toBe(original);
+    }
   });
 
   it('applyProjection reports created then updated', () => {

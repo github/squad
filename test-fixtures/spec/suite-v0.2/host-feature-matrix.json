@@ -166,8 +166,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "CLI scaffolds `.squad/`; coordinator Init Mode (digest §0) uses `squad_state_read team.md`, auto-confirms headless, casts via `squad cast --name`, never hand-edits `.squad/casting/`.",
+          "mechanism": "CLI scaffolds `.squad/`; the digest stub (§0) decides Init Mode with `squad_state_read team.md`, never glob, and loads the `squad-coordinator-init-mode` skill, which auto-confirms headless, casts via `squad cast --name` and never hand-edits `.squad/casting/`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::field findings from the live demo: Init Mode, scratch files, casting registry",
             "validated-test:test/cli/init.test.ts::*",
@@ -438,15 +439,13 @@
           "notes": "Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The CLI/SDK side works, but the projected digest carries no section for it, so the coordinator is not told about it on this host. Unsupported on this host until the section ships."
         },
         "claude": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "Host can: the `Agent` tool takes a per-call `model`, and subagent definitions take `model` and `effort` frontmatter. Unsupported because the digest lacks the model-selection section, so the coordinator never uses them; per-member `model`/`effort` frontmatter is tracked in #2442.",
+          "mechanism": "Each member's `.claude/agents/<id>.md` carries the charter's `Preferred` model (Claude models and aliases only) and the reasoning effort resolved from `.squad/config.json` (`agentReasoningEffortOverrides`, `defaultReasoningEffort`) over the charter. The Claude dispatch section applies the higher-precedence model layers (user directive, `agentModelOverrides`, `defaultModel`, session choice) as the per-call `Agent` `model`. A non-Claude model, a per-spawn effort directive (the `Agent` tool has no per-call effort) and `long_context` without a long-context Claude model are reported, not applied.",
           "evidence": [
-            "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
-            "static-only"
-          ],
-          "notes": "Expected-fail digest gap (per-host it.fails in test/clients.test.ts): unsupported on this host until the section ships."
+            "validated-test:test/claude-members.test.ts::*",
+            "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix"
+          ]
         },
         "kiro": {
           "capability": "unsupported",
@@ -1100,8 +1099,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Digest §17 lists `.squad/skills/` → `.copilot/skills/` → `.github/skills/` → `.claude/skills/` → `.agents/skills/` with earlier-wins precedence.",
+          "mechanism": "Digest §17 lists `.squad/skills/` → `.copilot/skills/` → `.github/skills/` → `.claude/skills/` → `.agents/skills/` with earlier-wins precedence. Squad's template skills are also projected as native skills in `.claude/skills/`, except where a team skill of the same name exists in `.squad/skills/`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/skills.test.ts::*",
             "validated-manual:lab:skills-precedence@2026-10-22"
@@ -1189,9 +1189,11 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Digest §12: REJECT locks out the author; revision reassigned; re-review required.",
+          "mechanism": "Digest §12: REJECT locks out the author; revision reassigned; re-review required. `squad lockout` records the §6 lockout state in `.squad/governance/lockouts.json`; with `claudeHooks: \"advisory\"`, a PreToolUse hook warns a locked-out member that edits a covered path (advisory: never denies).",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
+            "validated-test:test/claude-hooks.test.ts::runs reject → assign → submit → approve, and approval clears the lockout",
+            "validated-test:test/claude-hooks.test.ts::PreToolUse warns when a locked-out member edits a subject file, and never denies",
             "validated-manual:lab:reviewer-lockout@2026-10-22"
           ]
         },
@@ -1440,8 +1442,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Digest §15 reads `ceremonies.md`, spawns a facilitator, records via `squad_decide`.",
+          "mechanism": "The digest stub (§15) loads the `squad-coordinator-ceremonies` skill, which reads `ceremonies.md`, spawns a facilitator and records via `squad_decide`.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "static-only"
           ]
@@ -1701,8 +1704,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-live",
-          "mechanism": "Digest §9: coordinator runs the loop itself via `gh`; circuit breaker template. Requires `gh` authenticated inside the host.",
+          "mechanism": "The digest stub (§9) loads the `squad-coordinator-ralph-mode` skill; the coordinator runs the loop itself via `gh`, with the circuit breaker template. Requires `gh` authenticated inside the host.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator Ralph mode",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-manual:lab:ralph-no-repo@2026-10-22"
@@ -1789,12 +1793,12 @@
           ]
         },
         "claude": {
-          "capability": "degraded",
+          "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Scanning/routing is host-agnostic, but `--execute` dispatches through the Copilot CLI unless `agentCmd` (`--agent-cmd \"<host> … {prompt}\"`) is configured; no built-in preset for this host.",
+          "mechanism": "Built-in preset: `--agent-preset claude` (or `watch.agentPreset: \"claude\"`) runs `claude -p {prompt} --agent squad --mcp-config <squad_state-only config> --output-format stream-json --verbose` (the config is written by the CLI; the repository's `.mcp.json` is never passed); execute mode defaults to `--permission-mode bypassPermissions`. Fleet dispatch stays Copilot-only.",
           "evidence": [
             "validated-test:test/ralph-triage.test.ts::*",
-            "static-only"
+            "validated-test:test/cli/watch-claude-preset.test.ts::*"
           ]
         },
         "kiro": {
@@ -1874,8 +1878,9 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Digest §19; `prd-intake.md` template on demand.",
+          "mechanism": "The digest stub (§19) loads the `squad-coordinator-prd-mode` skill; `prd-intake.md` template on demand.",
           "evidence": [
+            "validated-test:test/claude-skills.test.ts::*",
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "static-only"
           ]
@@ -3870,10 +3875,11 @@
         "claude": {
           "capability": "n/a",
           "validation": "static-only",
-          "mechanism": "Runs in GitHub Actions with the Copilot engine; the local host is irrelevant.",
+          "mechanism": "Runs in GitHub Actions, so the local host is irrelevant. Squad's workflows use the Copilot engine; gh-aw also has a built-in Claude Code engine (`engine: claude`), which Squad does not ship a workflow for.",
           "evidence": [
             "static-only"
-          ]
+          ],
+          "notes": "Re-evaluated for #2442 (research: https://github.com/github/squad/issues/2438#issuecomment-6753729924). A Squad workflow on `engine: claude` would pass `engine.args: [\"--agent\", \"squad\"]` (gh-aw has no native agent selection for Claude) and needs `bare: false` for subagent delegation; not yet run."
         },
         "kiro": {
           "capability": "n/a",
@@ -5064,7 +5070,6 @@
       "perHost": true,
       "hosts": [
         "copilot",
-        "claude",
         "kiro",
         "opencode",
         "cursor",

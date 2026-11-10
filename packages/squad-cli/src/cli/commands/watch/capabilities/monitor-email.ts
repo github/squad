@@ -4,7 +4,7 @@
 
 import { execFile } from 'node:child_process';
 import type { WatchCapability, WatchContext, PreflightResult, CapabilityResult } from '../types.js';
-import { buildAgentCommand, spawnWithTimeout, IS_WINDOWS } from '../agent-spawn.js';
+import { buildAgentCommand, checkClaudeCli, spawnWithTimeout, IS_WINDOWS } from '../agent-spawn.js';
 
 export class MonitorEmailCapability implements WatchCapability {
   readonly name = 'monitor-email';
@@ -16,6 +16,7 @@ export class MonitorEmailCapability implements WatchCapability {
   async preflight(context: WatchContext): Promise<PreflightResult> {
     // If using custom agentCmd, skip copilot check
     if (context.agentCmd) return { ok: true };
+    if (context.agentPreset === 'claude') return checkClaudeCli();
     return new Promise((resolve) => {
       execFile('copilot', ['--version'], { shell: IS_WINDOWS, timeout: 5000 }, (err) => {
         if (err) {
@@ -42,8 +43,8 @@ export class MonitorEmailCapability implements WatchCapability {
         'If a failed workflow can be re-run, attempt: gh run rerun <run-id> --failed. ' +
         'If WorkIQ is not available, just report that and exit.';
 
-      const { cmd, args } = buildAgentCommand(prompt, context);
-      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000);
+      const { cmd, args, checkStdout } = buildAgentCommand(prompt, context);
+      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000, checkStdout);
       return { success: true, summary: 'Email scan complete' };
     } catch (e) {
       return { success: false, summary: `Email monitor: ${(e as Error).message}` };

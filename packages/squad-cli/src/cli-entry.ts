@@ -250,6 +250,7 @@ async function main(): Promise<void> {
     console.log(`             Usage: memory write --content "..." --class LOCAL`);
     console.log(`             Diagnostics: --log-level info|debug or --verbose`);
     console.log(`  ${BOLD}state-mcp${RESET}  MCP bridge exposing Squad runtime state tools`);
+    console.log(`  ${BOLD}lockout${RESET}    Reviewer lockouts: reject|assign|submit|approve|override|status`);
     console.log(`  ${BOLD}doctor${RESET}     Validate squad setup (check files, config, health)`);
     console.log(`  ${BOLD}health${RESET}     Validate team state for CI (team/registry/routing/backend/env)`);
     console.log(`             Flags: --json (structured output for CI)`);
@@ -556,6 +557,16 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (cmd === 'hook') {
+    const { runHookCommand } = await import('./cli/commands/hook.js');
+    process.exit(await runHookCommand(args.slice(1)));
+  }
+
+  if (cmd === 'lockout') {
+    const { runLockoutCommand } = await import('./cli/commands/lockout.js');
+    process.exit(await runLockoutCommand(getSquadStartDir(), args.slice(1)));
+  }
+
   if (cmd === 'state-mcp') {
     const { runStateMcp } = await import('./cli/commands/state-mcp.js');
     await runStateMcp(getSquadStartDir());
@@ -626,6 +637,19 @@ async function main(): Promise<void> {
     const agentCmdIdx = args.indexOf('--agent-cmd');
     const agentCmd = (agentCmdIdx !== -1 && args[agentCmdIdx + 1])
       ? args[agentCmdIdx + 1]
+      : undefined;
+
+    const agentPresetIdx = args.indexOf('--agent-preset');
+    const rawAgentPreset = agentPresetIdx !== -1 ? args[agentPresetIdx + 1] : undefined;
+    if (agentPresetIdx !== -1 && rawAgentPreset !== 'copilot' && rawAgentPreset !== 'claude') {
+      console.error(`\u26a0\ufe0f --agent-preset must be "copilot" or "claude"${rawAgentPreset ? ` (got "${rawAgentPreset}")` : ''}`);
+      process.exit(1);
+    }
+    const agentPreset = rawAgentPreset as 'copilot' | 'claude' | undefined;
+
+    const claudeFlagsIdx = args.indexOf('--claude-flags');
+    const claudeFlags = (claudeFlagsIdx !== -1 && args[claudeFlagsIdx + 1])
+      ? args[claudeFlagsIdx + 1]
       : undefined;
 
     const maxConcurrentIdx = args.indexOf('--max-concurrent');
@@ -752,6 +776,8 @@ async function main(): Promise<void> {
         timeout,
         copilotFlags,
         agentCmd,
+        agentPreset,
+        claudeFlags,
         verbose,
         dispatchMode,
         logFile,
@@ -774,7 +800,7 @@ async function main(): Promise<void> {
     // After parsing all flags, check for positional args that look like prompts.
     // Skip values that follow known value-flags (e.g. "--interval 5" → "5" is not positional).
     const knownValueFlags = new Set([
-      '--interval', '--max-rounds', '--max-duration', '--copilot-flags', '--agent-cmd', '--max-concurrent', '--timeout', '--board-project', '--board-owner', '--auth-user',
+      '--interval', '--max-rounds', '--max-duration', '--copilot-flags', '--agent-cmd', '--agent-preset', '--claude-flags', '--max-concurrent', '--timeout', '--board-project', '--board-owner', '--auth-user',
       '--dispatch-mode', '--log-file', '--notify-level', '--overnight-start', '--overnight-end', '--sentinel-file', '--state-backend',
       '--claims',
     ]);
