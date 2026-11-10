@@ -1795,7 +1795,7 @@
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Built-in preset: `--agent-preset claude` (or `watch.agentPreset: \"claude\"`) runs `claude -p {prompt} --agent squad --mcp-config .mcp.json --output-format stream-json --verbose`; execute mode defaults to `--permission-mode bypassPermissions`. Fleet dispatch stays Copilot-only.",
+          "mechanism": "Built-in preset: `--agent-preset claude` (or `watch.agentPreset: \"claude\"`) runs `claude -p {prompt} --agent squad --mcp-config <squad_state-only config> --output-format stream-json --verbose` (the config is written by the CLI; the repository's `.mcp.json` is never passed); execute mode defaults to `--permission-mode bypassPermissions`. Fleet dispatch stays Copilot-only.",
           "evidence": [
             "validated-test:test/ralph-triage.test.ts::*",
             "validated-test:test/cli/watch-claude-preset.test.ts::*"

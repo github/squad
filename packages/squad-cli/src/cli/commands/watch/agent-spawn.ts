@@ -266,30 +266,27 @@ export type AgentPreset = (typeof AGENT_PRESETS)[number];
  * `session` runs the projected coordinator (`--agent squad`, from `squad init|upgrade --client
  * claude`), which treats the "Ralph, Go!" prompt as its Ralph-mode trigger and dispatches members
  * as subagents. Without it, the prompt runs in a plain Claude Code session (monitor and hygiene
- * prompts). The project's `.mcp.json` is passed explicitly because `claude -p` does not load
- * unapproved project MCP servers, and the coordinator halts without `squad_state`.
+ * prompts). `squad_state` is passed through `context.claudeMcpConfig`, a config this CLI writes with
+ * only that server, resolved from its own install. The repository's `.mcp.json` is never passed
+ * explicitly: that would bypass Claude Code's approval for every other server in it.
  */
 export function buildClaudeCommand(
   prompt: string,
-  context: Pick<WatchContext, 'teamRoot' | 'claudeFlags'>,
+  context: Pick<WatchContext, 'teamRoot' | 'claudeFlags' | 'claudeMcpConfig'>,
   options: { session?: boolean } = {},
-): { cmd: string; args: string[] } {
+): { cmd: string; args: string[]; checkStdout: (stdout: string) => string | undefined } {
   const args = ['-p', prompt];
   if (options.session) args.push('--agent', 'squad');
-  const mcpConfig = path.join(context.teamRoot, '.mcp.json');
-  if (existsSync(mcpConfig)) {
-    args.push('--mcp-config', mcpConfig);
+  if (context.claudeMcpConfig) {
+    args.push('--mcp-config', context.claudeMcpConfig);
   } else {
-    console.warn(
-      `[squad] ⚠  .mcp.json not found at ${mcpConfig}. Run \`squad upgrade --client claude\` to create it. ` +
-        'squad_state tools will NOT be available in this session.',
-    );
+    console.warn('[squad] ⚠  No squad_state MCP config for the Claude preset: squad_state tools will NOT be available in this session.');
   }
   // stream-json (which needs --verbose with -p) ends with a `result` event even when the run
   // fails, so a failed session is reported as a failure; see parseClaudeStreamResult.
   args.push('--output-format', 'stream-json', '--verbose');
   if (context.claudeFlags) args.push(...context.claudeFlags.trim().split(/\s+/));
-  return { cmd: 'claude', args };
+  return { cmd: 'claude', args, checkStdout: parseClaudeStreamResult };
 }
 
 /** Is the Claude Code CLI on PATH? Used by preflight when the Claude preset is selected. */
@@ -338,7 +335,7 @@ export function parseClaudeStreamResult(stdout: string): string | undefined {
 export function buildAgentCommand(
   prompt: string,
   context: WatchContext,
-): { cmd: string; args: string[] } {
+): { cmd: string; args: string[]; checkStdout?: (stdout: string) => string | undefined } {
   if (context.agentCmd) {
     return buildCustomAgentCommand(context.agentCmd, prompt);
   }
@@ -367,7 +364,7 @@ export function buildAgentCommand(
 export function buildCopilotCommand(
   prompt: string,
   context: WatchContext,
-): { cmd: string; args: string[] } {
+): { cmd: string; args: string[]; checkStdout?: (stdout: string) => string | undefined } {
   if (context.agentCmd) {
     return buildCustomAgentCommand(context.agentCmd, prompt);
   }
@@ -382,13 +379,16 @@ export function buildCopilotCommand(
  *
  * Uses `shell: true` on Windows so that `.cmd`/`.bat` wrappers and
  * PATH resolution work correctly.  Args are escaped via `escapeArgs()`
- * to prevent Node DEP0190 and cmd.exe metacharacter injection.
+ * to prevent Node DEP0190 and cmd.exe metacharacter injection. `checkStdout` (from the command
+ * builder) turns a run that exited 0 but reported a failure, such as a Claude `error_max_turns`
+ * result, into an error.
  */
 export function spawnWithTimeout(
   cmd: string,
   args: string[],
   cwd: string,
   timeoutMs: number,
+  checkStdout?: (stdout: string) => string | undefined,
 ): Promise<void> {
   const { args: safeArgs, cleanup } = prepareArgsForSpawn(args);
   return runProcessTreeCommand(cmd, safeArgs, {
@@ -406,6 +406,8 @@ export function spawnWithTimeout(
           : run.error.message,
       );
     }
+    const failure = checkStdout?.(run.stdout);
+    if (failure) throw new Error(failure);
   }, (error) => {
     cleanup();
     throw error;

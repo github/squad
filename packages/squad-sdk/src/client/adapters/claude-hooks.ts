@@ -325,9 +325,14 @@ export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, no
     if (!member || !memberIdsWithCharters(env.teamAbs).includes(member)) return null;
     // Structured fields only: free text from the tool call (its `description`) is not reflected
     // back into the coordinator's context, so the hook cannot become an instruction channel.
+    // A background Agent call returns at launch (`status: "async_launched"`), before the member has
+    // finished. Claude Code gives no parent-side hook for the later completion (SubagentStop context
+    // goes to the subagent), so a launch is reported as an acknowledgement, never as a result.
+    const response = isObject(input['tool_response']) ? input['tool_response'] : {};
+    const launched = response['status'] === 'async_launched';
     const envelope = {
       profile: 'squad-coordination-handoff/v0.1',
-      type: 'result',
+      type: launched ? 'acknowledgement' : 'result',
       messageId: str(input['tool_use_id']) ?? null,
       correlationId: str(input['session_id']) ?? null,
       sender: member,
@@ -341,8 +346,11 @@ export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, no
       hookSpecificOutput: {
         hookEventName: 'PostToolUse',
         additionalContext: cap(
-          `Squad handoff result envelope: ${JSON.stringify(envelope)}. Record any verdict or decision with \`squad_decide\`, ` +
-            `and run the reviewer gate before declaring the work done.${review}`,
+          launched
+            ? `Squad handoff acknowledgement: ${JSON.stringify(envelope)}. ${member} is running in the background and has not finished; ` +
+                `wait for its completion notification, then record any verdict with \`squad_decide\` and run the reviewer gate.${review}`
+            : `Squad handoff result envelope: ${JSON.stringify(envelope)}. Record any verdict or decision with \`squad_decide\`, ` +
+                `and run the reviewer gate before declaring the work done.${review}`,
         ),
       },
     };

@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claudeCoordinatorSkills } from './coordinator.js';
+import { readContained } from './safe-path.js';
 import type { ClientContext, ProjectionFile } from './types.js';
 
 export const CLAUDE_SKILLS_DIR = '.claude/skills';
@@ -57,7 +58,8 @@ export function projectClaudeSkills(ctx: ClientContext, generatedNote: string, o
     if (teamSkills.has(name) || current.has(name)) continue;
     let skill: string;
     try {
-      skill = fs.readFileSync(path.join(templatesAbs, name, 'SKILL.md'), 'utf8');
+      // A SKILL.md (or directory) linked outside the team directory is never copied into .claude/.
+      skill = readContained(squadAbs, path.join('templates', 'skills', name, 'SKILL.md'));
     } catch {
       continue;
     }

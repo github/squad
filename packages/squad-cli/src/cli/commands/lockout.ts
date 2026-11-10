@@ -15,7 +15,7 @@ import {
   readLockouts,
   rejectRevision,
   submitRevision,
-  writeLockouts,
+  updateLockouts,
   type LockoutStore,
 } from '@bradygaster/squad-sdk/client';
 
@@ -40,7 +40,9 @@ function need(args: string[], name: string): string {
 }
 
 export async function runLockoutCommand(startDir: string, args: string[]): Promise<number> {
-  const [cmd, subject] = args;
+  const [cmd, second] = args;
+  // Only a positional second argument is a subject (`status --json` lists every record).
+  const subject = second && !second.startsWith('--') ? second : undefined;
   if (!cmd || cmd === '--help' || cmd === '-h') {
     console.log(USAGE);
     return cmd ? 0 : 1;
@@ -52,9 +54,9 @@ export async function runLockoutCommand(startDir: string, args: string[]): Promi
   }
   const team = state.paths.teamSquadDir;
   try {
-    const store = readLockouts(team);
     const roster = lockoutRoster(team);
     if (cmd === 'status') {
+      const store = readLockouts(team);
       const shown = store.subjects.filter((s) => !subject || s.subject === subject);
       if (args.includes('--json')) console.log(JSON.stringify(shown, null, 2));
       else if (shown.length === 0) console.log('No lockout records.');
@@ -67,20 +69,21 @@ export async function runLockoutCommand(startDir: string, args: string[]): Promi
       return 0;
     }
     if (!subject) throw new LockoutError('A review subject is required');
-    let next: LockoutStore;
+    let transition: (store: LockoutStore) => LockoutStore;
     if (cmd === 'reject') {
       const paths = flag(args, 'paths')?.split(',').map((p) => p.trim()).filter(Boolean);
-      next = rejectRevision(store, { subject, author: need(args, 'author'), reviewer: need(args, 'reviewer'), reason: need(args, 'reason'), paths, roster });
-    } else if (cmd === 'assign') next = assignRevision(store, { subject, successor: need(args, 'successor'), roster });
-    else if (cmd === 'submit') next = submitRevision(store, { subject, author: need(args, 'author') });
-    else if (cmd === 'approve') next = approveRevision(store, { subject, reviewer: need(args, 'reviewer') });
+      transition = (store) => rejectRevision(store, { subject, author: need(args, 'author'), reviewer: need(args, 'reviewer'), reason: need(args, 'reason'), paths, roster });
+    } else if (cmd === 'assign') transition = (store) => assignRevision(store, { subject, successor: need(args, 'successor'), roster });
+    else if (cmd === 'submit') transition = (store) => submitRevision(store, { subject, author: need(args, 'author') });
+    else if (cmd === 'approve') transition = (store) => approveRevision(store, { subject, reviewer: need(args, 'reviewer') });
     else if (cmd === 'override')
-      next = overrideLockout(store, { subject, author: need(args, 'author'), by: need(args, 'by'), reason: need(args, 'reason'), authorities: lockoutAuthorities(team), roster });
+      transition = (store) => overrideLockout(store, { subject, author: need(args, 'author'), by: need(args, 'by'), reason: need(args, 'reason'), authorities: lockoutAuthorities(team), roster });
     else {
       console.error(USAGE);
       return 1;
     }
-    writeLockouts(team, next);
+    // Read, transition and write under one interprocess lock.
+    const next = updateLockouts(team, transition);
     const r = next.subjects.find((s) => s.subject === subject)!;
     console.log(`${r.subject}: ${r.state}`);
     if (r.state === 'deadlocked') console.log('  No eligible successor remains: escalate to an authority (squad lockout override ...) or the user.');

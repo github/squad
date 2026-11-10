@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveContained } from './safe-path.js';
 
 export const LOCKOUT_FILE = 'governance/lockouts.json';
 
@@ -55,8 +56,11 @@ export class LockoutError extends Error {
   }
 }
 
-/** Members that never author revisions: the coordinator and the team's bookkeeping agents. */
-const NON_AUTHORS = new Set(['squad', 'scribe', 'ralph']);
+/**
+ * Members that never author revisions: the coordinator, the bookkeeping agents, and the
+ * reviewer-only built-ins whose charters exclude implementation and revision pairing.
+ */
+const NON_AUTHORS = new Set(['squad', 'scribe', 'ralph', 'rai', 'fact-checker']);
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function emptyLockoutStore(): LockoutStore {
@@ -66,8 +70,9 @@ export function emptyLockoutStore(): LockoutStore {
 export function readLockouts(squadAbs: string): LockoutStore {
   let raw: string;
   try {
-    raw = fs.readFileSync(path.join(squadAbs, LOCKOUT_FILE), 'utf8');
-  } catch {
+    raw = fs.readFileSync(lockoutPath(squadAbs), 'utf8');
+  } catch (err) {
+    if (err instanceof LockoutError) throw err;
     return emptyLockoutStore();
   }
   const parsed = JSON.parse(raw) as Partial<LockoutStore>;
@@ -77,15 +82,66 @@ export function readLockouts(squadAbs: string): LockoutStore {
   return { version: 1, subjects: parsed.subjects.map((r) => ({ ...r, paths: r.paths ?? [], overrides: r.overrides ?? [] })) };
 }
 
-export function writeLockouts(squadAbs: string, store: LockoutStore): void {
-  const abs = path.join(squadAbs, LOCKOUT_FILE);
+/** The lockout file, refusing a `governance/` directory or file link that leads outside the team. */
+function lockoutPath(squadAbs: string): string {
+  try {
+    return resolveContained(squadAbs, LOCKOUT_FILE);
+  } catch (err) {
+    throw new LockoutError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+const LOCK_STALE_MS = 30_000;
+const LOCK_WAIT_MS = 10_000;
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Read, transform and write the store under an interprocess lock, so concurrent `squad lockout`
+ * commands (for example two coordinator sessions rejecting different subjects) keep both
+ * transitions. A lock older than 30 s is treated as abandoned.
+ */
+export function updateLockouts(squadAbs: string, transition: (store: LockoutStore) => LockoutStore): LockoutStore {
+  const abs = lockoutPath(squadAbs);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
+  const lock = `${abs}.lock`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(lock, 'wx'));
+      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS) fs.rmSync(lock, { force: true });
+      } catch {
+        // released meanwhile
+      }
+      if (Date.now() > deadline) throw new LockoutError(`${LOCKOUT_FILE} is locked by another squad lockout command; try again`);
+      sleepSync(50);
+    }
+  }
+  try {
+    const next = transition(readLockouts(squadAbs));
+    writeLockouts(squadAbs, next);
+    return next;
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
+}
+
+export function writeLockouts(squadAbs: string, store: LockoutStore): void {
+  const abs = lockoutPath(squadAbs);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  // Rename replaces a link at `abs` instead of following it.
   const tmp = `${abs}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`);
   fs.renameSync(tmp, abs);
 }
 
-/** Authors who may revise: member IDs with a charter, minus the coordinator, Scribe and Ralph. */
+/** Authors who may revise: member IDs with a charter, minus the coordinator and the non-authoring built-ins. */
 export function lockoutRoster(squadAbs: string): string[] {
   try {
     return fs

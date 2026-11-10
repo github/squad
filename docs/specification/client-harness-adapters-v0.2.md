@@ -413,7 +413,7 @@ The handlers are:
 |---|---|---|
 | `SessionStart`, `SubagentStart` | `squad` (SubagentStart only) | For the coordinator only: adds context with the CLI version the `squad_state` bridge must match, the roster, routing, active reviewer lockouts and an open Ralph circuit breaker |
 | `PreToolUse` | `Edit\|MultiEdit\|Write\|NotebookEdit` | A member listed in an active lockout that edits a path the subject covers gets a warning, shown to the user and to the model |
-| `PostToolUse` | `Agent\|Task` | After the coordinator spawns a member: adds a `squad-coordination-handoff/v0.1` `result` envelope, a reminder to record decisions and run the reviewer gate, and the member's lockout state |
+| `PostToolUse` | `Agent\|Task` | After the coordinator spawns a member: adds a `squad-coordination-handoff/v0.1` envelope with structured fields only (`result` when the call finished; `acknowledgement` for a background launch, `status: "async_launched"`, which has not finished), a reminder to record decisions and run the reviewer gate, and the member's lockout state |
 | `Stop` | none | For the coordinator, once per stop (`stop_hook_active` is honoured): asks for Scribe when `decisions/inbox/` has entries, and reports an open Ralph circuit breaker |
 
 The hooks are advisory: no handler returns a `permissionDecision` or blocks a
@@ -427,7 +427,16 @@ Reviewer lockouts are recorded durably in
 That command implements the governance-review v0.1 §6 states (`author-locked`,
 `revision-assigned`, `revision-submitted`, `cleared`, `deadlocked`). An
 override needs an authority (the user, or a member listed in
-`governance.authorities` in `config.json`) and a reason.
+`governance.authorities` in `config.json`) and a reason. Revision authors are
+the members with a charter, except the coordinator, Scribe, Ralph, Rai and
+Fact Checker, whose charters exclude revision pairing. Each command reads,
+transitions and writes the record under an interprocess lock, so concurrent
+commands keep every transition. A `governance/` directory or file that resolves
+outside the team directory is refused.
+
+Projected Claude files never copy content from outside the team directory: a
+charter, `routing.md` or template `SKILL.md` that resolves outside it through a
+symlink is skipped.
 
 ### 7.2 `submit`
 

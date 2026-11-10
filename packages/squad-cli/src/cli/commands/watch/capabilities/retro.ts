@@ -57,8 +57,8 @@ export class RetroCapability implements WatchCapability {
         `Summarize: what went well, what didn't, action items. ` +
         `Write the output to .squad/log/${dateSlug}-retrospective.md`;
 
-      const { cmd, args } = buildAgentCommand(prompt, context);
-      await spawnWithTimeout(cmd, args, context.teamRoot, 120_000);
+      const { cmd, args, checkStdout } = buildAgentCommand(prompt, context);
+      await spawnWithTimeout(cmd, args, context.teamRoot, 120_000, checkStdout);
       return { success: true, summary: 'retrospective completed' };
     } catch (e) {
       return { success: false, summary: `retro: ${(e as Error).message}` };

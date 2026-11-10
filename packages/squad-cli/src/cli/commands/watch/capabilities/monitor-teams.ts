@@ -42,8 +42,8 @@ export class MonitorTeamsCapability implements WatchCapability {
         'First check existing open issues with label "teams-bridge" to avoid duplicates. ' +
         'If WorkIQ is not available, just report that and exit.';
 
-      const { cmd, args } = buildAgentCommand(prompt, context);
-      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000);
+      const { cmd, args, checkStdout } = buildAgentCommand(prompt, context);
+      await spawnWithTimeout(cmd, args, context.teamRoot, 60_000, checkStdout);
       return { success: true, summary: 'Teams scan complete' };
     } catch (e) {
       return { success: false, summary: `Teams monitor: ${(e as Error).message}` };

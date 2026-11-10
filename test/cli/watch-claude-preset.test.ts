@@ -15,7 +15,9 @@ import {
   buildAgentCommand,
   buildCopilotCommand,
   parseClaudeStreamResult,
+  spawnWithTimeout,
 } from '../../packages/squad-cli/src/cli/commands/watch/agent-spawn.js';
+import { writeClaudeWatchMcpConfig } from '../../packages/squad-cli/src/cli/commands/watch/claude-mcp.js';
 import type { WatchContext } from '../../packages/squad-cli/src/cli/commands/watch/types.js';
 
 const posixOnly = process.platform === 'win32' ? it.skip : it;
@@ -83,19 +85,20 @@ function context(teamRoot: string, overrides: Partial<WatchContext> = {}): Watch
     config: { timeout: 1 },
     agentPreset: 'claude',
     claudeFlags: CLAUDE_DEFAULT_EXECUTE_FLAGS,
+    claudeMcpConfig: path.join(teamRoot, 'squad-state-mcp.json'),
     ...overrides,
   };
 }
 
 describe('Claude preset: command shape', () => {
-  it('execute and wave-dispatch run the projected coordinator with the project MCP config', () => {
+  it('execute and wave-dispatch run the projected coordinator with the squad_state-only MCP config', () => {
     const root = team('shape');
     const { cmd, args } = buildCopilotCommand('Ralph, Go!', context(root));
     expect(cmd).toBe('claude');
     expect(args).toEqual([
       '-p', 'Ralph, Go!',
       '--agent', 'squad',
-      '--mcp-config', path.join(root, '.mcp.json'),
+      '--mcp-config', path.join(root, 'squad-state-mcp.json'),
       '--output-format', 'stream-json', '--verbose',
       '--permission-mode', 'bypassPermissions',
     ]);
@@ -109,11 +112,22 @@ describe('Claude preset: command shape', () => {
     expect(args.slice(-2)).toEqual(['--model', 'haiku']);
   });
 
-  it('warns and omits --mcp-config when .mcp.json is missing', () => {
+  it('never passes the repository .mcp.json, and warns when no squad_state config was written', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { args } = buildCopilotCommand('x', context(team('no-mcp', { mcp: false })));
+    const root = team('no-mcp');
+    const { args } = buildCopilotCommand('x', context(root, { claudeMcpConfig: undefined }));
     expect(args).not.toContain('--mcp-config');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('squad upgrade --client claude'));
+    expect(args.join(' ')).not.toContain('.mcp.json');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('squad_state tools will NOT be available'));
+  });
+
+  it('writes a private MCP config with only squad_state, resolved by the CLI, not the repository', async () => {
+    const file = await writeClaudeWatchMcpConfig('1.2.3');
+    const cfg = JSON.parse(fs.readFileSync(file, 'utf8')) as { mcpServers: Record<string, { command: string; args: string[] }> };
+    expect(Object.keys(cfg.mcpServers)).toEqual(['squad_state']);
+    expect(cfg.mcpServers.squad_state!.args.at(-1)).toBe('state-mcp');
+    expect(path.relative(os.tmpdir(), file).startsWith('..')).toBe(false);
+    if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
   });
 
   it('an explicit agentCmd still wins over the preset', () => {
@@ -127,6 +141,19 @@ describe('Claude preset: command shape', () => {
     expect(parseClaudeStreamResult('{"type":"result","subtype":"error_during_execution","is_error":true,"result":"API overloaded"}')).toMatch(/API overloaded/);
     expect(parseClaudeStreamResult('not json\n')).toBeUndefined();
   });
+});
+
+describe('Claude preset: monitor, retro and hygiene runs', () => {
+  posixOnly('fail on an error result event even when claude exits 0', async () => {
+    process.env['PATH'] = `${binDir}${path.delimiter}${originalPath}`;
+    const root = team('generic');
+    process.env['FAKE_CLAUDE_RECORD'] = path.join(root, 'argv.json');
+    const { cmd, args, checkStdout } = buildAgentCommand('scan the inbox', context(root));
+    expect(checkStdout).toBe(parseClaudeStreamResult);
+    await expect(spawnWithTimeout(cmd, args, root, 20_000, checkStdout)).resolves.toBeUndefined();
+    process.env['FAKE_CLAUDE_MODE'] = 'error';
+    await expect(spawnWithTimeout(cmd, args, root, 20_000, checkStdout)).rejects.toThrow(/error_max_turns/);
+  }, 30_000);
 });
 
 describe('Claude preset: watch config', () => {

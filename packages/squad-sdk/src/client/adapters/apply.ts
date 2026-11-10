@@ -686,7 +686,10 @@ export function applyProjection(root: string, files: readonly ProjectionFile[]):
     else {
       add(f.path, (t, abs) => {
         assertMergeableJson(abs, t);
-        const next = f.update(parseJsonObject(abs, t));
+        const current = parseJsonObject(abs, t);
+        const next = f.update(current);
+        // Nothing to change: keep the user's bytes (an existing `{}` is not deleted, nor reformatted).
+        if (t !== undefined && JSON.stringify(next) === JSON.stringify(current)) return t;
         return Object.keys(next).length === 0 ? '' : stringifyJson(next, t);
       });
     }

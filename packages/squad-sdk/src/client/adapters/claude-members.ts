@@ -13,6 +13,7 @@ import path from 'node:path';
 import { parseCharterMarkdown } from '../../agents/charter-compiler.js';
 import { VALID_REASONING_EFFORTS } from '../../config/models.js';
 import type { ClientContext, ProjectionFile } from './types.js';
+import { readContained } from './safe-path.js';
 
 /** Charter extension heading (charter §8: namespace `squad`, name `host-claude`). */
 export const CLAUDE_HOST_EXTENSION = 'X-squad-host-claude';
@@ -47,7 +48,9 @@ export function parseClaudeHostSettings(charter: string): ClaudeHostSettings {
     const m = line.match(/^\s*[-*]\s+\*\*([^*]+?):?\*\*:?\s*(.*)$/);
     if (!m) continue;
     const label = m[1]!.trim().toLowerCase();
-    const value = m[2]!.trim().replace(/^`(.*)`$/, '$1');
+    // Strip one code span around the whole value only when it has no inner backticks, so a list of
+    // individually quoted names (`Read`, `Grep`) is left for the per-token pass.
+    const value = m[2]!.trim().replace(/^`([^`]*)`$/, '$1');
     if (label === 'tools') {
       const tools = value.split(',').map((t) => t.trim().replace(/^`(.*)`$/, '$1')).filter(Boolean);
       const bad = tools.filter((t) => !TOOL_RE.test(t));
@@ -70,7 +73,7 @@ export interface RoutingRow {
 export function readRouting(squadAbs: string): RoutingRow[] {
   let text: string;
   try {
-    text = fs.readFileSync(path.join(squadAbs, 'routing.md'), 'utf8');
+    text = readContained(squadAbs, 'routing.md');
   } catch {
     return [];
   }
@@ -195,19 +198,22 @@ export function projectClaudeMembers(ctx: ClientContext, generatedNote: string, 
   const routing = readRouting(squadAbs);
   const ids = memberIds(agentsAbs);
   const effortConfig = readEffortConfig(squadAbs);
-  const files: ProjectionFile[] = ids.map((id) => ({
-    kind: 'managed',
-    path: `${CLAUDE_AGENTS_DIR}/${id}.md`,
-    ownedMarker,
-    content: renderClaudeMember(
-      id,
-      fs.readFileSync(path.join(agentsAbs, id, 'charter.md'), 'utf8'),
-      routing,
-      squadDir,
-      generatedNote,
-      effortConfig(id),
-    ),
-  }));
+  const files: ProjectionFile[] = [];
+  for (const id of ids) {
+    let charter: string;
+    try {
+      // A charter linked outside the team directory is never copied into .claude/.
+      charter = readContained(squadAbs, path.join(path.relative(squadAbs, agentsAbs), id, 'charter.md'));
+    } catch {
+      continue;
+    }
+    files.push({
+      kind: 'managed',
+      path: `${CLAUDE_AGENTS_DIR}/${id}.md`,
+      ownedMarker,
+      content: renderClaudeMember(id, charter, routing, squadDir, generatedNote, effortConfig(id)),
+    });
+  }
 
   const current = new Set(ids);
   let existing: fs.Dirent[] = [];

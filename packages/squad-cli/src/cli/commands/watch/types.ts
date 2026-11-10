@@ -50,6 +50,11 @@ export interface WatchContext {
   copilotFlags?: string;
   /** Extra flags for the Claude preset (execute mode defaults to `--permission-mode bypassPermissions`). */
   claudeFlags?: string;
+  /**
+   * MCP config for the Claude preset holding only `squad_state`, resolved by this CLI from its own
+   * install (not the repository's `.mcp.json`, whose other servers keep Claude Code's approval).
+   */
+  claudeMcpConfig?: string;
   /** Verbose diagnostic output enabled. */
   verbose?: boolean;
   /** PID tracker for child process cleanup (optional — only set when watch is running). */

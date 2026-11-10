@@ -277,11 +277,15 @@ Or set it once in `.squad/config.json`:
 { "watch": { "agentPreset": "claude" } }
 ```
 
-Each round runs `claude -p "<prompt>" --agent squad --mcp-config .mcp.json
---output-format stream-json --verbose`, so the projected Squad coordinator
-handles the issues. Preflight fails if `.claude/agents/squad.md` or the `claude`
-CLI is missing. A session that exits cleanly but reports an error in its final
-`result` event (for example `error_max_turns`) counts as a failed round.
+Each round runs `claude -p "<prompt>" --agent squad --output-format stream-json
+--verbose`, so the projected Squad coordinator handles the issues. The watcher
+passes `--mcp-config` with a private config that holds only `squad_state`,
+resolved by the `squad` CLI from its own install. It never passes your
+repository's `.mcp.json`, so any other project MCP servers still need Claude
+Code's usual approval. Preflight fails if `.claude/agents/squad.md` or the
+`claude` CLI is missing. A run that exits cleanly but reports an error in its
+final `result` event (for example `error_max_turns`) counts as a failed round;
+this applies to monitor, retro and decision-hygiene runs too.
 
 Execute mode adds `--permission-mode bypassPermissions` by default, the
 counterpart of Copilot's `--yolo`. Pass your own flags with

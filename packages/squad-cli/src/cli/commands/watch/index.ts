@@ -42,6 +42,7 @@ import { createVerboseLogger, type VerboseLogger } from './verbose.js';
 import { flattenClaimCounters, formatClaimRoundLines, hasClaimActivity, type ClaimCounters } from './claim-counters.js';
 import { updatePidFileClaims } from './health.js';
 import { buildCustomAgentCommand } from './agent-spawn.js';
+import { writeClaudeWatchMcpConfig } from './claude-mcp.js';
 
 const storage = new FSStorageProvider();
 const execFileAsync = promisify(execFile);
@@ -925,6 +926,8 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   })}${RESET}`);
   vlog.log(`Claim holder: ${executor.machineId}/${executor.instanceId}; work repo: ${workRepo ?? '(unknown)'}`);
 
+  // The Claude preset gets squad_state from this CLI, never the repository's whole .mcp.json.
+  const claudeMcpConfig = !config.agentCmd && config.agentPreset === 'claude' ? await writeClaudeWatchMcpConfig() : undefined;
   const baseContext: WatchContext = {
     teamRoot,
     stateRoot: stateDir,
@@ -936,6 +939,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
     ...(config.agentPreset ? { agentPreset: config.agentPreset } : {}),
     copilotFlags: config.copilotFlags,
     ...(config.claudeFlags ? { claudeFlags: config.claudeFlags } : {}),
+    ...(claudeMcpConfig ? { claudeMcpConfig } : {}),
     verbose: config.verbose,
     pidTracker,
     claims: claimProvider,
