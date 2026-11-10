@@ -4371,23 +4371,30 @@
       "cells": {
         "copilot": {
           "capability": "supported",
-          "validation": "validated-test",
-          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent.",
+          "validation": "validated-live",
+          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent. The `copilot-sdk` harness (`CopilotSdkHarness`) executes turns on the Copilot SDK; opt-in on the bridge via `SQUAD_BACKEND_HARNESSES=copilot-sdk`.",
           "evidence": [
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::completes the MCP handshake and lists squad_state_* and all squad_backend_* tools when opted in",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Scenario 4: DurableHttpSquadBackend full HTTP lifecycle",
-            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect"
-          ]
+            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect",
+            "validated-test:test/harness-contract.test.ts::*",
+            "validated-test:test/copilot-sdk-harness.test.ts::completes a turn through the broker",
+            "validated-manual:lab:copilot-sdk-harness@2026-11-09"
+          ],
+          "notes": "Live: one plain-text turn through the broker on the real Copilot backend (2026-11-09). Approvals are covered by the shared contract, not yet live."
         },
         "claude": {
           "capability": "supported",
           "validation": "validated-test",
-          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent.",
+          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent. The `claude-agent-sdk` harness (`ClaudeAgentSdkHarness`) executes turns on the Claude Agent SDK when the optional peer is installed.",
           "evidence": [
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::completes the MCP handshake and lists squad_state_* and all squad_backend_* tools when opted in",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Scenario 4: DurableHttpSquadBackend full HTTP lifecycle",
-            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect"
-          ]
+            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect",
+            "validated-test:test/harness-contract.test.ts::*",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::*"
+          ],
+          "notes": "Live harness runs need an Anthropic API key (or Bedrock/Vertex); not yet run."
         },
         "kiro": {
           "capability": "supported",
@@ -4975,6 +4982,14 @@
       "outcome": "blocked",
       "observedTools": [],
       "notes": "cursor-agent -p failed: \"You've hit your usage limit\"."
+    },
+    {
+      "host": "copilot",
+      "scenario": "copilot-sdk-harness",
+      "date": "2026-11-09",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "copilot-sdk HarnessAdapter (@github/copilot-sdk 1.0.19, signed-in Copilot user) completed one turn through LocalSquadBackend: \"Reply with exactly the word: pong\" → completed, transcript ends in pong (4.4 s). Plain text only; no tool approval in this run."
     }
   ],
   "expectedFailures": [
@@ -5078,7 +5093,7 @@
   "limitations": [
     "Capability and validation are separate axes: a `supported` cell may be only `static-only`, and an `unsupported` digest-gap cell is `validated-test` because an `it.fails` proves the gap. Read both columns.",
     "Expected failures are pinned per host and per gap (one `it.fails` per `<gap> [<host>]` pair); a section landing for one host turns exactly that host's test red. Those cells are `unsupported`, never `degraded`.",
-    "Live evidence exists for Claude Code and OpenCode only (reference machine, 2026-10-22). Kiro, Codex, Antigravity and Cursor have no passing live run: their cells are `validated-test` only through host-independent tests, otherwise `static-only`, `untested` or `blocked`.",
+    "Live evidence exists for Claude Code and OpenCode (reference machine, 2026-10-22) and for the Copilot `copilot-sdk` execution harness (2026-11-09, experimental backend only). Kiro, Codex, Antigravity and Cursor have no passing live run: their cells are `validated-test` only through host-independent tests, otherwise `static-only`, `untested` or `blocked`.",
     "The opt-in headless coordinator tests (`SQUAD_REAL_MODEL_TESTS=1`) verify the MCP bridge through a tee'd `squad state-mcp` transcript (a successful `tools/call` of `squad_state_read` with `key: \"team.md\"`), not by matching stdout. No other cell claims bridge-level verification."
   ]
 }
