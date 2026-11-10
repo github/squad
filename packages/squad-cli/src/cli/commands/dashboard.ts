@@ -4,7 +4,8 @@
  * It reads the Claude Code session transcripts for this directory (see dashboard/sources.ts) and
  * follows the newest session, moving to a new one when it starts; `--session` pins one, and
  * `--stream` reads stream-json logs instead. One dashboard runs per directory: starting it again
- * reuses the running one, through a state file in the temp directory checked against /health.
+ * reuses the running one, through a state file under the Squad home checked against /health, and
+ * a lock file makes the check-and-start one step.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -128,6 +129,52 @@ function removeState(root: string, pid?: number): void {
   fs.rmSync(dashboardStatePath(root), { force: true });
 }
 
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * Claims the right to start `root`'s dashboard: a lock file beside the state file, created with
+ * `wx` so only one process gets it. A second start waits for the holder to finish (it then finds
+ * the dashboard running), and takes over a lock whose holder has died. Returns the release function.
+ */
+export async function claimDashboardStart(root: string, timeoutMs = 15_000): Promise<() => void> {
+  const lock = dashboardStatePath(root).replace(/\.json$/, '.lock');
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+      return () => {
+        try {
+          if (Number(fs.readFileSync(lock, 'utf8')) === process.pid) fs.rmSync(lock, { force: true });
+        } catch {
+          // already gone
+        }
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+    let holder = NaN;
+    try {
+      holder = Number.parseInt(fs.readFileSync(lock, 'utf8'), 10);
+    } catch {
+      continue; // released between our attempt and the read
+    }
+    if (!Number.isInteger(holder) || !alive(holder) || Date.now() > deadline) {
+      // A dead holder (or one stuck past the deadline) left the lock behind: take it over.
+      fs.rmSync(lock, { force: true });
+      continue;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 /** The running dashboard for `root`, confirmed through its /health endpoint. */
 export async function runningDashboard(root: string): Promise<DashboardState | undefined> {
   const want = path.resolve(root);
@@ -249,6 +296,22 @@ function report(o: Options, state: DashboardState, note: string): void {
 }
 
 async function serve(root: string, o: Options): Promise<number> {
+  // Checking for a running dashboard and starting one must be one step: two starts at once in
+  // one directory would otherwise both serve, and `stop` would find only one of them.
+  const release = await claimDashboardStart(root);
+  try {
+    const running = await runningDashboard(root);
+    if (running) {
+      if (!o.detach) report(o, running, 'Squad dashboard already running');
+      return 0;
+    }
+    return await listen(root, o, release);
+  } finally {
+    release();
+  }
+}
+
+async function listen(root: string, o: Options, release: () => void): Promise<number> {
   const follower = new SessionFollower(root, o);
   const ports = o.port !== undefined ? [o.port] : [...Array.from({ length: PORT_TRIES }, (_, i) => DEFAULT_PORT + i), 0];
   let server: Awaited<ReturnType<typeof startDashboardServer>> | undefined;
@@ -269,6 +332,7 @@ async function serve(root: string, o: Options): Promise<number> {
   if (!server) throw new Error('No free port for the dashboard');
   const state: DashboardState = { pid: process.pid, port: server.port, url: server.url, root, startedAt: new Date().toISOString() };
   writeState(root, state);
+  release();
   const stop = () => {
     removeState(root, process.pid);
     void server!.close().then(() => process.exit(0));
@@ -288,12 +352,13 @@ async function startDetached(root: string, o: Options, argv: string[]): Promise<
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 150));
+    // Usually our child; another start that won the race serves instead, and ours exits.
     const s = readState(root);
-    if (s && s.pid === child.pid && (await runningDashboard(root))) {
-      report(o, s, 'Squad dashboard running in the background');
+    if (s && (await runningDashboard(root))) {
+      report(o, s, s.pid === child.pid ? 'Squad dashboard running in the background' : 'Squad dashboard already running');
       return 0;
     }
-    if (child.exitCode !== null) break;
+    if (child.exitCode !== null && !readState(root)) break;
   }
   console.error('The dashboard did not start. Run `squad dashboard` without --detach to see why.');
   return 1;

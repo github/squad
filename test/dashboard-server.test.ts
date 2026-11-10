@@ -14,9 +14,11 @@ import {
   type DashboardServer,
 } from '../packages/squad-cli/src/cli/dashboard/server.js';
 import type { DashboardEvent, DashboardSource } from '../packages/squad-cli/src/cli/dashboard/sources.js';
-import { parseDashboardArgs, readRoster, dashboardStatePath } from '../packages/squad-cli/src/cli/commands/dashboard.js';
+import { parseDashboardArgs, readRoster, dashboardStatePath, claimDashboardStart } from '../packages/squad-cli/src/cli/commands/dashboard.js';
+import { spawn, spawnSync } from 'node:child_process';
 
 const UI = path.resolve(__dirname, '..', 'packages', 'squad-cli', 'src', 'dashboard-ui');
+const CLI = path.resolve(__dirname, '..', 'packages', 'squad-cli', 'dist', 'cli-entry.js');
 
 class FakeSource implements DashboardSource {
   readonly label = 'fake';
@@ -210,4 +212,89 @@ describe('squad dashboard command', () => {
     expect(readRoster(tmp)).toEqual({ dallas: 'Backend Dev', rai: 'Responsible AI' });
     expect(readRoster(path.join(tmp, 'none'))).toEqual({});
   });
+});
+
+describe('dashboard start lock', () => {
+  let home: string;
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-dash-lock-'));
+    process.env['SQUAD_HOME'] = home;
+  });
+  afterEach(() => {
+    delete process.env['SQUAD_HOME'];
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('lets one start through at a time, and takes over a lock whose holder died', async () => {
+    const lock = dashboardStatePath('/w').replace(/\.json$/, '.lock');
+    const release = await claimDashboardStart('/w');
+    let second = false;
+    const waiting = claimDashboardStart('/w').then((r) => ((second = true), r));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(second).toBe(false);
+    release();
+    (await waiting)();
+    expect(fs.existsSync(lock)).toBe(false);
+
+    const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout;
+    fs.writeFileSync(lock, `${dead}\n`);
+    const took = await claimDashboardStart('/w', 1000);
+    expect(fs.readFileSync(lock, 'utf8').trim()).toBe(String(process.pid));
+    took();
+  });
+});
+
+describe.skipIf(!fs.existsSync(CLI) || process.platform === 'win32')('squad dashboard, started twice at once', () => {
+  let cwd: string;
+  let home: string;
+  beforeEach(() => {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-dash-race-'));
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-dash-home-'));
+  });
+  afterEach(() => {
+    fs.rmSync(cwd, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  const env = () => ({ ...process.env, SQUAD_HOME: home, SQUAD_DASHBOARD_NO_OPEN: '1' });
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  /** Starts `squad dashboard --port 0 --json` and resolves with the first JSON line it prints. */
+  const start = () =>
+    new Promise<{ pid: number; port: number; child: ReturnType<typeof spawn> }>((resolve, reject) => {
+      const child = spawn(process.execPath, [CLI, 'dashboard', '--port', '0', '--json'], { cwd, env: env(), stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout!.on('data', (c) => {
+        out += c;
+        const line = out.split('\n').find((l) => l.startsWith('{'));
+        if (line) resolve({ ...(JSON.parse(line) as { pid: number; port: number }), child });
+      });
+      child.on('exit', (code) => (out.includes('{') ? undefined : reject(new Error(`exited ${code}: ${out}`))));
+    });
+
+  it('serves one dashboard, and one stop leaves none running', async () => {
+    const [a, b] = await Promise.all([start(), start()]);
+    try {
+      expect(a.pid).toBe(b.pid);
+      expect(a.port).toBe(b.port);
+      const server = a.child.pid === a.pid ? a.child : b.child;
+      const other = server === a.child ? b.child : a.child;
+      await new Promise((r) => (other.exitCode !== null ? r(undefined) : other.on('exit', r)));
+      expect(other.exitCode).toBe(0);
+
+      const stop = spawnSync(process.execPath, [CLI, 'dashboard', 'stop', '--json'], { cwd, env: env(), encoding: 'utf8' });
+      expect(JSON.parse(stop.stdout)).toMatchObject({ running: false });
+      for (let i = 0; i < 30 && alive(a.pid); i++) await new Promise((r) => setTimeout(r, 100));
+      expect(alive(a.pid)).toBe(false);
+    } finally {
+      a.child.kill();
+      b.child.kill();
+    }
+  }, 30_000);
 });
