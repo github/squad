@@ -4385,9 +4385,10 @@
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect",
             "validated-test:test/harness-contract.test.ts::*",
             "validated-test:test/copilot-sdk-harness.test.ts::completes a turn through the broker",
-            "validated-manual:lab:copilot-sdk-harness@2026-11-09"
+            "validated-test:test/copilot-sdk-harness.test.ts::completes a turn with a harness-only Copilot config directory (login still works)",
+            "validated-manual:lab:copilot-sdk-harness@2026-11-10"
           ],
-          "notes": "Live: one plain-text turn through the broker on the real Copilot backend (2026-11-09). Approvals are covered by the shared contract, not yet live."
+          "notes": "Live: plain turns through the broker on the real Copilot backend (2026-11-09; again 2026-11-10 after event correlation, including with a harness-only config directory). Approvals are covered by the shared contract, not yet live."
         },
         "claude": {
           "capability": "supported",
@@ -5008,6 +5009,14 @@
         "Bash"
       ],
       "notes": "claude-agent-sdk HarnessAdapter (@anthropic-ai/claude-agent-sdk 0.3.317, Anthropic API key) through LocalSquadBackend: a plain turn completed (6.7 s); a Bash `touch` reached the broker as an approval, was denied, ended the turn cancelled, and the file was not created (6.1 s). A read-only `echo` ran without an approval request (Claude Code treats it as safe)."
+    },
+    {
+      "host": "copilot",
+      "scenario": "copilot-sdk-harness",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "After review round 4 (event correlation to the turn's own user.message, durable state): one turn through LocalSquadBackend completed (5.7 s), and the same with a harness-only Copilot configDirectory in an empty temp dir (3.2 s): sign-in still works there, so state-mcp's isolated config directory is safe."
     }
   ],
   "expectedFailures": [

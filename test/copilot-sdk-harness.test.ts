@@ -180,16 +180,35 @@ describe('copilot-sdk harness', () => {
 });
 
 describe.skipIf(process.env['SQUAD_REAL_CLI_TESTS'] !== '1')('copilot-sdk harness: live (real Copilot SDK)', () => {
-  it('completes a turn through the broker', async () => {
-    const harness = new CopilotSdkHarness({ cwd: process.cwd() });
+  /** One plain turn through the broker; a short timeout so a correlation miss fails fast instead of hanging. */
+  async function liveTurn(extra: Partial<ConstructorParameters<typeof CopilotSdkHarness>[0]> = {}) {
+    const harness = new CopilotSdkHarness({ cwd: process.cwd(), turnTimeoutMs: 120_000, ...extra });
     const harnesses = new DefaultHarnessRegistry();
     harnesses.register(harness);
     const backend = new LocalSquadBackend({ harnesses });
     await backend.createConversation({ conversationId: 'live' });
     await backend.sendMessage('live', { runId: 'r1', seq: 1, role: 'user', content: 'Reply with exactly the word: pong', harness: 'copilot-sdk' });
     await harness.settled('live', 'r1', 1);
-    expect((await backend.getTurn('live', 1)).state).toBe('completed');
+    const turn = await backend.getTurn('live', 1);
+    expect(turn.error).toBeUndefined();
+    expect(turn.state).toBe('completed');
     expect((await backend.getTranscript('live')).at(-1)?.content.toLowerCase()).toContain('pong');
+  }
+
+  it('completes a turn through the broker', async () => {
+    await liveTurn();
+  }, 180_000);
+
+  it('completes a turn with a harness-only Copilot config directory (login still works)', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const configDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-copilot-config-'));
+    try {
+      await liveTurn({ configDirectory });
+    } finally {
+      fs.rmSync(configDirectory, { recursive: true, force: true });
+    }
   }, 180_000);
 });
 
