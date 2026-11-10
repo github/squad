@@ -104,6 +104,11 @@ export function startDashboardServer(opts: DashboardServerOptions): Promise<Dash
     } catch {
       return;
     }
+    if (current.takeReset?.()) {
+      // The source replayed its transcript from the start: the page starts over too.
+      history = [];
+      for (const c of clients) c.write('event: reset\ndata: {}\n\n');
+    }
     for (const e of events) {
       activeAt = Date.now();
       const s = { seq: ++seq, ...e };

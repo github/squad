@@ -21,6 +21,12 @@ const UI = path.resolve(__dirname, '..', 'packages', 'squad-cli', 'src', 'dashbo
 class FakeSource implements DashboardSource {
   readonly label = 'fake';
   queue: DashboardEvent[] = [];
+  resetNext = false;
+  takeReset() {
+    const r = this.resetNext;
+    this.resetNext = false;
+    return r;
+  }
   poll() {
     const q = this.queue;
     this.queue = [];
@@ -135,6 +141,17 @@ describe('dashboard server', () => {
     src = new FakeSource();
     server.tick();
     expect((await pending).reset).toBe(true);
+  });
+
+  it('starts over when the source replays its transcript, keeping only the replay', async () => {
+    const pending = events(server.port, 99);
+    await new Promise((r) => setTimeout(r, 50));
+    fake.queue.push({ t: 1, lane: 'coordinator', kind: 'say', text: 'replayed' });
+    fake.resetNext = true;
+    server.tick();
+    expect((await pending).reset).toBe(true);
+    const after = await events(server.port, 1);
+    expect(after.data.map((e) => e.text)).toEqual(['replayed']);
   });
 });
 

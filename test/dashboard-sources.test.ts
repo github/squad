@@ -123,6 +123,30 @@ describe('Claude transcript source', () => {
     for (const lane of [SCRIBE_BG, RAI_BG, SCRIBE_FG]) expect(of(all, lane, 'start'), lane).toHaveLength(1);
   });
 
+  it('starts over when the transcript is rewritten shorter, so finished members end again', () => {
+    const dir = path.join(tmp, 'projects', '-work-demo');
+    fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });
+    const file = path.join(dir, `${SESSION}.jsonl`);
+    const full = fs.readFileSync(file, 'utf8');
+    const live = new ClaudeTranscriptSource(file);
+    const first = live.poll();
+    expect(of(first, SCRIBE_FG, 'end')).toHaveLength(1);
+    expect(live.takeReset()).toBe(false);
+
+    // Rewritten shorter, keeping every dispatch and result: drop the hook attachments.
+    const shorter = full.split('\n').filter((l) => !l.includes('"type":"attachment"')).join('\n');
+    expect(shorter.length).toBeLessThan(full.length);
+    fs.writeFileSync(file, shorter);
+    const again = live.poll();
+    expect(live.takeReset()).toBe(true);
+    expect(live.takeReset()).toBe(false);
+    for (const lane of [SCRIBE_BG, RAI_BG, SCRIBE_FG]) {
+      expect(of(again, lane, 'start'), lane).toHaveLength(1);
+      expect(of(again, lane, 'end'), lane).toHaveLength(1);
+    }
+    expect(again).toEqual(new ClaudeTranscriptSource(file).poll());
+  });
+
   it('starts a member from its meta file when the dispatch never arrives', () => {
     const dir = path.join(tmp, 'projects', '-work-demo');
     fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });

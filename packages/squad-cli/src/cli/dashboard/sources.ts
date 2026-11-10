@@ -45,6 +45,11 @@ export interface DashboardSource {
   poll(): DashboardEvent[];
   /** A short description for the page header and logs. */
   readonly label: string;
+  /**
+   * True once after the source started over (a transcript was truncated or rewritten): the last
+   * poll replayed it from the beginning, so earlier events are void and the page must start over.
+   */
+  takeReset?(): boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -80,6 +85,8 @@ export function toolText(name: string, input: unknown): string {
 export class JsonlTail {
   private offset = 0;
   private buf: Buffer = Buffer.alloc(0);
+  /** Set when the file shrank and reading started over from byte zero. */
+  rewound = false;
   constructor(readonly file: string) {}
 
   read(): Json[] {
@@ -93,6 +100,7 @@ export class JsonlTail {
       // Truncated or replaced: start over.
       this.offset = 0;
       this.buf = Buffer.alloc(0);
+      this.rewound = true;
     }
     if (size === this.offset) return [];
     const fd = fs.openSync(this.file, 'r');
@@ -216,7 +224,7 @@ function resultText(toolUseResult: unknown, content: unknown): string {
  */
 export class ClaudeTranscriptSource implements DashboardSource {
   readonly label: string;
-  private readonly main: JsonlTail;
+  private main: JsonlTail;
   private readonly subagentDir: string;
   private readonly subagents = new Map<string, Subagent>();
   private readonly runs = new Map<string, MemberRun>();
@@ -225,6 +233,7 @@ export class ClaudeTranscriptSource implements DashboardSource {
   private idle = false;
   private model: string | undefined;
   private lastT = 0;
+  private reset = false;
   /** Line types that were skipped, with counts (diagnostics only; never shown on the page). */
   readonly skipped = new Map<string, number>();
 
@@ -235,6 +244,29 @@ export class ClaudeTranscriptSource implements DashboardSource {
   }
 
   poll(): DashboardEvent[] {
+    const out = this.read();
+    if (!this.main.rewound && ![...this.subagents.values()].some((s) => s.tail.rewound)) return out;
+    // A transcript shrank: what was read before no longer holds (runs that ended would never end
+    // again), so drop everything and read every file from the beginning.
+    this.main = new JsonlTail(this.sessionFile);
+    this.subagents.clear();
+    this.runs.clear();
+    this.turn = 0;
+    this.pendingPrompt = false;
+    this.idle = false;
+    this.model = undefined;
+    this.lastT = 0;
+    this.reset = true;
+    return this.read();
+  }
+
+  takeReset(): boolean {
+    const r = this.reset;
+    this.reset = false;
+    return r;
+  }
+
+  private read(): DashboardEvent[] {
     const out: DashboardEvent[] = [];
     for (const m of this.main.read()) this.mainLine(m, out);
     this.discoverSubagents();
