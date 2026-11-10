@@ -34,8 +34,16 @@ const MATCHERS: Record<ClaudeHookEvent, string | undefined> = {
   Stop: undefined,
 };
 
+/** Hook matcher for `event`. The plugin's coordinator is `squad:squad`, so its SubagentStart matcher names both. */
+export function claudeHookMatcher(event: ClaudeHookEvent, opts: { plugin?: boolean } = {}): string | undefined {
+  if (opts.plugin && event === 'SubagentStart') return `${MATCHERS.SubagentStart}|${CLAUDE_PLUGIN_COORDINATOR}`;
+  return MATCHERS[event];
+}
+
 const HOOK_TIMEOUT_SECONDS = 15;
 const COORDINATOR = 'squad';
+/** The coordinator's `agent_type` when it comes from the Squad Claude Code plugin (namespaced `<plugin>:<agent>`). */
+export const CLAUDE_PLUGIN_COORDINATOR = 'squad:squad';
 /** Claude Code caps hook context at 10,000 characters; stay well under it. */
 const MAX_CONTEXT = 8000;
 
@@ -140,18 +148,50 @@ export function mergeClaudeHooks(settings: Json, mcp: McpLaunchSpec | null): Jso
  * turning hooks off, or rolling Claude back, removes Squad's handlers). Never creates the file
  * just to leave it empty.
  */
-export function projectClaudeHooks(ctx: ClientContext): ProjectionFile[] {
+export function projectClaudeHooks(ctx: ClientContext, opts: { plugin?: boolean } = {}): ProjectionFile[] {
   const squadAbs = path.resolve(ctx.root, ctx.squadDir ?? '.squad');
-  const on = readClaudeHooksMode(squadAbs) === 'advisory' && claudeHookLaunch(ctx.mcp, 'Stop') !== null;
-  if (!on && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
+  const plugin = opts.plugin === true;
+  // In plugin mode the plugin registers the hooks; the project file only carries the plugin keys.
+  const on = !plugin && readClaudeHooksMode(squadAbs) === 'advisory' && claudeHookLaunch(ctx.mcp, 'Stop') !== null;
+  if (!on && !plugin && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
   return [
     {
       kind: 'json',
       path: CLAUDE_SETTINGS_PATH,
-      update: (existing) => mergeClaudeHooks(existing, on ? ctx.mcp : null),
-      remove: stripClaudeHooks,
+      update: (existing) => mergeClaudePluginSettings(mergeClaudeHooks(existing, on ? ctx.mcp : null), plugin),
+      remove: (existing) => mergeClaudePluginSettings(stripClaudeHooks(existing), false),
     },
   ];
+}
+
+/** Project `.mcp.json` servers that plugin mode turns off: the plugin serves `squad_state` instead. */
+const PLUGIN_DISABLED_MCPJSON = 'squad_state';
+
+/**
+ * Plugin-mode keys in `.claude/settings.json` (Claude projection v3). With `on`, `agent` starts the
+ * plugin's coordinator (unless the user chose another agent) and `disabledMcpjsonServers` turns off
+ * the project `.mcp.json` copy of `squad_state`, which would otherwise prompt for approval and
+ * duplicate the plugin's tools. Without `on`, exactly those values are removed again.
+ */
+export function mergeClaudePluginSettings(settings: Json, on: boolean): Json {
+  const out: Json = { ...settings };
+  const disabled = out['disabledMcpjsonServers'];
+  if (disabled !== undefined && !Array.isArray(disabled)) {
+    throw new Error('Refusing to overwrite "disabledMcpjsonServers" in .claude/settings.json: expected an array');
+  }
+  const list = (disabled as unknown[] | undefined) ?? [];
+  if (on) {
+    if (out['agent'] === undefined || out['agent'] === COORDINATOR) out['agent'] = CLAUDE_PLUGIN_COORDINATOR;
+    if (!list.includes(PLUGIN_DISABLED_MCPJSON)) out['disabledMcpjsonServers'] = [...list, PLUGIN_DISABLED_MCPJSON];
+    return out;
+  }
+  if (out['agent'] === CLAUDE_PLUGIN_COORDINATOR) delete out['agent'];
+  if (list.includes(PLUGIN_DISABLED_MCPJSON)) {
+    const rest = list.filter((s) => s !== PLUGIN_DISABLED_MCPJSON);
+    if (rest.length > 0) out['disabledMcpjsonServers'] = rest;
+    else delete out['disabledMcpjsonServers'];
+  }
+  return JSON.stringify(out) === JSON.stringify(settings) ? settings : out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -167,6 +207,12 @@ export interface ClaudeHookEnv {
   projectAbs: string;
   /** Squad CLI version, for the health line. */
   version: string;
+  /**
+   * `plugin`: the handler was registered by the Squad Claude Code plugin (`--plugin`). It defers to
+   * Squad handlers in the project's `.claude/settings.json`, so a repo on the project projection
+   * with the plugin installed gets each advisory once.
+   */
+  source?: 'project' | 'plugin';
 }
 
 /** Claude Code hook output (the subset Squad uses). `null`: print nothing. */
@@ -320,10 +366,29 @@ function sessionContext(env: ClaudeHookEnv, now: number): { additionalContext?: 
   return { additionalContext: cap(lines.join('\n')) };
 }
 
+/** True when the project's `.claude/settings.json` carries Squad's own hook handlers. */
+export function projectHasSquadHooks(root: string): boolean {
+  try {
+    const settings = JSON.parse(fs.readFileSync(path.join(root, CLAUDE_SETTINGS_PATH), 'utf8')) as unknown;
+    const hooks = isObject(settings) ? settings['hooks'] : undefined;
+    if (!isObject(hooks)) return false;
+    return Object.values(hooks).some(
+      (groups) =>
+        Array.isArray(groups) &&
+        groups.some((g) => isObject(g) && Array.isArray(g['hooks']) && (g['hooks'] as unknown[]).some(isSquadHookHandler)),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Run one hook event. Advisory: the result only adds context or a warning, never a permission decision. */
 export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, now = Date.now()): ClaudeHookOutput {
   if (readClaudeHooksMode(env.teamAbs) !== 'advisory') return null;
-  const agent = str(input['agent_type'])?.toLowerCase();
+  if (env.source === 'plugin' && projectHasSquadHooks(env.root)) return null;
+  const raw = str(input['agent_type'])?.toLowerCase();
+  // The plugin's coordinator is `squad:squad`; it is the same coordinator as the project's `squad`.
+  const agent = raw === CLAUDE_PLUGIN_COORDINATOR ? COORDINATOR : raw;
 
   if (event === 'SessionStart' || event === 'SubagentStart') {
     if (agent !== COORDINATOR) return null;

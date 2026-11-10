@@ -38,7 +38,16 @@ function withNote(skill: string, note: string): string {
   return fm ? `${fm[0]}${note}\n${text.slice(fm[0].length)}` : `${note}\n\n${text}`;
 }
 
-export function projectClaudeSkills(ctx: ClientContext, generatedNote: string, ownedMarker: string): ProjectionFile[] {
+/**
+ * With `opts.plugin` (Claude projection v3 plugin mode) the Squad plugin carries every skill, so
+ * nothing is projected and previously generated skills are removed.
+ */
+export function projectClaudeSkills(
+  ctx: ClientContext,
+  generatedNote: string,
+  ownedMarker: string,
+  opts: { plugin?: boolean } = {},
+): ProjectionFile[] {
   const squadDir = ctx.squadDir ?? '.squad';
   const squadAbs = path.resolve(ctx.root, squadDir);
   const files: ProjectionFile[] = [];
@@ -48,13 +57,13 @@ export function projectClaudeSkills(ctx: ClientContext, generatedNote: string, o
     files.push({ kind: 'managed', path: `${CLAUDE_SKILLS_DIR}/${name}/SKILL.md`, ownedMarker, content });
   };
 
-  for (const k of claudeCoordinatorSkills(squadDir, ctx.root)) {
+  for (const k of opts.plugin ? [] : claudeCoordinatorSkills(squadDir, ctx.root)) {
     add(k.name, `---\nname: ${k.name}\ndescription: ${JSON.stringify(k.description)}\n---\n${generatedNote}\n\n${k.body}`);
   }
 
   const teamSkills = new Set(dirs(path.join(squadAbs, 'skills')));
   const templatesAbs = path.join(squadAbs, 'templates', 'skills');
-  for (const name of dirs(templatesAbs)) {
+  for (const name of opts.plugin ? [] : dirs(templatesAbs)) {
     if (teamSkills.has(name) || current.has(name)) continue;
     let skill: string;
     try {

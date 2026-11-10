@@ -185,6 +185,8 @@ export interface UpgradeOptions {
   dryRun?: boolean;
   /** Add these client hosts to the configured set; configured clients are always refreshed. */
   clients?: ClientId[];
+  /** `--claude-plugin` (true) / `--no-claude-plugin` (false): Claude projection plugin mode. */
+  claudePlugin?: boolean;
 }
 
 export interface UpdateInfo {
@@ -1541,6 +1543,7 @@ async function refreshClients(dest: string, squadDir: string, options: UpgradeOp
   try {
     const synced = await applyClientProjectionsForUpgrade(dest, squadDir, {
       clients: options.clients,
+      claudePlugin: options.claudePlugin,
       warn: (m) => warn(m.replace(/^⚠\s*/, '')),
     });
     if (synced.clients.length === 0) return;
@@ -1684,6 +1687,7 @@ export async function runUpgrade(dest: string, options: UpgradeOptions = {}): Pr
       }
       const planned = await applyClientProjectionsForUpgrade(dest, squadDirInfo.path, {
         clients: options.clients,
+        claudePlugin: options.claudePlugin,
         dryRun: true,
         warn: (m) => warn(m.replace(/^⚠\s*/, '')),
       });

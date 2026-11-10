@@ -165,6 +165,7 @@ async function main(): Promise<void> {
     console.log(`                    --preset <name> (apply a preset after init)`);
     console.log(`                    --state-backend <type> (local|orphan|two-layer)`);
     console.log(`                    --client <list> (client hosts to project, or "all")`);
+    console.log(`                    --claude-plugin (Claude Code via the Squad plugin)`);
     console.log(`             Usage: init --mode remote <team-repo-path>`);
     console.log(`             Creates .squad/config.json pointing to an external team root`);
     console.log(`  ${BOLD}upgrade${RESET}    Update Squad-owned files to latest version`);
@@ -177,6 +178,7 @@ async function main(): Promise<void> {
     console.log(`                    --migrate-directory (rename .ai-team/ → .squad/)`);
     console.log(`                    --state-backend <type> (migrate to orphan|two-layer)`);
     console.log(`                    --client <list> (add client hosts; refresh configured)`);
+    console.log(`                    --[no-]claude-plugin (Claude Code plugin mode)`);
     console.log(`                    --self (upgrade the CLI itself on its own channel)`);
     console.log(`                    --insider (with --self: force the insider channel)`);
     console.log(`                    --force (with --self: allow a downgrade)`);
@@ -351,9 +353,14 @@ async function main(): Promise<void> {
     const mode = (modeIdx !== -1 && args[modeIdx + 1]) ? args[modeIdx + 1] : undefined;
 
     let initClients;
+    let initClaudePlugin: boolean | undefined;
     try {
-      const { readClientFlag } = await import('./cli/core/clients.js');
+      const { readClientFlag, readClaudePluginFlag } = await import('./cli/core/clients.js');
       initClients = readClientFlag(args);
+      initClaudePlugin = readClaudePluginFlag(args);
+      if (initClaudePlugin !== undefined && !(initClients ?? []).includes('claude')) {
+        initClients = [...(initClients ?? []), 'claude' as const];
+      }
     } catch (err) {
       console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
@@ -367,7 +374,7 @@ async function main(): Promise<void> {
       const { writeRemoteConfig } = await import('./cli/commands/init-remote.js');
       const dest = process.cwd();
       writeRemoteConfig(dest, teamPath);
-      await runInit(dest, { clients: initClients });
+      await runInit(dest, { clients: initClients, claudePlugin: initClaudePlugin });
       return;
     }
 
@@ -382,7 +389,7 @@ async function main(): Promise<void> {
     // Parse --state-backend flag for init
     const sbIdx = args.indexOf('--state-backend');
     const initStateBackend = (sbIdx !== -1 && args[sbIdx + 1]) ? args[sbIdx + 1] : undefined;
-    runInit(dest, { includeWorkflows: !noWorkflows, sdk, roles, stateBackend: initStateBackend, mcpFrontmatter, clients: initClients, includeVscodeDefault: !noVscodeDefault }).then(async () => {
+    runInit(dest, { includeWorkflows: !noWorkflows, sdk, roles, stateBackend: initStateBackend, mcpFrontmatter, clients: initClients, claudePlugin: initClaudePlugin, includeVscodeDefault: !noVscodeDefault }).then(async () => {
       if (presetName) {
         const { seedBuiltinPresets, applyPreset } = await import('@bradygaster/squad-sdk/presets');
         const { resolvePresetsDir, ensureSquadHome } = await import('@bradygaster/squad-sdk/resolution');
@@ -430,9 +437,11 @@ async function main(): Promise<void> {
     const insider = args.includes('--insider');
     const dryRun = args.includes('--dry-run');
     let upgradeClients;
+    let upgradeClaudePlugin: boolean | undefined;
     try {
-      const { readClientFlag } = await import('./cli/core/clients.js');
+      const { readClientFlag, readClaudePluginFlag } = await import('./cli/core/clients.js');
       upgradeClients = readClientFlag(args);
+      upgradeClaudePlugin = readClaudePluginFlag(args);
     } catch (err) {
       console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
@@ -505,6 +514,7 @@ async function main(): Promise<void> {
         force: forceUpgrade,
         dryRun,
         clients: upgradeClients,
+        claudePlugin: upgradeClaudePlugin,
       });
     }
 
