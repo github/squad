@@ -103,14 +103,9 @@ describe('release test reconciliation', () => {
   it('requires the Windows-only test to be present and passed in Windows evidence', () => {
     const title = '[platform: win32] removes the legacy raw uppercase Windows drive hash while preserving unrelated entries';
     const memoryTitle = '[platform: win32] retries transient Windows index rename sharing violations';
-    const linkedTitles = [
-      '[platform: win32] a teamRoot naming the team repo, with a different drive-letter and path case',
-      "[platform: win32] a teamRoot naming the team's .squad dir (spelled .SQUAD), with a different drive-letter and path case",
-    ];
     const result = reconcile(reportForMany([
       { file: 'D:\\a\\squad\\squad\\test\\mcp-root-write.test.ts', title, status: 'passed' },
       { file: 'D:\\a\\squad\\squad\\test\\memory-providers.test.ts', title: memoryTitle, status: 'passed' },
-      ...linkedTitles.map((linkedTitle) => ({ file: 'D:\\a\\squad\\squad\\test\\linked-team-state-boundary.test.ts', title: linkedTitle, status: 'passed' as const })),
     ]), {
       platform: 'win32',
       requirePlatformExecutions: true,
@@ -131,13 +126,6 @@ describe('release test reconciliation', () => {
         status: 'passed',
         ok: true,
       },
-      ...linkedTitles.map((linkedTitle) => ({
-        file: 'test/linked-team-state-boundary.test.ts',
-        title: linkedTitle,
-        platform: 'win32',
-        status: 'passed',
-        ok: true,
-      })),
     ]);
     expect(result.summary.ok).toBe(true);
     expect(shouldFail(result, { failOnUnexplained: true })).toBe(false);
@@ -152,8 +140,6 @@ describe('release test reconciliation', () => {
     expect(result.summary.requiredExecutions).toEqual([
       expect.objectContaining({ file: 'test/mcp-root-write.test.ts', platform: 'win32', status: 'missing', ok: false }),
       expect.objectContaining({ file: 'test/memory-providers.test.ts', platform: 'win32', status: 'missing', ok: false }),
-      expect.objectContaining({ file: 'test/linked-team-state-boundary.test.ts', platform: 'win32', status: 'missing', ok: false }),
-      expect.objectContaining({ file: 'test/linked-team-state-boundary.test.ts', platform: 'win32', status: 'missing', ok: false }),
     ]);
     expect(result.summary.ok).toBe(false);
     expect(shouldFail(result, { failOnUnexplained: true })).toBe(true);
