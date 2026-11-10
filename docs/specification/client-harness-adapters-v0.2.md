@@ -253,7 +253,10 @@ is a sha256 of the canonical tool name and input, parallel tool calls are
 offered one at a time (the broker holds one pending approval per turn), and a
 deny ends the turn. It runs with `permissionMode: 'default'` and
 `settingSources: []`, so no repository or user allow rule approves a call the
-broker never sees. The SDK is an optional peer dependency; `squad state-mcp
+broker never sees. Claude Code still runs some read-only commands (such as
+`echo`) without calling `canUseTool`, so those never reach the broker; anything
+that writes does (live-verified 2026-11-10: a `touch` was offered, denied, and
+not run). The SDK is an optional peer dependency; `squad state-mcp
 --experimental-backend` registers the harness only when it is installed
 (`SQUAD_BACKEND_HARNESSES=none` turns it off), and otherwise refuses
 `squad_backend_send_message`.

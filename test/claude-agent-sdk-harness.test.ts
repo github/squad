@@ -244,18 +244,45 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK)', () => 
   }, 120_000);
 
   it('routes a real tool call through broker approval and honours a deny', async () => {
-    const harness = new ClaudeAgentSdkHarness({ cwd: process.cwd(), maxTurns: 3 });
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    // A command that writes: Claude Code runs some read-only commands (such as echo) without asking.
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-live-'));
+    const marker = path.join(cwd, 'squad-live-marker.txt');
+    const harness = new ClaudeAgentSdkHarness({ cwd, maxTurns: 4 });
     const harnesses = new DefaultHarnessRegistry();
     harnesses.register(harness);
     const backend = new LocalSquadBackend({ harnesses });
     await backend.createConversation({ conversationId: 'live2' });
-    await backend.sendMessage('live2', { runId: 'r1', seq: 1, role: 'user', content: 'Use the Bash tool to run: echo squad-live-check', harness: HARNESS });
-    await until(async () => (await backend.getApprovals('live2')).some((a) => a.state === 'pending'), 90_000);
-    const pending = (await backend.getApprovals('live2')).find((a) => a.state === 'pending')!;
-    expect(pending.action).toMatch(/^Bash: /);
-    await backend.respondApproval('live2', { approvalId: pending.approvalId, hash: pending.hash, decision: 'deny', reason: 'live test denies tool use' });
-    await harness.settled('live2', 'r1', 1);
-    expect(['completed', 'failed']).toContain((await backend.getTurn('live2', 1)).state);
+    const events: unknown[] = [];
+    harness.subscribe('live2', (e) => events.push(e));
+    const diagnose = async () => JSON.stringify({
+      turn: await backend.getTurn('live2', 1).catch((e) => String(e)),
+      approvals: await backend.getApprovals('live2'),
+      events,
+    }, null, 2);
+    try {
+      await backend.sendMessage('live2', { runId: 'r1', seq: 1, role: 'user', content: 'Use the Bash tool to run exactly this command, nothing else: touch squad-live-marker.txt', harness: HARNESS });
+      // Wait for the approval, or for the turn to end without one (then report what happened).
+      await until(async () => {
+        if ((await backend.getApprovals('live2')).some((a) => a.state === 'pending')) return true;
+        const state = (await backend.getTurn('live2', 1)).state;
+        if (state === 'completed' || state === 'failed' || state === 'cancelled') throw new Error(`turn ended (${state}) without an approval request:\n${await diagnose()}`);
+        return false;
+      }, 120_000).catch(async (err) => {
+        throw new Error(`${err instanceof Error ? err.message : String(err)}\n${String(err).includes('turn ended') ? '' : await diagnose()}`);
+      });
+      const pending = (await backend.getApprovals('live2')).find((a) => a.state === 'pending')!;
+      expect(pending.action).toMatch(/^Bash: /);
+      expect(pending.action).toContain('touch');
+      await backend.respondApproval('live2', { approvalId: pending.approvalId, hash: pending.hash, decision: 'deny', reason: 'live test denies tool use' });
+      await harness.settled('live2', 'r1', 1);
+      expect((await backend.getTurn('live2', 1)).state).toBe('cancelled'); // a broker deny ends the turn
+      expect(fs.existsSync(marker), 'the denied command must not have run').toBe(false);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   }, 180_000);
 });
 
