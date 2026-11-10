@@ -164,8 +164,7 @@ async function main(): Promise<void> {
     console.log(`                    --no-vscode-default (skip .vscode/settings.json update)`);
     console.log(`                    --preset <name> (apply a preset after init)`);
     console.log(`                    --state-backend <type> (local|orphan|two-layer)`);
-    console.log(`                    --client <list> (client hosts to project, or "all")`);
-    console.log(`                    --claude-plugin (Claude Code via the Squad plugin)`);
+    console.log(`                    --client <list> (hosts, or "all"); --claude-plugin`);
     console.log(`             Usage: init --mode remote <team-repo-path>`);
     console.log(`             Creates .squad/config.json pointing to an external team root`);
     console.log(`  ${BOLD}upgrade${RESET}    Update Squad-owned files to latest version`);
@@ -177,8 +176,7 @@ async function main(): Promise<void> {
     console.log(`                    --dry-run (preview; writes nothing, installs nothing)`);
     console.log(`                    --migrate-directory (rename .ai-team/ → .squad/)`);
     console.log(`                    --state-backend <type> (migrate to orphan|two-layer)`);
-    console.log(`                    --client <list> (add client hosts; refresh configured)`);
-    console.log(`                    --[no-]claude-plugin (Claude Code plugin mode)`);
+    console.log(`                    --client <list> (add hosts); --[no-]claude-plugin`);
     console.log(`                    --self (upgrade the CLI itself on its own channel)`);
     console.log(`                    --insider (with --self: force the insider channel)`);
     console.log(`                    --force (with --self: allow a downgrade)`);
@@ -253,8 +251,7 @@ async function main(): Promise<void> {
     console.log(`             Diagnostics: --log-level info|debug or --verbose`);
     console.log(`  ${BOLD}state-mcp${RESET}  MCP bridge exposing Squad runtime state tools`);
     console.log(`  ${BOLD}lockout${RESET}    Reviewer lockouts: reject|assign|submit|approve|override|status`);
-    console.log(`  ${BOLD}dashboard${RESET}  Live web view of the team's Claude Code session (127.0.0.1)`);
-    console.log(`             Usage: dashboard [start|stop|status] [--port <n>] [--detach]`);
+    console.log(`  ${BOLD}dashboard${RESET}  Live local view of the Claude Code session [stop|status]`);
     console.log(`  ${BOLD}doctor${RESET}     Validate squad setup (check files, config, health)`);
     console.log(`  ${BOLD}health${RESET}     Validate team state for CI (team/registry/routing/backend/env)`);
     console.log(`             Flags: --json (structured output for CI)`);
