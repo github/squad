@@ -2698,10 +2698,11 @@
           "capability": "unsupported",
           "validation": "validated-test",
           "expectedFailure": true,
-          "mechanism": "Claude discovers `.claude/agents/squad.md` and `.mcp.json` from a package subfolder; state-mcp walks up to the root `.squad/`. Headless (`-p`) runs need `--mcp-config <root>/.mcp.json` or a prior per-project approval (F5).",
+          "mechanism": "Claude discovers `.claude/agents/squad.md` and `.mcp.json` from a package subfolder; state-mcp walks up to the root `.squad/`. Interactive runs prompt to approve the project `.mcp.json` server (F5); headless (`-p`) runs on Claude Code 2.1.318 connect it without `--mcp-config` (lab `plugin-mcp-headless`, 2026-11-10; earlier versions needed the flag or a prior per-project approval). The Squad plugin's server needs no approval in either mode.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
             "validated-manual:lab:mono-subfolder@2026-10-22",
+            "validated-manual:lab:plugin-mcp-headless@2026-11-10",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp resolves the root .squad when launched from a monorepo subfolder",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude lists the root .mcp.json squad_state server from packages/api",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
@@ -4211,8 +4212,11 @@
             "validated-test:test/clients-real-cli.test.ts::claude discovers the squad subagents and parses .mcp.json",
             "validated-manual:lab:smoke-roster@2026-10-22",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude --agent squad reads the roster through mcp__squad_state__squad_state_read",
-            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_state_health names the configured backend (orphan) as the coordinator digest promises"
-          ]
+            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_state_health names the configured backend (orphan) as the coordinator digest promises",
+            "validated-manual:lab:plugin-mcp-headless@2026-11-10",
+            "validated-manual:lab:plugin-mcp-interactive@2026-11-10"
+          ],
+          "notes": "Plugin measurement (Claude Code 2.1.318, 2026-11-10, #2443): a `squad_state` server supplied by the Squad plugin (`plugin:squad:squad_state`, tools `mcp__plugin_squad_squad_state__*`) connects with no approval prompt and no `--mcp-config`, both interactively and headless (`-p`), from the repo root and from a package subfolder. A project `.mcp.json` server still prompts interactively (\"New MCP server found in this project\", default \"Continue without using this MCP server\"); headless `-p` on this version connects it without the flag."
         },
         "kiro": {
           "capability": "supported",
@@ -5017,6 +5021,25 @@
       "outcome": "pass",
       "observedTools": [],
       "notes": "After review round 4 (event correlation to the turn's own user.message, durable state): one turn through LocalSquadBackend completed (5.7 s), and the same with a harness-only Copilot configDirectory in an empty temp dir (3.2 s): sign-in still works there, so state-mcp's isolated config directory is safe."
+    },
+    {
+      "host": "claude",
+      "scenario": "plugin-mcp-headless",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__plugin_squad_squad_state__squad_state_health",
+        "mcp__squad_state__squad_state_health"
+      ],
+      "notes": "Claude Code 2.1.318, clean environment, `claude -p --output-format stream-json`, no `--mcp-config`, no prior approval. Plugin loaded with `--plugin-dir`: init lists `plugin:squad:squad_state` connected (source `plugin`) and `squad_state_health` returns, at the repo root and from packages/api. The plugin's settings.json `agent: \"squad\"` made `squad:squad` the main agent with no `--agent`; when the repo also has a projected `.claude/agents/squad.md`, that project agent wins. Control: a project `.mcp.json` server also connected headless without the flag (source `project`) on this version."
+    },
+    {
+      "host": "claude",
+      "scenario": "plugin-mcp-interactive",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "Claude Code 2.1.318 interactive TUI driven in a pty, clean environment. With the plugin (`--plugin-dir`): after the folder-trust dialog there is no MCP approval prompt, `/mcp` lists `plugin:squad:squad_state` connected (15 tools), and the session starts as `@squad:squad` with no `--agent`. Control, project `.mcp.json` only: after the folder-trust dialog Claude Code shows \"New MCP server found in this project: squad_state\" with \"Continue without using this MCP server\" preselected."
     }
   ],
   "expectedFailures": [
