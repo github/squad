@@ -92,9 +92,10 @@ describe('Claude plugin: contents', () => {
 
   it('ships the coordinator, the slash commands, hooks and the squad_state MCP server', () => {
     expect(files.has('agents/squad.md')).toBe(true);
-    for (const c of ['ralph', 'cast', 'ceremony', 'status']) {
+    for (const c of ['ralph', 'cast', 'ceremony', 'status', 'dashboard']) {
       expect(files.has(`commands/${c}.md`), c).toBe(true);
     }
+    expect(files.get('commands/dashboard.md')).toContain('allowed-tools: Bash(squad dashboard:*)');
     const mcp = JSON.parse(files.get('.mcp.json')!);
     expect(mcp.mcpServers.squad_state).toEqual({
       command: 'node',

@@ -253,6 +253,8 @@ async function main(): Promise<void> {
     console.log(`             Diagnostics: --log-level info|debug or --verbose`);
     console.log(`  ${BOLD}state-mcp${RESET}  MCP bridge exposing Squad runtime state tools`);
     console.log(`  ${BOLD}lockout${RESET}    Reviewer lockouts: reject|assign|submit|approve|override|status`);
+    console.log(`  ${BOLD}dashboard${RESET}  Live web view of the team's Claude Code session (127.0.0.1)`);
+    console.log(`             Usage: dashboard [start|stop|status] [--port <n>] [--detach]`);
     console.log(`  ${BOLD}doctor${RESET}     Validate squad setup (check files, config, health)`);
     console.log(`  ${BOLD}health${RESET}     Validate team state for CI (team/registry/routing/backend/env)`);
     console.log(`             Flags: --json (structured output for CI)`);
@@ -570,6 +572,12 @@ async function main(): Promise<void> {
   if (cmd === 'hook') {
     const { runHookCommand } = await import('./cli/commands/hook.js');
     process.exit(await runHookCommand(args.slice(1)));
+  }
+
+  if (cmd === 'dashboard') {
+    const { runDashboardCommand } = await import('./cli/commands/dashboard.js');
+    const code = await runDashboardCommand(process.cwd(), args.slice(1));
+    process.exit(code);
   }
 
   if (cmd === 'lockout') {

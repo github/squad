@@ -11,7 +11,7 @@ Version 2.0.0-preview.4. Squad https://github.com/github/squad.
 - The coordinator agent `squad:squad`.
 - The `squad_state` MCP server, with no `.mcp.json` approval step and no `--mcp-config` flag.
 - The coordinator's on-demand skills and Squad's template skills (`/squad:<skill>`).
-- Slash commands: `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status`.
+- Slash commands: `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status`, `/squad:dashboard`.
 - Squad's advisory governance hooks. They act only when `.squad/config.json` has `"claudeHooks": "advisory"`.
 - `squad` on the Bash PATH. The launcher runs, in order: `SQUAD_CLI`, the project's `node_modules/@bradygaster/squad-cli`, a `squad` on PATH, or `npx -y @bradygaster/squad-cli@2.0.0-preview.4`.
 

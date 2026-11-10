@@ -1,188 +1,11 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Squad team activity · squad-e2e-arcade</title>
-<style>
-  :root {
-    color-scheme: light;
-    --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --border-muted: #d1d9e0b3; --canvas: #ffffff; --inset: #f6f8fa;
-    --accent: #0969da; --open: #1a7f37; --done: #8250df; --attention: #9a6700; --danger: #d1242f; --neutral: #59636e;
-    --done-subtle: #fbefff; --done-border: #d8b9ff; --attention-subtle: #fff8c5; --attention-border: #d4a72c;
-    --neutral-subtle: #eff2f5; --hover: #818b981a; --counter: #818b981f; --rail: #d1d9e0; --shadow: #1f23280a;
-  }
-  :root[data-color-mode="dark"] {
-    color-scheme: dark;
-    --fg: #f0f6fc; --muted: #9198a1; --border: #3d444d; --border-muted: #3d444db3; --canvas: #0d1117; --inset: #151b23;
-    --accent: #4493f8; --open: #238636; --done: #8957e5; --attention: #d29922; --danger: #f85149; --neutral: #9198a1;
-    --done-subtle: #ab7df826; --done-border: #ab7df866; --attention-subtle: #bb800926; --attention-border: #bb800966;
-    --neutral-subtle: #212830; --hover: #656c7633; --counter: #656c7633; --rail: #3d444d; --shadow: #01040966;
-  }
-  .ThemeToggle { margin-left: auto; appearance: none; border: 1px solid var(--border); background: var(--inset); color: var(--fg); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-  .ThemeToggle:hover { background: var(--hover); }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--canvas); color: var(--fg);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji"; }
-  a { color: var(--accent); text-decoration: none; }
-  svg { fill: currentColor; vertical-align: text-bottom; }
-  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; }
-  .hidden { display: none !important; }
-
-  /* GitHub header */
-  .gh-header { background: var(--inset); border-bottom: 1px solid var(--border); padding: 16px 32px 0; }
-  .crumbs { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .crumbs .owner { color: var(--fg); }
-  .crumbs .sep { color: var(--muted); }
-  .crumbs b { font-weight: 600; }
-  .project-title { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; }
-  .project-title h1 { margin: 0; font-size: 20px; font-weight: 600; }
-  .State { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 2em; color: #fff; font-size: 14px; font-weight: 500; line-height: 20px; background: var(--open); }
-  .State.done { background: var(--done); }
-  .State.failed { background: var(--danger); }
-  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 12px; }
-  .UnderlineNav { display: flex; gap: 8px; }
-  .UnderlineNav-item { appearance: none; border: 0; background: none; font: inherit; color: var(--fg); padding: 8px 8px 10px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; border-bottom: 2px solid transparent; border-radius: 0; }
-  .UnderlineNav-item:hover { background: var(--hover); border-radius: 6px 6px 0 0; }
-  .UnderlineNav-item[aria-current="page"] { font-weight: 600; border-bottom-color: #fd8c73; }
-  .UnderlineNav-item svg { color: var(--muted); }
-  .Counter { display: inline-block; min-width: 20px; padding: 0 6px; font-size: 12px; font-weight: 500; line-height: 18px; text-align: center; background: var(--counter); border: 1px solid transparent; border-radius: 2em; }
-  main { padding: 16px 32px 32px; }
-
-  /* Board (GitHub Projects) */
-  .board { display: grid; grid-auto-flow: column; grid-auto-columns: 350px; gap: 8px; overflow-x: auto; align-items: start; }
-  .column { background: var(--inset); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); }
-  .column-head { padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .column-head .hint { color: var(--muted); font-weight: 400; font-size: 12px; display: block; }
-  .column-head .menu { margin-left: auto; color: var(--muted); padding: 0 6px; }
-  .status-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid; flex: none; }
-  .status-dot.queued { border-color: var(--muted); background: var(--neutral-subtle); }
-  .status-dot.working { border-color: var(--attention); background: var(--attention-subtle); }
-  .status-dot.done { border-color: var(--done); background: var(--done-subtle); }
-  .cards { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  .card { background: var(--canvas); border: 1px solid var(--border); border-radius: 6px; padding: 8px 16px 12px; box-shadow: 0 1px 0 var(--shadow); }
-  .card .ref { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
-  .card .ref .assignees { margin-left: auto; display: flex; }
-  .card .title { display: block; margin: 4px 0 6px; font-weight: 600; color: var(--fg); }
-  .card .title:hover { color: var(--accent); text-decoration: underline; }
-  .card .now { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-  .card .labels { display: flex; flex-wrap: wrap; gap: 4px; }
-  .IssueLabel { display: inline-block; padding: 0 7px; font-size: 12px; font-weight: 500; line-height: 18px; border-radius: 2em; border: 1px solid transparent; white-space: nowrap;
-    background: rgb(var(--lr) var(--lg) var(--lb) / .18); border-color: rgb(var(--lr) var(--lg) var(--lb) / .4);
-    color: rgb(calc(var(--lr) * .6) calc(var(--lg) * .6) calc(var(--lb) * .6)); }
-  :root[data-color-mode="dark"] .IssueLabel { background: rgb(var(--lr) var(--lg) var(--lb) / .22); border-color: rgb(var(--lr) var(--lg) var(--lb) / .5);
-    color: rgb(calc(var(--lr) + (255 - var(--lr)) * .55) calc(var(--lg) + (255 - var(--lg)) * .55) calc(var(--lb) + (255 - var(--lb)) * .55)); }
-  .card details { margin-top: 8px; font-size: 12px; }
-  .card details summary { cursor: pointer; color: var(--muted); }
-  .card details div { margin-top: 6px; white-space: pre-wrap; color: var(--fg); }
-  .avatar { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 600; flex: none; box-shadow: 0 0 0 1px var(--border); }
-  .avatar.lg { width: 40px; height: 40px; font-size: 16px; }
-  .open { color: var(--open); }
-  .closed { color: var(--done); }
-
-  /* Roadmap */
-  .roadmap { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .rm-head, .rm-row { display: grid; grid-template-columns: 360px 1fr; }
-  .rm-head { background: var(--inset); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); font-weight: 600; }
-  .rm-head > div, .rm-row > div { padding: 6px 12px; }
-  .rm-head .scale { position: relative; height: 32px; padding: 0; }
-  .rm-head .tick { position: absolute; top: 8px; transform: translateX(-50%); font-weight: 400; }
-  .rm-row { border-bottom: 1px solid var(--border-muted); min-height: 40px; align-items: center; }
-  .rm-row:last-child { border-bottom: 0; }
-  .rm-row .item { display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border); min-width: 0; height: 100%; }
-  .rm-row .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
-  .rm-row .lane { position: relative; height: 40px; padding: 0; background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--tick) - 1px), var(--border-muted) calc(var(--tick) - 1px), var(--border-muted) var(--tick)); }
-  .rm-bar { position: absolute; top: 8px; height: 24px; border-radius: 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; border: 1px solid; }
-  .rm-bar.done { background: var(--done-subtle); border-color: var(--done-border); }
-  .rm-bar.working { background: var(--attention-subtle); border-color: var(--attention-border); }
-  .rm-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); pointer-events: none; }
-  .roadmap-body { position: relative; }
-
-  /* Conversation (issue timeline) */
-  .issue { max-width: 920px; }
-  .TimelineItem { display: flex; position: relative; padding: 16px 0; margin-left: 16px; }
-  .TimelineItem::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: var(--rail); }
-  .TimelineItem-badge { width: 32px; height: 32px; margin: -2px 8px 0 -15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--neutral-subtle); border: 2px solid var(--canvas); color: var(--muted); z-index: 1; flex: none; }
-  .TimelineItem-badge.done { background: var(--done); color: #fff; }
-  .TimelineItem-badge.open { background: var(--open); color: #fff; }
-  .TimelineItem-body { color: var(--muted); min-width: 0; padding-top: 4px; }
-  .TimelineItem-body b { color: var(--fg); font-weight: 600; }
-  .TimelineItem-body details summary { cursor: pointer; }
-  .TimelineItem-body ol { margin: 6px 0 0; padding-left: 18px; }
-  .comment-row { display: flex; gap: 16px; margin: 0 0 0 -56px; padding: 0 0 16px; position: relative; }
-  .comment-wrap { position: relative; padding-left: 56px; }
-  .comment-wrap::before { content: ""; position: absolute; top: 0; bottom: 0; left: 16px; width: 2px; background: var(--rail); }
-  .timeline-comment { flex: 1; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); min-width: 0; position: relative; }
-  .timeline-comment.member { border-color: var(--done-border); }
-  .timeline-comment-header { display: flex; align-items: center; gap: 4px; padding: 0 16px; min-height: 37px; background: var(--inset); border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0; color: var(--muted); }
-  .timeline-comment.member .timeline-comment-header { background: var(--done-subtle); border-bottom-color: var(--done-border); }
-  .timeline-comment-header b { color: var(--fg); font-weight: 600; }
-  .Label--secondary { margin-left: auto; padding: 0 7px; border: 1px solid var(--border); border-radius: 2em; font-size: 12px; font-weight: 500; line-height: 18px; color: var(--muted); }
-  .comment-body { padding: 16px; white-space: pre-wrap; word-break: break-word; }
-  .comment-row .avatar.lg { margin-left: 0; position: relative; z-index: 1; }
-  .arrived { animation: arrive 2.4s ease-out; }
-  @keyframes arrive { from { background: var(--attention-subtle); } to { background: transparent; } }
-  .MergeBox { position: sticky; bottom: 0; z-index: 5; max-width: 920px; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--canvas); box-shadow: 0 -8px 24px var(--shadow), 0 1px 0 var(--shadow); }
-  .MergeBox-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-  .MergeBox-head .icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; background: var(--attention-subtle); color: var(--attention); }
-  .MergeBox-head .icon.idle { background: var(--done-subtle); color: var(--done); }
-  .MergeBox-head b { display: block; }
-  .MergeBox-head small { color: var(--muted); }
-  .MergeBox-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--border-muted); }
-  .MergeBox-row:first-child { border-top: 0; }
-  .MergeBox-row .what { color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-  .MergeBox-row .who { font-weight: 600; flex: none; }
-  .MergeBox-row .elapsed { color: var(--muted); font-size: 12px; flex: none; }
-  .pending-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--attention); flex: none; animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .25; } }
-  .NewActivity { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 6; appearance: none; border: 1px solid var(--border); background: var(--accent); color: #fff; border-radius: 2em; padding: 4px 14px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px var(--shadow); }
-</style>
-</head>
-<body>
-<header class="gh-header">
-  <nav class="crumbs">
-    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/></svg>
-    <a class="owner" href="#">bradygaster</a><span class="sep">/</span><a href="#"><b>squad-e2e-arcade</b></a><span class="sep">/</span><span>Projects</span>
-    <button class="ThemeToggle" id="theme" type="button" aria-label="Toggle dark mode"></button>
-  </nav>
-  <div class="project-title">
-    <h1>Squad team activity</h1>
-    <span id="state" class="State">Connecting</span>
-  </div>
-  <div class="subtitle" id="meta">Waiting for events…</div>
-  <nav class="UnderlineNav" aria-label="Views">
-    <button class="UnderlineNav-item" aria-current="page" data-view="board">
-      <svg width="16" height="16" viewBox="0 0 16 16"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25ZM6.5 6.5v8h7.75a.25.25 0 0 0 .25-.25V6.5Zm8-1.5V1.75a.25.25 0 0 0-.25-.25H6.5V5Zm-13 1.5v7.75c0 .138.112.25.25.25H5v-8ZM5 5V1.5H1.75a.25.25 0 0 0-.25.25V5Z"/></svg>
-      Board <span class="Counter" id="count-board">0</span></button>
-    <button class="UnderlineNav-item" data-view="roadmap">
-      <svg width="16" height="16" viewBox="0 0 16 16"><path d="M4.75 7a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5ZM5 4.75A.75.75 0 0 1 5.75 4h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 5 4.75ZM6.75 10a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Z"/><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"/></svg>
-      Roadmap</button>
-    <button class="UnderlineNav-item" data-view="conversation">
-      <svg width="16" height="16" viewBox="0 0 16 16"><path d="M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z"/></svg>
-      Conversation <span class="Counter" id="count-convo">0</span></button>
-  </nav>
-</header>
-<main>
-  <section id="view-board" class="board">
-    <div class="column"><div class="column-head"><span class="status-dot queued"></span><span>Queued <span class="hint">Assigned, not started</span></span><span class="Counter" id="n-queued">0</span><span class="menu">···</span></div><div class="cards" id="col-queued"></div></div>
-    <div class="column"><div class="column-head"><span class="status-dot working"></span><span>In progress <span class="hint">A member is working on it</span></span><span class="Counter" id="n-working">0</span><span class="menu">···</span></div><div class="cards" id="col-working"></div></div>
-    <div class="column"><div class="column-head"><span class="status-dot done"></span><span>Done <span class="hint">Reported back to the coordinator</span></span><span class="Counter" id="n-done">0</span><span class="menu">···</span></div><div class="cards" id="col-done"></div></div>
-  </section>
-  <section id="view-roadmap" class="hidden">
-    <div class="roadmap">
-      <div class="rm-head"><div>Title</div><div class="scale" id="rm-scale"></div></div>
-      <div class="roadmap-body" id="rm-body"></div>
-    </div>
-  </section>
-  <section id="view-conversation" class="issue hidden">
-    <div class="comment-wrap" id="convo"></div>
-    <div class="MergeBox" id="live" aria-live="polite">
-      <div class="MergeBox-head"><span class="icon" id="live-icon"></span><span><b id="live-title">Waiting for activity</b><small id="live-sub"></small></span></div>
-      <div id="live-rows"></div>
-    </div>
-    <button class="NewActivity hidden" id="new-activity" type="button">↓ New activity</button>
-  </section>
-</main>
-<script>
+/*
+ * Squad dashboard page (#2460): the team's Claude Code activity as a GitHub Projects-style board,
+ * a roadmap of who worked when, and the conversation as an issue timeline.
+ *
+ * Every event field is transcript data. It reaches the page only through textContent, or through
+ * esc() where markup is built; the server also sends a CSP that allows no inline script.
+ */
+'use strict';
 // ── icons (GitHub Octicons) ──────────────────────────────────────────────────────────────────────
 const ICON = {
   open: '<svg class="open" width="16" height="16" viewBox="0 0 16 16"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>',
@@ -198,7 +21,7 @@ const ICON = {
 const palette = ['#0969da', '#8250df', '#bf3989', '#1a7f37', '#bc4c00', '#0550ae', '#6639ba', '#953800'];
 const colorFor = (n) => palette[[...String(n)].reduce((a, c) => a + c.charCodeAt(0), 0) % palette.length];
 const cap = (s) => String(s ?? '').replace(/^./, (c) => c.toUpperCase());
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const html = (s) => { const t = document.createElement('template'); t.innerHTML = s.trim(); return t.content.firstElementChild; };
 const display = (n) => (n === 'coordinator' ? 'squad' : n === 'member' || n == null || n === 'undefined' ? 'general-purpose' : String(n));
@@ -208,8 +31,15 @@ function avatar(name, lg) {
   a.title = display(name);
   return a;
 }
-const LABELS = { lead: ['#0e8a16', 'lead'], 'game-developer': ['#5319e7', 'game logic'], frontend: ['#d93f0b', 'frontend'], tester: ['#1d76db', 'tests'], scribe: ['#6e7781', 'scribe'], rai: ['#b60205', 'rai'], 'fact-checker': ['#fbca04', 'fact-check'] };
-const ROLE_OF = { blinky: 'lead', inky: 'game-developer', pinky: 'frontend', clyde: 'tester', scribe: 'scribe', rai: 'rai', 'fact-checker': 'fact-checker' };
+const labelPalette = ['#0e8a16', '#5319e7', '#d93f0b', '#1d76db', '#6e7781', '#b60205', '#bf8700', '#006b75'];
+// Repository name and member roles, from /meta (the roster in .squad/).
+const META = { repo: '', owner: '', roles: {}, source: '' };
+function roleLabel(member) {
+  const role = META.roles[member] ?? META.roles[String(member).replace(/^[^:]+:/, '')];
+  if (!role) return null;
+  const color = labelPalette[[...role].reduce((a, c) => a + c.charCodeAt(0), 0) % labelPalette.length];
+  return [color, role.toLowerCase()];
+}
 function issueLabel(text, color) {
   const l = el('span', 'IssueLabel', text);
   const r = parseInt(color.slice(1, 3), 16), g = parseInt(color.slice(3, 5), 16), b = parseInt(color.slice(5, 7), 16);
@@ -264,13 +94,14 @@ function renderCard(T) {
   const c = T.card;
   c.textContent = '';
   const ref = el('div', 'ref');
-  ref.innerHTML = (T.status === 'done' ? ICON.closed : ICON.open) + `<span>squad-e2e-arcade #${T.number}</span>`;
+  ref.innerHTML = (T.status === 'done' ? ICON.closed : ICON.open);
+  ref.append(el('span', null, `${META.repo || 'squad'} #${T.number}`));
   const as = el('span', 'assignees'); as.append(avatar(T.member)); ref.append(as);
   const title = el('a', 'title', T.title || `${cap(T.member)}`); title.href = '#';
   c.append(ref, title);
   if (T.status === 'working' && T.now) c.append(el('div', 'now mono', T.now));
   const labels = el('div', 'labels');
-  const role = LABELS[ROLE_OF[T.member]];
+  const role = roleLabel(T.member);
   if (role) labels.append(issueLabel(role[1], role[0]));
   if (T.bg) labels.append(issueLabel('background', '#0969da'));
   if (T.start != null) labels.append(issueLabel(T.status === 'done' ? `took ${dur(T.end - T.start)}` : `running ${dur(Math.max(Date.now(), latest) - T.start)}`, '#6e7781'));
@@ -378,7 +209,18 @@ const laneMember = new Map([['coordinator', 'coordinator']]);
 let latest = 0;
 const state = document.getElementById('state');
 const setState = (cls, text) => { state.className = `State ${cls}`; state.innerHTML = (cls === 'done' ? ICON.check : ICON.play) + ' ' + esc(text); };
+fetch('/meta').then((r) => r.json()).then((m) => {
+  Object.assign(META, m);
+  document.getElementById('repo').textContent = META.repo || 'Squad';
+  document.getElementById('owner').textContent = META.owner || '';
+  document.getElementById('owner-sep').classList.toggle('hidden', !META.owner);
+  document.getElementById('source').textContent = META.source || 'Dashboard';
+  document.title = `Squad team activity · ${META.repo || 'Squad'}`;
+  for (const T of tasks.values()) renderCard(T);
+}).catch(() => {});
 const es = new EventSource('/events');
+// The dashboard moved to a newer Claude Code session: start the page over.
+es.addEventListener('reset', () => location.reload());
 es.onopen = () => setState('', 'Live');
 es.onerror = () => setState('', 'Reconnecting');
 es.onmessage = (msg) => {
@@ -391,7 +233,7 @@ es.onmessage = (msg) => {
   switch (ev.kind) {
     case 'session':
       setState('', `Prompt ${ev.extra?.run} running`);
-      item('play', 'open', `<b>squad</b> started prompt ${ev.extra?.run} on <span class="mono">${esc(ev.text.split('·').pop().trim())}</span>`, ev.t);
+      item('play', 'open', `<b>squad</b> started prompt ${esc(ev.extra?.run ?? '')} on <span class="mono">${esc(ev.text.split('·').pop().trim())}</span>`, ev.t);
       break;
     case 'dispatch': {
       const T = task(ev.extra.target, ev.extra.member);
@@ -431,9 +273,14 @@ es.onmessage = (msg) => {
     case 'hook':
       item('zap', '', `Hook <b>${esc(ev.text.replace(/^hook\s*/, '') || 'event')}</b> ran`, ev.t);
       break;
+    case 'idle':
+      setState('done', `Prompt ${ev.extra?.run} done`);
+      if (lastResult !== `Prompt ${ev.extra?.run} finished`) item('check', 'done', `<b>squad</b> finished prompt ${esc(ev.extra?.run ?? '')} and is waiting for input`, ev.t);
+      lastResult = `Prompt ${ev.extra?.run} finished`;
+      break;
     case 'result':
       setState(ev.extra?.error ? 'failed' : 'done', ev.extra?.error ? 'Failed' : `Prompt ${ev.extra?.run} done`);
-      item('check', 'done', `<b>squad</b> finished prompt ${ev.extra?.run}: ${esc(ev.text)}`, ev.t);
+      item('check', 'done', `<b>squad</b> finished prompt ${esc(ev.extra?.run ?? '')}: ${esc(ev.text)}`, ev.t);
       lastResult = `Prompt ${ev.extra?.run} finished · ${ev.text}`;
       break;
   }
@@ -469,6 +316,3 @@ setInterval(() => {
     document.getElementById('meta').textContent = `${tasks.size} items · ${working} in progress · ${ago(t0, nowT).replace(' ago', '')} of team activity · updated ${ago(latest, nowT)}`;
   }
 }, 1000);
-</script>
-</body>
-</html>

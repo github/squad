@@ -271,6 +271,22 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
     console.log(`                              installed; otherwise transcript/event-log only.\n`);
   },
 
+  dashboard: (version) => {
+    header('dashboard', version, "Live web view of the team's Claude Code session");
+    console.log(`Usage: squad dashboard [start|stop|status] [options]\n`);
+    console.log(`Serves a page on 127.0.0.1 showing the coordinator and each member run as a`);
+    console.log(`board, a roadmap and a timeline, read from Claude Code's session transcripts`);
+    console.log(`for this directory. One dashboard runs per directory: starting it again`);
+    console.log(`prints the running one. In Claude Code, /squad:dashboard does the same.\n`);
+    console.log(`Options:`);
+    console.log(`  ${BOLD}--port <n>${RESET}                  Port (default: first free from 4280)`);
+    console.log(`  ${BOLD}--session <id>${RESET}              Follow one session (default: the newest)`);
+    console.log(`  ${BOLD}--stream <file>${RESET}             Read claude -p stream-json logs (repeatable)`);
+    console.log(`  ${BOLD}--detach${RESET}                    Run in the background and return`);
+    console.log(`  ${BOLD}--open${RESET}                      Open the page in the browser`);
+    console.log(`  ${BOLD}--json${RESET}                      Print the result as JSON\n`);
+  },
+
   doctor: (version) => {
     header('doctor', version, 'Validate squad setup');
     console.log(`Usage: squad doctor\n`);

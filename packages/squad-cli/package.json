@@ -173,7 +173,7 @@
     "postinstall": "node scripts/patch-esm-imports.mjs && node scripts/patch-ink-rendering.mjs",
     "prepublishOnly": "npm run build",
     "build": "tsc -p tsconfig.json && npm run postbuild",
-    "postbuild": "node -e \"require('fs').cpSync('src/remote-ui', 'dist/remote-ui', {recursive: true})\""
+    "postbuild": "node -e \"for (const d of ['remote-ui', 'dashboard-ui']) require('fs').cpSync('src/' + d, 'dist/' + d, {recursive: true})\""
   },
   "engines": {
     "node": ">=22.5.0"
