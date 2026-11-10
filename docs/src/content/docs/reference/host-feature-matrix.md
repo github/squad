@@ -876,7 +876,7 @@ Depends on: **e** · docs: [guide/gh-aw](/squad/docs/guide/gh-aw/)
 | Host | Capability | Validation | Mechanism | Evidence |
 |------|------------|------------|-----------|----------|
 | `copilot` | ✅ supported | 🧪 validated-test | Workflows in `workflows/*.md`; verifier + e2e scripts. | `validated-test:test/gh-aw-enlistment-skill.test.ts::*`<br>`static-only` |
-| `claude` | — n/a | 📄 static-only | Runs in GitHub Actions with the Copilot engine; the local host is irrelevant. | `static-only` |
+| `claude` | — n/a | 📄 static-only | Runs in GitHub Actions, so the local host is irrelevant. Squad's workflows use the Copilot engine; gh-aw also has a built-in Claude Code engine (`engine: claude`), which Squad does not ship a workflow for. _Re-evaluated for #2442 (research: https://github.com/github/squad/issues/2438#issuecomment-6753729924). A Squad workflow on `engine: claude` would pass `engine.args: ["--agent", "squad"]` (gh-aw has no native agent selection for Claude) and needs `bare: false` for subagent delegation; not yet run._ | `static-only` |
 | `kiro` | — n/a | 📄 static-only | Runs in GitHub Actions with the Copilot engine; the local host is irrelevant. _Live run blocked on 2026-10-22: kiro quota/usage limit reached on the reference machine._ | `static-only` |
 | `opencode` | — n/a | 📄 static-only | Runs in GitHub Actions with the Copilot engine; the local host is irrelevant. | `static-only` |
 | `cursor` | — n/a | 📄 static-only | Runs in GitHub Actions with the Copilot engine; the local host is irrelevant. _Live run blocked on 2026-10-22: cursor quota/usage limit reached on the reference machine._ | `static-only` |

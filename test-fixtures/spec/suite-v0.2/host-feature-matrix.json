@@ -3875,10 +3875,11 @@
         "claude": {
           "capability": "n/a",
           "validation": "static-only",
-          "mechanism": "Runs in GitHub Actions with the Copilot engine; the local host is irrelevant.",
+          "mechanism": "Runs in GitHub Actions, so the local host is irrelevant. Squad's workflows use the Copilot engine; gh-aw also has a built-in Claude Code engine (`engine: claude`), which Squad does not ship a workflow for.",
           "evidence": [
             "static-only"
-          ]
+          ],
+          "notes": "Re-evaluated for #2442 (research: https://github.com/github/squad/issues/2438#issuecomment-6753729924). A Squad workflow on `engine: claude` would pass `engine.args: [\"--agent\", \"squad\"]` (gh-aw has no native agent selection for Claude) and needs `bare: false` for subagent delegation; not yet run."
         },
         "kiro": {
           "capability": "n/a",
