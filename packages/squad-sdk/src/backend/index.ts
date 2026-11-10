@@ -17,6 +17,8 @@ export type { LocalSquadBackendOptions, FileStateStoreOptions } from './local-ba
 export { createStateBackendStore } from './state-backend-store.js';
 export type { StateBackendLike, StateBackendStoreOptions } from './state-backend-store.js';
 export { DurableHttpSquadBackend, validateBaseUrl } from './durable-http-backend.js';
+export { ClaudeAgentSdkHarness, CLAUDE_AGENT_SDK_HARNESS_ID, claudeApprovalHash } from './harnesses/claude-agent-sdk.js';
+export type { ClaudeAgentSdkHarnessOptions, ClaudeAgentSdkModule, ClaudeSdkMessage, ClaudeQueryOptions, ClaudeCanUseTool, ClaudePermissionResult } from './harnesses/claude-agent-sdk.js';
 export type { DurableHttpOptions } from './durable-http-backend.js';
 
 /**
