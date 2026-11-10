@@ -326,9 +326,10 @@ export function printStateMcpHelp(): void {
     'enable them; once enabled it routes the tools to a remote durable backend',
     '(https required, plain http only for localhost) with SQUAD_BACKEND_TOKEN.',
     'Execution uses the claude-agent-sdk harness when the optional',
-    '@anthropic-ai/claude-agent-sdk package is installed',
-    '(SQUAD_BACKEND_HARNESSES=none turns it off); otherwise the bridge',
-    'records transcripts and events only.',
+    '@anthropic-ai/claude-agent-sdk package is installed. Set',
+    'SQUAD_BACKEND_HARNESSES (comma-separated: claude-agent-sdk, copilot-sdk,',
+    'or none) to choose; without a harness the bridge records transcripts',
+    'and events only.',
     '',
   ].join('\n'));
 }

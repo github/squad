@@ -266,6 +266,9 @@ describe('claude-agent-sdk harness: state-mcp registration', () => {
     expect(createLocalHarnesses('/repo', {}, () => false).list()).toEqual([]);
     expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'none' }, () => true).list()).toEqual([]);
     expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'other' }, () => true).list()).toEqual([]);
+    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'copilot-sdk' }, () => true).list().map((h) => h.id)).toEqual(['copilot-sdk']);
+    expect(createLocalHarnesses('/repo', { SQUAD_BACKEND_HARNESSES: 'copilot-sdk, claude-agent-sdk' }, () => true).list().map((h) => h.id)).toEqual([HARNESS, 'copilot-sdk']);
+    expect(createLocalHarnesses('/repo', {}, () => false).list()).toEqual([]); // copilot-sdk is never a default
   });
 
   it('createMcpBackend wires the registry into the local backend', async () => {

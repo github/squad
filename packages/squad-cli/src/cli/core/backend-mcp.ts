@@ -5,6 +5,7 @@ import {
   BACKEND_PROTOCOL_VERSION,
   BackendError,
   ClaudeAgentSdkHarness,
+  CopilotSdkHarness,
   DefaultHarnessRegistry,
   isClaudeAgentSdkAvailable,
   type HarnessRegistry,
@@ -139,7 +140,9 @@ export function isExperimentalBackendEnabled(
  */
 /**
  * Execution harnesses for the local backend. `SQUAD_BACKEND_HARNESSES` is a comma-separated list of harness
- * ids (default `claude-agent-sdk`), or `none`; a listed harness is registered only when it can run here.
+ * ids, or `none`. The default is `claude-agent-sdk`, registered only when its optional SDK is installed.
+ * `copilot-sdk` is opt-in: its SDK is always installed, so registering it by default would make every
+ * experimental bridge run Copilot sessions.
  */
 export function createLocalHarnesses(
   repoRoot: string,
@@ -148,9 +151,9 @@ export function createLocalHarnesses(
 ): HarnessRegistry {
   const registry = new DefaultHarnessRegistry();
   const wanted = (env['SQUAD_BACKEND_HARNESSES'] ?? 'claude-agent-sdk').split(',').map((h) => h.trim()).filter(Boolean);
-  if (!wanted.includes('none') && wanted.includes('claude-agent-sdk') && claudeSdkAvailable()) {
-    registry.register(new ClaudeAgentSdkHarness({ cwd: repoRoot }));
-  }
+  if (wanted.includes('none')) return registry;
+  if (wanted.includes('claude-agent-sdk') && claudeSdkAvailable()) registry.register(new ClaudeAgentSdkHarness({ cwd: repoRoot }));
+  if (wanted.includes('copilot-sdk')) registry.register(new CopilotSdkHarness({ cwd: repoRoot }));
   return registry;
 }
 

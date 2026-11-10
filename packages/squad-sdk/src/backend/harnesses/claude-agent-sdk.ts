@@ -21,7 +21,6 @@
  * Not durable across harness restarts: a pending callback lives in this process. On restart the broker's
  * pending approval should be cancelled and the session resumed (see the #2441 notes).
  */
-import { createHash } from 'node:crypto';
 import type {
   ApprovalResponse,
   HarnessAdapter,
@@ -32,6 +31,7 @@ import type {
   LeaseEpoch,
 } from '../types.js';
 import { partsToText } from '../types.js';
+import { TurnApprovals, canonicalApprovalHash } from './approval-queue.js';
 
 export const CLAUDE_AGENT_SDK_HARNESS_ID = 'claude-agent-sdk';
 const SDK_MODULE = '@anthropic-ai/claude-agent-sdk';
@@ -105,22 +105,7 @@ export function isClaudeAgentSdkAvailable(): boolean {
 
 /** sha256 over canonical JSON (sorted keys) of the tool name and input: the approval's bound payload. */
 export function claudeApprovalHash(toolName: string, input: unknown): string {
-  const canonical = (v: unknown): unknown =>
-    Array.isArray(v)
-      ? v.map(canonical)
-      : v && typeof v === 'object'
-        ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])]))
-        : v;
-  return `sha256:${createHash('sha256').update(JSON.stringify(canonical({ tool: toolName, input }))).digest('hex')}`;
-}
-
-interface PendingApproval {
-  approvalId: string;
-  hash: string;
-  toolName: string;
-  input: Record<string, unknown>;
-  resolve: (result: ClaudePermissionResult) => void;
-  offered: boolean;
+  return canonicalApprovalHash({ tool: toolName, input });
 }
 
 interface Run {
@@ -129,7 +114,7 @@ interface Run {
   seq: number;
   epoch?: LeaseEpoch;
   abort: AbortController;
-  approvals: PendingApproval[];
+  approvals: TurnApprovals;
   done: Promise<void>;
 }
 
@@ -179,9 +164,15 @@ export class ClaudeAgentSdkHarness implements HarnessAdapter {
       seq: submission.seq,
       epoch: submission.epoch,
       abort: new AbortController(),
-      approvals: [],
+      approvals: undefined as unknown as TurnApprovals,
       done: Promise.resolve(),
     };
+    run.approvals = new TurnApprovals(
+      run.seq,
+      (request) => this.emit(run, { type: 'approval-requested', request }),
+      () => this.emit(run, { type: 'state', state: 'running' }),
+      () => run.abort.abort(),
+    );
     this.runs.set(this.runKey(run.conversationId, run.runId, run.seq), run);
     const prompt = submission.messages
       .filter((m) => m.role === 'user')
@@ -195,35 +186,13 @@ export class ClaudeAgentSdkHarness implements HarnessAdapter {
   async cancel(conversationId: string, runId: string, seq: number): Promise<void> {
     const run = this.runs.get(this.runKey(conversationId, runId, seq));
     if (!run || run.abort.signal.aborted) return; // idempotent
+    run.approvals.close('Turn cancelled');
     run.abort.abort();
-    for (const a of run.approvals.splice(0)) a.resolve({ behavior: 'deny', message: 'Turn cancelled', interrupt: true });
   }
 
   async respondApproval(_conversationId: string, response: ApprovalResponse): Promise<void> {
-    for (const run of this.runs.values()) {
-      const i = run.approvals.findIndex((a) => a.approvalId === response.approvalId);
-      if (i === -1) continue;
-      const pending = run.approvals[i]!;
-      // The response must be bound to exactly this request; anything else leaves the call waiting.
-      if (response.hash !== pending.hash) {
-        throw new Error(`Approval ${response.approvalId}: hash does not match the requested action`);
-      }
-      run.approvals.splice(i, 1);
-      if (response.decision === 'approve') {
-        pending.resolve({ behavior: 'allow', updatedInput: pending.input });
-        this.emit(run, { type: 'state', state: 'running' });
-        this.offerNext(run);
-        return;
-      }
-      // The broker ends the turn on a deny (`cancelled`), so stop the query too: deny this call and every
-      // queued one without offering them, then abort.
-      const reason = response.reason ?? 'Denied by the Squad approval policy';
-      pending.resolve({ behavior: 'deny', message: reason, interrupt: true });
-      for (const a of run.approvals.splice(0)) a.resolve({ behavior: 'deny', message: reason, interrupt: true });
-      run.abort.abort();
-      return;
-    }
-    // Unknown or already decided: redelivery of a decision that was applied is a no-op.
+    for (const run of this.runs.values()) if (run.approvals.respond(response)) return;
+    // Unknown or already decided: a redelivered decision is a no-op.
   }
 
   /** Waits for a submitted turn to finish (tests and orderly shutdown). */
@@ -252,40 +221,18 @@ export class ClaudeAgentSdkHarness implements HarnessAdapter {
     for (const l of this.listeners.get(run.conversationId) ?? []) l(envelope);
   }
 
-  /** Offer the oldest unoffered approval when none is outstanding (one pending approval per turn). */
-  private offerNext(run: Run): void {
-    if (run.approvals.some((a) => a.offered)) return;
-    const next = run.approvals[0];
-    if (!next) return;
-    next.offered = true;
-    this.emit(run, {
-      type: 'approval-requested',
-      request: {
-        approvalId: next.approvalId,
-        turnSeq: run.seq,
-        action: `${next.toolName}: ${JSON.stringify(next.input).slice(0, 500)}`,
-        hash: next.hash,
-        payload: { tool: next.toolName, input: next.input },
-      },
-    });
-  }
-
   private canUseTool(run: Run): ClaudeCanUseTool {
-    return (toolName, input, { signal, toolUseID }) =>
-      new Promise<ClaudePermissionResult>((resolve) => {
-        if (signal.aborted || run.abort.signal.aborted) {
-          resolve({ behavior: 'deny', message: 'Turn cancelled', interrupt: true });
-          return;
-        }
-        const pending: PendingApproval = { approvalId: toolUseID, hash: claudeApprovalHash(toolName, input), toolName, input, resolve, offered: false };
-        signal.addEventListener('abort', () => {
-          const i = run.approvals.indexOf(pending);
-          if (i !== -1) run.approvals.splice(i, 1);
-          resolve({ behavior: 'deny', message: 'Turn cancelled', interrupt: true });
-        });
-        run.approvals.push(pending);
-        this.offerNext(run);
-      });
+    return async (toolName, input, { signal, toolUseID }) => {
+      if (signal.aborted || run.abort.signal.aborted) return { behavior: 'deny', message: 'Turn cancelled', interrupt: true };
+      signal.addEventListener('abort', () => run.approvals.drop(toolUseID, 'Turn cancelled'));
+      const outcome = await run.approvals.request(
+        toolUseID,
+        `${toolName}: ${JSON.stringify(input).slice(0, 500)}`,
+        { tool: toolName, input },
+      );
+      // Approve runs the original input unchanged, so what runs is what was hashed.
+      return outcome.approved ? { behavior: 'allow', updatedInput: input } : { behavior: 'deny', message: outcome.reason, interrupt: true };
+    };
   }
 
   private async execute(run: Run, prompt: string): Promise<void> {
@@ -336,7 +283,7 @@ export class ClaudeAgentSdkHarness implements HarnessAdapter {
       if (run.abort.signal.aborted) this.emit(run, { type: 'state', state: 'cancelled' });
       else this.emit(run, { type: 'state', state: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
     } finally {
-      for (const a of run.approvals.splice(0)) a.resolve({ behavior: 'deny', message: 'Turn ended', interrupt: true });
+      run.approvals.close('Turn ended');
     }
   }
 }

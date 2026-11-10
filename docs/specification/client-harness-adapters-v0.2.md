@@ -229,8 +229,12 @@ registry lists harnesses during capability negotiation.
 `decision: 'approve' | 'deny'`, `reason?`, `epoch?`); the `hash` is the opaque
 string the harness itself supplied with its `approval-requested` event.
 
-One `HarnessAdapter` ships: `claude-agent-sdk` (`ClaudeAgentSdkHarness`, in
-`packages/squad-sdk/src/backend/harnesses/`). It runs each admitted turn as a
+Two `HarnessAdapter`s ship, in `packages/squad-sdk/src/backend/harnesses/`.
+Both route approvals through one shared queue (`TurnApprovals`): requests are
+hash-bound (sha256 of the canonical action), offered one at a time because the
+broker holds one pending approval per turn, and a deny ends the turn.
+
+`claude-agent-sdk` (`ClaudeAgentSdkHarness`) runs each admitted turn as a
 Claude Agent SDK `query()`, resuming the conversation's session, and maps
 `canUseTool` onto `approval-requested`: `approvalId` is the tool-use id, `hash`
 is a sha256 of the canonical tool name and input, parallel tool calls are
@@ -240,9 +244,20 @@ deny ends the turn. It runs with `permissionMode: 'default'` and
 broker never sees. The SDK is an optional peer dependency; `squad state-mcp
 --experimental-backend` registers the harness only when it is installed
 (`SQUAD_BACKEND_HARNESSES=none` turns it off), and otherwise refuses
-`squad_backend_send_message`. No Copilot harness exists yet, so the shared
-contract suite (`test/harness-contract.ts`) runs against `claude-agent-sdk`
-only.
+`squad_backend_send_message`.
+
+`copilot-sdk` (`CopilotSdkHarness`) keeps one Copilot session per conversation
+(created on the first turn, resumed by id afterwards). A turn is `send()`
+followed by `session.idle` (completed) or `session.error` (failed); only
+main-agent `assistant.message` content enters the transcript.
+`onPermissionRequest` goes through the same queue, with `toolCallId` as the
+`approvalId`; approve answers `approve-once`, and deny answers `reject` and
+aborts the turn. Because `@github/copilot-sdk` is always installed, the MCP
+bridge registers this harness only when `SQUAD_BACKEND_HARNESSES` lists
+`copilot-sdk`.
+
+The shared contract suite (`test/harness-contract.ts`) runs the same
+assertions against both harnesses (§15 item 1).
 
 `describe` and `projectWorkspace` on `ClientAdapter`
 let the broker reason about host capabilities and file projection without

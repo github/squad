@@ -13,10 +13,12 @@
 **Implementation status:** The contract in this draft is implemented as the
 experimental `@bradygaster/squad-sdk/backend` subpath (`LocalSquadBackend`,
 `DurableHttpSquadBackend`, `DefaultHarnessRegistry`) and bridged over MCP by
-`squad state-mcp --experimental-backend`. One execution harness ships:
-`claude-agent-sdk` (`ClaudeAgentSdkHarness`), registered by the MCP bridge when
-the optional `@anthropic-ai/claude-agent-sdk` peer is installed. Without it the
-bridge records transcripts and events only.
+`squad state-mcp --experimental-backend`. Two execution harnesses ship:
+`claude-agent-sdk` (`ClaudeAgentSdkHarness`), registered by the MCP bridge by
+default when the optional `@anthropic-ai/claude-agent-sdk` peer is installed,
+and `copilot-sdk` (`CopilotSdkHarness`), registered only when listed in
+`SQUAD_BACKEND_HARNESSES`. Without a registered harness the bridge records
+transcripts and events only.
 
 **Known deviations:** Approval hashes are opaque harness-supplied strings
 (not broker-computed digests), lease epochs are client-asserted rather than
@@ -418,7 +420,8 @@ The same contract is projected through three backend families.
 one JSON snapshot under `.squad/backend/conversations/<id>.json`, serialized
 across processes by `.squad/backend/locks/<id>.lock`. Harnesses are plugged in
 through a `HarnessRegistry`; the SDK ships the registry, the harness
-interface and one implementation, `claude-agent-sdk` (Claude Agent SDK).
+interface and two implementations, `claude-agent-sdk` (Claude Agent SDK) and
+`copilot-sdk` (GitHub Copilot SDK).
 
 ### 10.2 MCP bridge
 
@@ -456,10 +459,10 @@ replayed to another origin.
 - Lease epochs are client-asserted (see section 9).
 - Cursors are unsigned `base64url("c1:<conversationId>:<sequence>")` values,
   validated only for the conversation id and numeric form.
-- The only shipped harness is `claude-agent-sdk`; it needs the optional
-  `@anthropic-ai/claude-agent-sdk` peer and Anthropic API, Bedrock or Vertex
-  credentials. There is no Copilot `HarnessAdapter` yet.
-- `claude-agent-sdk` keeps a pending approval in process memory, so a harness
+- `claude-agent-sdk` needs the optional `@anthropic-ai/claude-agent-sdk` peer
+  and Anthropic API, Bedrock or Vertex credentials; `copilot-sdk` needs a
+  signed-in Copilot user and is opt-in on the MCP bridge.
+- Both harnesses keep a pending approval in process memory, so a harness
   restart loses it; the broker's record must then be cancelled and the session
   resumed.
 
