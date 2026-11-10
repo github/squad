@@ -470,8 +470,16 @@ describe('config merging', () => {
     expect(exists('.cursor/rules/squad.mdc')).toBe(true);
   });
 
-  it('upsertBlock appends with spacing', () => {
-    expect(upsertBlock('a', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->\n`);
+  it('upsertBlock appends after one blank line and keeps a missing final newline missing', () => {
+    expect(upsertBlock('a', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->`);
+    expect(upsertBlock('a\n', 'x')).toBe(`a\n\n${BLOCK_BEGIN}\nx\n<!-- squad:end -->\n`);
+  });
+
+  it('removeBlock restores the exact original bytes however the file ended (§15.7)', () => {
+    for (const original of ['', 'a', 'a\n', 'a\n\n', 'a\n\n\n', '# T\n\nbody', '\n', 'x\n  ']) {
+      expect(removeBlock(upsertBlock(original, 'x')), JSON.stringify(original)).toBe(original);
+      expect(removeBlock(upsertBlock(upsertBlock(original, 'x'), 'x-v2')), JSON.stringify(original)).toBe(original);
+    }
   });
 
   it('applyProjection reports created then updated', () => {

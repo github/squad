@@ -33,8 +33,11 @@ export function upsertBlock(existing: string, content: string, id?: string): str
   if (start !== -1 && end > start) {
     return existing.slice(0, start) + block + existing.slice(end + endMarker.length);
   }
-  const sep = existing.length === 0 ? '' : existing.endsWith('\n\n') ? '' : existing.endsWith('\n') ? '\n' : '\n\n';
-  return `${existing}${sep}${block}\n`;
+  // One blank line before the block, and a final newline only if the file had one, so
+  // removeBlock can undo exactly this and restore the original bytes (§15.7).
+  if (existing.length === 0) return `${block}\n`;
+  if (existing.endsWith('\n')) return `${existing}\n${block}\n`;
+  return `${existing}\n\n${block}`;
 }
 
 const linesMarker = (id: string) => `# squad:${id}`;
@@ -738,7 +741,7 @@ export function installClients(clients: readonly ClientId[], ctx: ClientContext)
   return applyProjection(ctx.root, projectClients(clients, ctx));
 }
 
-/** Remove the Squad-managed block; collapses the separator that `upsertBlock` added. */
+/** Remove the Squad-managed block and exactly the separator `upsertBlock` added. */
 export function removeBlock(existing: string, id?: string): string {
   const { begin, end: endMarker } = markers(id);
   const start = existing.indexOf(begin);
@@ -747,9 +750,12 @@ export function removeBlock(existing: string, id?: string): string {
     throw new Error('Unclosed Squad managed block marker in file; refusing to overwrite user content after marker');
   }
   if (start === -1) return existing;
-  const before = existing.slice(0, start).replace(/\n{2,}$/, '\n');
-  const after = existing.slice(end + endMarker.length).replace(/^\n/, '');
-  return before + after;
+  const before = existing.slice(0, start);
+  const after = existing.slice(end + endMarker.length);
+  if (before === '') return after.replace(/^\n/, '');
+  // Block appended to a file without a final newline: drop the blank-line separator only.
+  if (after === '') return before.replace(/\n\n$/, '');
+  return before.replace(/\n$/, '') + after.replace(/^\n/, '');
 }
 
 /** Remove a whole `[table]`, its `[table.*]` sub-tables, and any inline/dotted definitions; other tables are untouched. */

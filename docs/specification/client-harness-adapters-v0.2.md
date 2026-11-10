@@ -289,7 +289,7 @@ distinct from negotiated `effectiveCapabilities`.
 | Host (`ClientId` / `hostKind`) | Agent anchor | MCP config | Support files | `submit` projection |
 |---|---|---|---|---|
 | GitHub Copilot (`copilot` / `github-copilot`) | `.github/agents/squad.agent.md` | `.mcp.json` | `.github/copilot-instructions.md` when present | `create_session`, `task`, or `runSubagent` depending on surface |
-| Claude Code (`claude` / `claude-code`) | `.claude/agents/squad.md` | `.mcp.json` | `CLAUDE.md` marker block, `.gitignore` `# squad:claude` lines | Claude `Agent` subagent tool |
+| Claude Code (`claude` / `claude-code`) | `.claude/agents/squad.md` | `.mcp.json` | `CLAUDE.md` marker block, `.gitignore` `# squad:claude` lines, `.claude/agents/<member>.md`, `.claude/skills/<name>/SKILL.md`, opt-in `.claude/settings.json` hooks | Claude `Agent` subagent tool |
 | Kiro (`kiro`) | `.kiro/steering/squad.md` | `.kiro/settings/mcp.json` | `.kiro/agents/squad.json`, Kiro spec and steering hooks | Kiro agent or spec execution hook |
 | OpenCode (`opencode`) | `.opencode/agent/squad.md` | `opencode.json` | host agent and MCP definition blocks in `opencode.json` | OpenCode agent execution entry declared in `opencode.json` |
 | Cursor (`cursor`) | `.cursor/agents/squad.md` | `.cursor/mcp.json` | `.cursor/rules/squad.mdc` | Cursor agent dispatch or inline agent run with projected rules |
@@ -299,6 +299,16 @@ distinct from negotiated `effectiveCapabilities`.
 These file paths are the portable contract. A host-specific installer may
 write additional generated files, but it may not move the canonical anchor
 without changing the projection version.
+
+Projection versions are per host. The Claude Code projection is at **v2**
+(`CLAUDE_PROJECTION_VERSION`): v1 wrote the coordinator, `.mcp.json`, the
+`CLAUDE.md` block and the `.gitignore` lines; v2 adds one subagent per member,
+the template and coordinator skills, and the opt-in `settings.json` hooks.
+Every generated Claude Markdown file states its version in the generated-file
+note (`… Claude projection v2.`). The note keeps the v1 wording as a prefix, so
+`squad upgrade` still recognises v1 files as Squad-owned and replaces them in
+place. `settings.json` handlers are identified by their `hook claude <Event>`
+args instead, because JSON has no comments.
 
 The `submit` column describes the host execution primitive only. It is not the
 portable conversation wire contract. MCP-backed projections are still host
@@ -586,7 +596,9 @@ Companion-file ownership is explicit:
   `<!-- squad:begin (managed by Squad; do not edit between markers) -->` and
   `<!-- squad:end -->`;
 - `AGENTS.md` and `GEMINI.md` integrations are marker-scoped and therefore use
-  byte-preserving rollback outside those managed regions.
+  byte-preserving rollback outside those managed regions. A block is appended after one blank line, and keeps
+  the file's missing final newline missing, so removing it restores the
+  original bytes however the file ended.
 
 Merge and upgrade behavior follows the same rule: full ownership allows
 replacement with the current projection version, while marker-scoped ownership

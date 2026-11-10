@@ -250,9 +250,7 @@ async function main(): Promise<void> {
     console.log(`             Usage: memory write --content "..." --class LOCAL`);
     console.log(`             Diagnostics: --log-level info|debug or --verbose`);
     console.log(`  ${BOLD}state-mcp${RESET}  MCP bridge exposing Squad runtime state tools`);
-    console.log(`  ${BOLD}lockout${RESET}    Record reviewer lockouts (reject, assign, submit, approve, override)`);
-    console.log(`             Usage: lockout <reject|assign|submit|approve|override|status> <subject>`);
-    console.log(`  ${BOLD}hook${RESET}       Claude Code hook entry point (advisory; set claudeHooks in config.json)`);
+    console.log(`  ${BOLD}lockout${RESET}    Reviewer lockouts: reject|assign|submit|approve|override|status`);
     console.log(`  ${BOLD}doctor${RESET}     Validate squad setup (check files, config, health)`);
     console.log(`  ${BOLD}health${RESET}     Validate team state for CI (team/registry/routing/backend/env)`);
     console.log(`             Flags: --json (structured output for CI)`);
