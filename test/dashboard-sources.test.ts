@@ -106,6 +106,34 @@ describe('Claude transcript source', () => {
     const kinds = (es: DashboardEvent[]) => es.map((e) => `${e.lane} ${e.kind} ${e.text}`).sort();
     expect(kinds([...first, ...rest])).toEqual(kinds(events));
   });
+
+  it('starts each member once when its meta file is written before the dispatch line', () => {
+    const dir = path.join(tmp, 'projects', '-work-demo');
+    fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });
+    const file = path.join(dir, `${SESSION}.jsonl`);
+    const full = fs.readFileSync(file, 'utf8');
+    const dispatchAt = full.indexOf('"name":"Agent"');
+    fs.writeFileSync(file, full.slice(0, full.lastIndexOf('\n', dispatchAt) + 1));
+
+    const live = new ClaudeTranscriptSource(file);
+    const before = live.poll();
+    expect(before.filter((e) => e.kind === 'start')).toEqual([]);
+    fs.writeFileSync(file, full);
+    const all = [...before, ...live.poll(), ...live.poll()];
+    for (const lane of [SCRIBE_BG, RAI_BG, SCRIBE_FG]) expect(of(all, lane, 'start'), lane).toHaveLength(1);
+  });
+
+  it('starts a member from its meta file when the dispatch never arrives', () => {
+    const dir = path.join(tmp, 'projects', '-work-demo');
+    fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });
+    const file = path.join(dir, `${SESSION}.jsonl`);
+    fs.writeFileSync(file, '');
+    const live = new ClaudeTranscriptSource(file);
+    expect(live.poll()).toEqual([]);
+    const later = live.poll();
+    expect(of(later, RAI_BG, 'start')[0]?.extra).toEqual({ member: 'rai', background: true });
+    expect(of(later, RAI_BG, 'say')).toHaveLength(1);
+  });
 });
 
 describe('Claude session discovery', () => {

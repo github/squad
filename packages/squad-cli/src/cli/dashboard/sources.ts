@@ -170,6 +170,16 @@ export function findClaudeSessions(cwd: string, env: NodeJS.ProcessEnv = process
   return out.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
+interface Subagent {
+  tail: JsonlTail;
+  lane: string;
+  member: string;
+  background: boolean;
+  description: string;
+  /** Polls this run's meta file has waited for its dispatch line in the main transcript. */
+  waited: number;
+}
+
 interface MemberRun {
   member: string;
   background: boolean;
@@ -206,7 +216,7 @@ export class ClaudeTranscriptSource implements DashboardSource {
   readonly label: string;
   private readonly main: JsonlTail;
   private readonly subagentDir: string;
-  private readonly subagents = new Map<string, { tail: JsonlTail; lane: string }>();
+  private readonly subagents = new Map<string, Subagent>();
   private readonly runs = new Map<string, MemberRun>();
   private turn = 0;
   private pendingPrompt = false;
@@ -225,8 +235,18 @@ export class ClaudeTranscriptSource implements DashboardSource {
   poll(): DashboardEvent[] {
     const out: DashboardEvent[] = [];
     for (const m of this.main.read()) this.mainLine(m, out);
-    this.discoverSubagents(out);
-    for (const s of this.subagents.values()) for (const m of s.tail.read()) this.memberLine(m, s.lane, out);
+    this.discoverSubagents();
+    for (const s of this.subagents.values()) {
+      if (!this.runs.has(s.lane)) {
+        // Claude Code can write a member's meta file before the dispatch line that starts it: wait one
+        // poll for the dispatch, then start the run from the meta file (a dispatch older than a truncated
+        // transcript never arrives).
+        if (s.waited++ < 1) continue;
+        this.runs.set(s.lane, { member: s.member, background: s.background, ended: false });
+        out.push({ t: this.lastT, lane: s.lane, kind: 'start', text: s.description, extra: { member: s.member, background: s.background } });
+      }
+      for (const m of s.tail.read()) this.memberLine(m, s.lane, out);
+    }
     // Stable sort: lines from different files interleave by time; ties keep file order.
     return out.map((e, i) => ({ e, i })).sort((a, b) => a.e.t - b.e.t || a.i - b.i).map((x) => x.e);
   }
@@ -241,7 +261,7 @@ export class ClaudeTranscriptSource implements DashboardSource {
     this.skipped.set(type, (this.skipped.get(type) ?? 0) + 1);
   }
 
-  private discoverSubagents(out: DashboardEvent[]): void {
+  private discoverSubagents(): void {
     let names: string[];
     try {
       names = fs.readdirSync(this.subagentDir);
@@ -260,14 +280,14 @@ export class ClaudeTranscriptSource implements DashboardSource {
         continue; // being written: try again on the next poll
       }
       const lane = str(meta['toolUseId']) ?? `agent-${m[1]}`;
-      const member = str(meta['agentType']) ?? 'general-purpose';
-      this.subagents.set(m[1]!, { tail: new JsonlTail(path.join(this.subagentDir, `agent-${m[1]}.jsonl`)), lane });
-      if (!this.runs.has(lane)) {
-        // Not dispatched from a transcript line this reader saw (for example, a dispatch older than a truncated file).
-        const background = meta['requestShape'] === 'background';
-        this.runs.set(lane, { member, background, ended: false });
-        out.push({ t: this.lastT, lane, kind: 'start', text: short(meta['description'], 120), extra: { member, background } });
-      }
+      this.subagents.set(m[1]!, {
+        tail: new JsonlTail(path.join(this.subagentDir, `agent-${m[1]}.jsonl`)),
+        lane,
+        member: str(meta['agentType']) ?? 'general-purpose',
+        background: meta['requestShape'] === 'background',
+        description: short(meta['description'], 120),
+        waited: 0,
+      });
     }
   }
 
