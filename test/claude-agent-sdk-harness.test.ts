@@ -30,6 +30,20 @@ async function until(check: () => boolean | Promise<boolean>, ms = 2000): Promis
   }
 }
 
+async function within<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`harness did not settle within ${ms} ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
 interface ToolCall { name: string; input: Record<string, unknown>; id: string }
 
 /**
@@ -228,8 +242,8 @@ describe('claude-agent-sdk harness: deterministic protocol checks', () => {
   });
 });
 
-const live = process.env['SQUAD_REAL_CLI_TESTS'] === '1' &&
-  !!(process.env['ANTHROPIC_API_KEY'] || process.env['CLAUDE_CODE_USE_BEDROCK'] || process.env['CLAUDE_CODE_USE_VERTEX']);
+// Opting in without credentials or the optional SDK must fail, not silently skip.
+const live = process.env['SQUAD_REAL_CLI_TESTS'] === '1';
 
 describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK)', () => {
   it('completes a turn through the broker', async () => {
@@ -304,6 +318,8 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
     const ev = (name: string) => golden.events.find((e) => e.event === name)!;
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-golden-'));
     const marker = path.join(cwd, 'squad-golden-marker.txt');
+    const command = 'touch squad-golden-marker.txt && exec sleep 60';
+    const expectedApprovedAction = `Bash: ${command}`;
     const harness = new ClaudeAgentSdkHarness({ cwd, maxTurns: 6 });
     const registry = new DefaultHarnessRegistry();
     registry.register(harness);
@@ -316,7 +332,7 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
       await client.createConversation({ conversationId });
       const adm = await client.sendMessage(conversationId, {
         runId, seq, role: 'user', harness: HARNESS,
-        content: 'Use the Bash tool to run these two commands, one after the other, exactly as written: touch squad-golden-marker.txt ; then: sleep 60',
+        content: `Use the Bash tool exactly once to run this single command, exactly as written, with no background execution: ${command}`,
       });
       expect(adm).toMatchObject({ runId, seq, duplicate: false });
 
@@ -324,29 +340,45 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
       const requested = ev('approval.requested');
       const [v1] = await client.getApprovals(conversationId);
       expect(v1).toMatchObject({ version: requested['version'], state: requested['state'], scope: { kind: requested['scope'] } });
-      expect(v1!.action).toMatch(/^Bash: .*touch/);
+      expect(v1!.action).toBe(expectedApprovedAction);
 
       // client.disconnected: remember the cursor and drop the client; client.reconnected: resume from it
       const beforeDrop = await client.readEvents(conversationId);
-      const seen = new Map(beforeDrop.events.map((e) => [e.id, e]));
+      const cursorSequence = beforeDrop.events.at(-1)!.sequence!;
       client = connect();
       const resume = await client.readEvents(conversationId, { after: beforeDrop.nextCursor });
       expect(resume.resumable).toBe(ev('client.reconnected')['resumable']);
-      expect(resume.lastAcceptedSeq).toBe(beforeDrop.events.at(-1)!.sequence);
-      for (const e of (await client.readEvents(conversationId)).events) seen.set(e.id, e);
-      expect(seen.size).toBeGreaterThanOrEqual(beforeDrop.events.length);
+      expect(resume.lastAcceptedSeq).toBe(cursorSequence);
+      expect(resume.events).toEqual([]);
+      expect(resume.nextCursor).toBe(beforeDrop.nextCursor);
+      const replayed = (await client.readEvents(conversationId)).events;
+      expect(replayed.slice(0, beforeDrop.events.length)).toEqual(beforeDrop.events);
+      expect(new Set(replayed.map((e) => e.id)).size).toBe(replayed.length);
+      expect(await client.getApprovals(conversationId)).toEqual([v1]);
 
       const decided = ev('approval.resolved');
       const turn = await client.respondApproval(conversationId, { approvalId: v1!.approvalId, hash: v1!.hash, decision: decided['decision'] as 'approve' });
       expect(turn.state).toBe('running');
-      // The approved command really runs: the first live approve on the real harness.
-      await until(() => fs.existsSync(marker), 60_000);
+      // One approved foreground command signals startup before its 60-second sleep.
+      await until(() => fs.existsSync(marker), 10_000);
+      expect((await client.getTurn(conversationId, seq)).state).toBe('running');
+      expect(harness.activeTurns).toBe(1);
 
-      const cancelled = await client.cancelRun(conversationId, runId, ev('cancellation.requested')['reason'] as string);
-      expect(cancelled.state).toBe(golden.expectedTerminalState);
-      await harness.settled(conversationId, runId, seq);
+      await within((async () => {
+        const cancelled = await client.cancelRun(conversationId, runId, ev('cancellation.requested')['reason'] as string);
+        expect(cancelled.state).toBe(golden.expectedTerminalState);
+        await harness.settled(conversationId, runId, seq);
+      })(), 10_000);
 
-      const history = (await client.readEvents(conversationId)).events.map((e) => e.type);
+      const allEvents = (await client.readEvents(conversationId)).events;
+      expect(allEvents.slice(0, beforeDrop.events.length)).toEqual(beforeDrop.events);
+      expect(new Set(allEvents.map((e) => e.id)).size).toBe(allEvents.length);
+      const resumed = await client.readEvents(conversationId, { after: beforeDrop.nextCursor });
+      expect(resumed.events.length).toBeGreaterThan(0);
+      expect(resumed.events).toEqual(allEvents.filter((e) => e.sequence! > cursorSequence));
+      expect(resumed.events.every((e) => e.sequence! > cursorSequence)).toBe(true);
+      expect(resumed.lastAcceptedSeq).toBe(allEvents.at(-1)!.sequence);
+      const history = allEvents.map((e) => e.type);
       const expected = golden.events.map((e) => e.event).filter((n) => !n.startsWith('client.'));
       let i = 0;
       for (const type of history) if (type === expected[i]) i++;
@@ -355,6 +387,8 @@ describe.skipIf(!live)('claude-agent-sdk harness: live (real Agent SDK) golden t
       expect(approvals[0]).toMatchObject({ approvalId: v1!.approvalId, version: decided['version'], state: decided['state'], decision: 'approve' });
       expect((await client.getTurn(conversationId, seq)).state).toBe(golden.expectedTerminalState);
     } finally {
+      await harness.cancel(conversationId, runId, seq);
+      await harness.settled(conversationId, runId, seq);
       fs.rmSync(cwd, { recursive: true, force: true });
     }
   }, 300_000);
