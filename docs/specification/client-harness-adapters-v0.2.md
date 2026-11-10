@@ -541,7 +541,8 @@ It contains:
   `mcp__plugin_squad_squad_state__*`;
 - the coordinator and template skills under `skills/` (`squad:<name>`);
 - the slash commands `/squad:ralph`, `/squad:cast`, `/squad:ceremony`,
-  `/squad:status` and `/squad:dashboard`;
+  `/squad:status` and `/squad:dashboard` (which runs only
+  `squad dashboard`, a 127.0.0.1-only page over the session transcripts);
 - `hooks/hooks.json`: the §7.1 handlers, with the SubagentStart matcher
   `squad|squad:squad` and `--plugin` after the event;
 - `.mcp.json`: the `squad_state` server (`plugin:squad:squad_state`);

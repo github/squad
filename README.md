@@ -134,7 +134,17 @@ squad init --client claude,opencode      # or: --client all
 squad upgrade --client codex             # add a host later; refreshes every configured host
 ```
 
-Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered. See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md), [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md), and the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md).
+Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered.
+
+In Claude Code, Squad also installs as a plugin that carries the coordinator, `squad_state`, skills, hooks and slash commands, including `/squad:dashboard`, a live local page of the team at work (also `squad dashboard`):
+
+```bash
+claude plugin marketplace add github/squad
+claude plugin install squad@squad --scope project
+squad init --client claude --claude-plugin
+```
+
+See [Squad for Claude Code (plugin)](docs/src/content/docs/features/claude-code-plugin.md). See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md), [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md), and the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md).
 
 ---
 
@@ -193,6 +203,7 @@ Say **"squad commands"** in chat to see a categorized menu of common operations 
 | `squad upstream add\|remove\|list\|sync` | Manage upstream Squad sources |
 | `squad nap` | Context hygiene — compress, prune, archive; use `--deep` for aggressive compression, `--dry-run` to preview changes |
 | `squad aspire` | Open Aspire dashboard for observability |
+| `squad dashboard` | Live local page of the team's Claude Code sessions on 127.0.0.1; `stop`, `status`, `--detach`, `--open`, `--session <id>`, `--stream <file>` |
 | `squad scrub-emails [directory]` | Remove email addresses from Squad state files (default: `.squad/`) |
 
 ---

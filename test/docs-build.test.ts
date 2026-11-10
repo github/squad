@@ -65,6 +65,7 @@ const EXPECTED_SCENARIOS = [
 const EXPECTED_FEATURES = [
   'ceremonies',
   'capability-routing',
+  'claude-code-plugin',
   'copilot-coding-agent',
   'directives',
   'enterprise-platforms',
