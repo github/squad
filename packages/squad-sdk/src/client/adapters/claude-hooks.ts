@@ -16,6 +16,7 @@ import { parseCharterMarkdown } from '../../agents/charter-compiler.js';
 import { CLAUDE_AGENTS_DIR, readRouting } from './claude-members.js';
 import { effectiveLocked, lockoutsFor, readLockouts, type LockoutRecord } from './lockout.js';
 import type { ClientContext, McpLaunchSpec, ProjectionFile } from './types.js';
+import { readContained } from './safe-path.js';
 
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
 
@@ -262,7 +263,9 @@ function openCircuit(projectAbs: string, now: number): string | undefined {
     const idx = typeof cb['currentFallbackIndex'] === 'number' ? (cb['currentFallbackIndex'] as number) : 0;
     const fallback = chain[Math.min(idx, chain.length - 1)];
     const until = Number.isFinite(opened) ? ` until ${new Date(opened + minutes * 60_000).toISOString()}` : '';
-    return `Ralph circuit breaker is OPEN${until}: spawn with ${fallback ? `the fallback model \`${fallback}\`` : 'a fallback model'} instead of \`${String(cb['preferredModel'] ?? 'the preferred model')}\`.`;
+    // Model names come from a repository file: inert, as for lockout fields.
+    const preferred = inert(cb['preferredModel'] ?? 'the preferred model', 60);
+    return `Ralph circuit breaker is OPEN${until}: spawn with ${fallback ? `the fallback model ${JSON.stringify(inert(fallback, 60))}` : 'a fallback model'} instead of ${JSON.stringify(preferred)}.`;
   } catch {
     return undefined;
   }
@@ -287,16 +290,26 @@ function sessionContext(env: ClaudeHookEnv, now: number): { additionalContext?: 
   ];
   const members = memberIdsWithCharters(env.teamAbs).map((id) => {
     try {
-      const c = parseCharterMarkdown(fs.readFileSync(path.join(env.teamAbs, 'agents', id, 'charter.md'), 'utf8'));
+      const c = parseCharterMarkdown(readContained(env.teamAbs, path.join('agents', id, 'charter.md')));
       const sub = fs.existsSync(path.join(env.root, CLAUDE_AGENTS_DIR, `${id}.md`)) ? '' : ' (no subagent file)';
-      return `${id}${c.identity.role ? ` (${c.identity.role})` : ''}${sub}`;
+      const role = c.identity.role ? inert(c.identity.role, 60) : '';
+      return `${id}${role ? ` (${role})` : ''}${sub}`;
     } catch {
       return id;
     }
   });
   if (members.length > 0) lines.push(`Roster: ${members.join(', ')}.`);
   const routing = readRouting(env.teamAbs);
-  if (routing.length > 0) lines.push(`Routing: ${routing.map((r) => `${r.workType} → ${r.routeTo}`).join('; ')}.`);
+  // routing.md is repository text: each work type is quoted as data, and only roster members route.
+  const known = new Set(memberIdsWithCharters(env.teamAbs));
+  const routes = routing
+    .slice(0, 40)
+    .map((r) => ({
+      work: inert(r.workType, 80),
+      to: [...new Set(ids(r.routeTo.toLowerCase().split(/[\s,/&+]+/).map((t) => t.replace(/^@/, ''))).filter((id) => known.has(id)))],
+    }))
+    .filter((r) => r.work && r.to.length > 0);
+  if (routes.length > 0) lines.push(`Routing (work type, as written → member): ${routes.map((r) => `${JSON.stringify(r.work)} → ${r.to.join(', ')}`).join('; ')}.`);
   const locks = activeLockouts(env.teamAbs);
   if (locks.length > 0) lines.push(`Active reviewer lockouts (governance-review §6): ${locks.map(describeLockout).join('; ')}.`);
   const circuit = openCircuit(env.projectAbs, now);

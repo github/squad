@@ -260,7 +260,7 @@ describe('Claude hook runtime (advisory)', () => {
     const ctx = runClaudeHook('SessionStart', { agent_type: 'squad', source: 'startup' }, env)!.hookSpecificOutput!.additionalContext;
     expect(ctx).toContain('squad-state 9.9.9');
     expect(ctx).toMatch(/Roster: dallas \(Backend Dev\).*ripley \(Lead\)/);
-    expect(ctx).toContain('API → dallas');
+    expect(ctx).toContain('"API" → dallas');
     expect(ctx).toMatch(/issue-42 \(author-locked\) on src\/auth\/\*\*: dallas locked out after ripley's REJECT/);
     expect(runClaudeHook('SessionStart', { source: 'startup' }, env)).toBeNull();
     expect(runClaudeHook('SubagentStart', { agent_type: 'squad' }, env)!.hookSpecificOutput!.hookEventName).toBe('SubagentStart');
