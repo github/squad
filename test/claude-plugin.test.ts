@@ -61,6 +61,20 @@ describe('Claude plugin: committed tree matches the SDK', () => {
     expect(stale, 'run: npm run build && node scripts/build-claude-plugin.mjs').toEqual([]);
   });
 
+  // A marketplace install clones the repository, so a generated file git ignores (bin/ once was) is missing there.
+  it('every file is tracked by git, and the POSIX launcher is executable', () => {
+    const git = spawnSync('git', ['ls-files', '-s', '--', CLAUDE_PLUGIN_SOURCE_DIR], { cwd: ROOT, encoding: 'utf8' });
+    expect(git.status, git.stderr).toBe(0);
+    const modes = new Map(
+      git.stdout.trim().split('\n').map((l) => {
+        const [meta, file] = l.split('\t');
+        return [path.posix.relative(CLAUDE_PLUGIN_SOURCE_DIR, file!), meta!.split(' ')[0]] as const;
+      }),
+    );
+    expect(files.map((f) => f.path).filter((p) => !modes.has(p))).toEqual([]);
+    expect(modes.get('bin/squad')).toBe('100755');
+  });
+
   it('marketplace.json matches and points at the plugin directory', () => {
     const market = fs.readFileSync(path.join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8').replace(/\r\n/g, '\n');
     expect(market).toBe(buildClaudeMarketplace(committedVersion));

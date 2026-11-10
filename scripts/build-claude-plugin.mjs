@@ -13,6 +13,7 @@
  * The plugin version is the Squad CLI version (packages/squad-cli/package.json) unless
  * --version <v> is given.
  */
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -68,6 +69,12 @@ const marketplaceStale = !fs.existsSync(marketplacePath) || fs.readFileSync(mark
 if (check) {
   const problems = [...changed.map((p) => `changed: ${p}`), ...stale.map((p) => `extra: ${p}`)];
   if (marketplaceStale) problems.push('changed: .claude-plugin/marketplace.json');
+  // Marketplace installs clone the repository: a generated file git ignores never reaches users.
+  const ignored = spawnSync('git', ['check-ignore', '--no-index', '--', ...files.map((f) => path.join(CLAUDE_PLUGIN_SOURCE_DIR, f.path))], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  for (const p of (ignored.stdout || '').split('\n').filter(Boolean)) problems.push(`git-ignored: ${p}`);
   if (problems.length > 0) {
     console.error(`build-claude-plugin: ${CLAUDE_PLUGIN_SOURCE_DIR} is stale; run node scripts/build-claude-plugin.mjs\n  ${problems.join('\n  ')}`);
     process.exit(1);
