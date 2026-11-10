@@ -110,7 +110,7 @@ describe('dashboard server', () => {
     expect(DASHBOARD_CSP).not.toContain('unsafe-inline');
     expect(page.headers['x-content-type-options']).toBe('nosniff');
     expect(page.body).toContain('<script src="/app.js" defer></script>');
-    expect(page.body).not.toMatch(/<script>|<style>|style="/);
+    expect(page.body).not.toMatch(/<script\b[^>]*>(?!<\/script>)|<style\b|style="/i);
     expect((await get(server.port, '/app.js')).headers['content-type']).toContain('javascript');
     expect((await get(server.port, '/../package.json')).status).toBe(404);
     expect((await get(server.port, '/server.ts')).status).toBe(404);

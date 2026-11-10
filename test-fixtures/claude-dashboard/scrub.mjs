@@ -1,7 +1,7 @@
 import fs from 'node:fs'; import path from 'node:path';
 const [src, sid, outDir] = process.argv.slice(2);
 const NEW = 'b7e1c0de-0000-4000-8000-000000000001';
-const reps = [[/\/private\/tmp\/claude-[0-9]+\/-private-tmp-squad-plugin-lab-live/g,'/tmp/claude/-work-demo'],[/-private-tmp-squad-plugin-lab-live/g,'-work-demo'],[/\/private\/tmp\/squad-plugin-lab\/live/g,'/work/demo'],[/\/tmp\/squad-plugin-lab\/live/g,'/work/demo'],[/\/Users\/[a-z0-9_-]+/gi,'/home/user'],[/[\w.+-]+@[\w-]+\.[\w.]+/g,'user@example.com'],[new RegExp(sid,'g'),NEW]];
+const reps = [[/\/private\/tmp\/claude-[0-9]+\/-private-tmp-squad-plugin-lab-live/g,'/tmp/claude/-work-demo'],[/-private-tmp-squad-plugin-lab-live/g,'-work-demo'],[/\/private\/tmp\/squad-plugin-lab\/live/g,'/work/demo'],[/\/tmp\/squad-plugin-lab\/live/g,'/work/demo'],[/\/Users\/[a-z0-9_-]+/gi,'/home/user'],[/[\w.+-]+@[\w-]+\.[\w.]+/g,'user@example.com'],[new RegExp(sid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),NEW]];
 const clip = (s,n=400)=>{ s=String(s); for (const [r,v] of reps) s=s.replace(r,v); return s.length>n? s.slice(0,n)+'…':s; };
 const deep = (v)=> typeof v==='string'? clip(v,600) : Array.isArray(v)? v.map(deep) : v&&typeof v==='object'? Object.fromEntries(Object.entries(v).map(([k,x])=>[k,deep(x)])) : v;
 function content(c){ if (typeof c==='string') return clip(c,1500); if(!Array.isArray(c)) return c;
