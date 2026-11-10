@@ -37,12 +37,40 @@ const SECRET_NAME =
 /** `name: value` / `name=value`; the value stops at whitespace, quotes and `&`, so surrounding syntax survives. */
 const INLINE_SECRET = new RegExp(`(\\b${SECRET_NAME}\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s"'&]+)`, 'gi');
 const BEARER = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+/**
+ * Secrets with no name in front of them (positional arguments such as `gh auth login --with-token ghp_…`):
+ * well-known vendor token formats and JWTs. Plain hex (git SHAs, checksums), UUIDs and paths are deliberately
+ * left readable, since the approver needs to see what they're approving.
+ */
+const BARE_TOKEN = new RegExp(
+  [
+    'gh[pousr]_[A-Za-z0-9]{20,}',
+    'github_pat_[A-Za-z0-9_]{20,}',
+    'sk-(?:ant-|proj-|live-|test-)?[A-Za-z0-9_-]{16,}',
+    'xox[abposr]-[A-Za-z0-9-]{10,}',
+    '(?:AKIA|ASIA)[0-9A-Z]{16}',
+    'AIza[0-9A-Za-z_-]{30,}',
+    'glpat-[A-Za-z0-9_-]{16,}',
+    'npm_[A-Za-z0-9]{30,}',
+    'eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}',
+  ].map((p) => `(?<![A-Za-z0-9_-])${p}`).join('|'),
+  'g',
+);
+/** A long opaque base64-looking token: 40+ characters with upper and lower case and a digit, no path separator. */
+const OPAQUE = /(?<![A-Za-z0-9+/=_-])(?=[A-Za-z0-9+=_-]*[a-z])(?=[A-Za-z0-9+=_-]*[A-Z])(?=[A-Za-z0-9+=_-]*\d)[A-Za-z0-9+=_-]{40,}(?![A-Za-z0-9+/=_-])/g;
+/** The password in `scheme://user:password@host`. */
+const URL_PASSWORD = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi;
 const MAX_STRING = 1000;
 
-/** Mask inline credentials (`token=…`, `Authorization: Bearer …`) in free text. */
+/** Mask credentials in free text: named (`token=…`, `X-API-Key: …`), bearer/basic, URL passwords and bare tokens. */
 export function redactText(text: string): string {
   // Bearer/basic tokens first, so `Authorization: Bearer <token>` loses the token rather than the scheme word.
-  return text.replace(BEARER, '$1 [redacted]').replace(INLINE_SECRET, (m, key: string, value: string) => (value === 'Bearer' || value === 'Basic' || value.startsWith('[redacted]') ? m : `${key}[redacted]`));
+  return text
+    .replace(URL_PASSWORD, '$1[redacted]@')
+    .replace(BARE_TOKEN, '[redacted]')
+    .replace(OPAQUE, '[redacted]')
+    .replace(BEARER, '$1 [redacted]')
+    .replace(INLINE_SECRET, (m, key: string, value: string) => (value === 'Bearer' || value === 'Basic' || value.startsWith('[redacted]') ? m : `${key}[redacted]`));
 }
 
 /** A copy of an approval payload safe to record: secret-looking keys masked, strings truncated, depth bounded. */

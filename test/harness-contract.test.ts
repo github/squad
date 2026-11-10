@@ -117,6 +117,29 @@ describe('approval record redaction (TurnApprovals)', () => {
     expect(redactText('https://api.example.com?token=s3cr3t&page=2')).toBe('https://api.example.com?token=[redacted]&page=2');
   });
 
+  it('masks bare token-shaped secrets and URL passwords', async () => {
+    const { redactText } = await import('../packages/squad-sdk/src/backend/index.js');
+    expect(redactText('gh auth login --with-token ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8')).toBe('gh auth login --with-token [redacted]');
+    expect(redactText('curl https://bob:hunter2pass@api.example.com/v1')).toBe('curl https://bob:[redacted]@api.example.com/v1');
+    expect(redactText('node deploy.js sk-ant-api03-AbCdEfGhIjKlMnOpQrSt')).toBe('node deploy.js [redacted]');
+    expect(redactText('aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE')).toBe('aws configure set aws_access_key_id [redacted]');
+    expect(redactText('call --jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U')).toBe('call --jwt [redacted]');
+    expect(redactText('slack-notify xoxb-1234567890-abcdefghij')).toBe('slack-notify [redacted]');
+    expect(redactText('run --secret Zm9vYmFyQmF6UXV4MTIzNDU2Nzg5MEFCQ0RFRkdISUpLTE1O')).toBe('run --secret [redacted]');
+  });
+
+  it('keeps hashes, ids and paths readable for the approver', async () => {
+    const { redactText } = await import('../packages/squad-sdk/src/backend/index.js');
+    for (const s of [
+      'git checkout 9273a84c84ff51eb990d909b96c2e96b4c647c5a',
+      'sha256sum: 5f2b4c1e9a7d3f6b8e0c2a4d6f8b0e2c4a6d8f0b2e4c6a8d0f2b4e6c8a0d2f4b',
+      'rm -rf node_modules/@anthropic-ai/claude-agent-sdk/dist/ConfigurationManagerFactoryImplementation.js',
+      'id 3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+      'npm install @github/copilot-sdk@1.0.19',
+      'git push origin squad/2441-claude-agent-sdk-harness',
+    ]) expect(redactText(s)).toBe(s);
+  });
+
   it('leaves look-alike words alone', async () => {
     const { redactText } = await import('../packages/squad-sdk/src/backend/index.js');
     for (const s of ['git log --author=brady --since=1.week', 'mkdir -p build/out', 'python tokenizer.py --input a.txt', 'npm test -- --run', 'session: started']) {
