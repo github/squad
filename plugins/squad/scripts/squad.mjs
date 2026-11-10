@@ -5,7 +5,8 @@
 //   1. SQUAD_CLI (a command, or a .js entry run with this Node)
 //   2. the project's own install: node_modules/@bradygaster/squad-cli
 //   3. a `squad` on PATH (never this plugin's own bin/)
-//   4. npx -y @bradygaster/squad-cli@<this plugin's version>
+//   4. npx -y @bradygaster/squad-cli@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
+//      code, so it is opt-in. Without it, the launcher fails with install instructions.
 // 2 and 3 are skipped when their version is older than this plugin's: an older CLI lacks commands the
 // plugin calls (`dashboard`, `hook --plugin`). The version is read from package.json, BUNDLE-INFO.json
 // (standalone bundles), or an embedded node_modules. A CLI whose version cannot be read is used as found.
@@ -153,7 +154,12 @@ function resolveCli() {
   if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
   if (global && recentEnough(global, version)) return [global, []];
-  return [win ? 'npx.cmd' : 'npx', ['-y', version ? `${PKG}@${version}` : PKG]];
+  const want = version ? `${PKG}@${version}` : PKG;
+  if (/^(1|true|yes)$/i.test(process.env.SQUAD_ALLOW_NPX || '')) return [win ? 'npx.cmd' : 'npx', ['-y', want]];
+  throw new Error(
+    `no Squad CLI${version ? ` ${version} or newer` : ''} found (looked at SQUAD_CLI, this project's node_modules and PATH). ` +
+      `Install it with: npm install -g ${want}. Or set SQUAD_ALLOW_NPX=1 to let the plugin download and run it with npx.`,
+  );
 }
 
 // npm's .cmd shims cannot safely forward arbitrary argv through cmd.exe. Run their JS entry instead.

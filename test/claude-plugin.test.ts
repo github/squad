@@ -226,11 +226,25 @@ describe('Claude plugin: launcher', () => {
       fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
       fs.symlinkSync(path.join(pkg, 'bin', 'squad'), path.join(bin, 'squad'));
     }
-    const go = (env: Record<string, string> = {}) => run({ PATH: `${bin}:/usr/bin:/bin`, ...env }, dir).stdout.trim();
+    const go = (env: Record<string, string> = {}) => run({ PATH: `${bin}:/usr/bin:/bin`, SQUAD_ALLOW_NPX: '1', ...env }, dir).stdout.trim();
 
     it('falls through an older squad on PATH to npx of the plugin version', () => {
       globalCli('2.0.0-preview.3');
       expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
+    });
+
+    it('runs npx only when SQUAD_ALLOW_NPX is set; otherwise fails with install instructions', () => {
+      globalCli('2.0.0-preview.3');
+      for (const allow of [undefined, '0', '']) {
+        const env: Record<string, string> = { PATH: `${bin}:/usr/bin:/bin` };
+        if (allow !== undefined) env['SQUAD_ALLOW_NPX'] = allow;
+        const r = run(env, dir);
+        expect(r.status, String(allow)).toBe(1);
+        expect(r.stdout).toBe(''); // npx never ran
+        expect(r.stderr).toContain(`npm install -g @bradygaster/squad-cli@${committedVersion}`);
+        expect(r.stderr).toContain('SQUAD_ALLOW_NPX=1');
+      }
+      for (const allow of ['1', 'true']) expect(go({ SQUAD_ALLOW_NPX: allow })).toMatch(/^npx:/);
     });
 
     it('uses a squad on PATH at or past the plugin version, or one whose version is unknown', () => {

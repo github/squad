@@ -58,7 +58,7 @@ export function claudePluginCoordinatorInstructions(): string {
     PROJECT_MCP_SENTENCE,
     `The \`squad_state\` MCP tools come from the Squad Claude Code plugin as \`${CLAUDE_PLUGIN_MCP_PREFIX}*\`.
 
-**Running from the Squad plugin.** This coordinator, its \`squad-coordinator-*\` skills and Squad's template skills come from the \`${CLAUDE_PLUGIN_NAME}\` plugin, so their names carry the plugin namespace: load a skill named \`<skill>\` here as \`${CLAUDE_PLUGIN_NAME}:<skill>\`. The \`squad\` CLI is on the Bash PATH (the plugin's launcher runs the project's or a globally installed Squad CLI, or the plugin's pinned version through \`npx\`). If the repository has no \`.squad/\` directory at all, run \`squad init --client claude --claude-plugin\` with Bash before Init Mode. Member subagents are per repository: after casting a member or changing a charter, run \`squad upgrade\` so \`.claude/agents/<member>.md\` is regenerated. Claude Code loads new subagent files in the next session; until then, spawn a general-purpose subagent with the member's charter inlined.`,
+**Running from the Squad plugin.** This coordinator, its \`squad-coordinator-*\` skills and Squad's template skills come from the \`${CLAUDE_PLUGIN_NAME}\` plugin, so their names carry the plugin namespace: load a skill named \`<skill>\` here as \`${CLAUDE_PLUGIN_NAME}:<skill>\`. The \`squad\` CLI is on the Bash PATH (the plugin's launcher runs the project's or a globally installed Squad CLI, or the plugin's pinned version through \`npx\` when the user set \`SQUAD_ALLOW_NPX=1\`). If the repository has no \`.squad/\` directory at all, run \`squad init --client claude --claude-plugin\` with Bash before Init Mode. Member subagents are per repository: after casting a member or changing a charter, run \`squad upgrade\` so \`.claude/agents/<member>.md\` is regenerated. Claude Code loads new subagent files in the next session; until then, spawn a general-purpose subagent with the member's charter inlined.`,
   );
 }
 
@@ -110,7 +110,8 @@ export const CLAUDE_PLUGIN_LAUNCHER = `#!/usr/bin/env node
 //   1. SQUAD_CLI (a command, or a .js entry run with this Node)
 //   2. the project's own install: node_modules/${CLI_PACKAGE}
 //   3. a \`squad\` on PATH (never this plugin's own bin/)
-//   4. npx -y ${CLI_PACKAGE}@<this plugin's version>
+//   4. npx -y ${CLI_PACKAGE}@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
+//      code, so it is opt-in. Without it, the launcher fails with install instructions.
 // 2 and 3 are skipped when their version is older than this plugin's: an older CLI lacks commands the
 // plugin calls (\`dashboard\`, \`hook --plugin\`). The version is read from package.json, BUNDLE-INFO.json
 // (standalone bundles), or an embedded node_modules. A CLI whose version cannot be read is used as found.
@@ -258,7 +259,12 @@ function resolveCli() {
   if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
   if (global && recentEnough(global, version)) return [global, []];
-  return [win ? 'npx.cmd' : 'npx', ['-y', version ? \`\${PKG}@\${version}\` : PKG]];
+  const want = version ? \`\${PKG}@\${version}\` : PKG;
+  if (/^(1|true|yes)$/i.test(process.env.SQUAD_ALLOW_NPX || '')) return [win ? 'npx.cmd' : 'npx', ['-y', want]];
+  throw new Error(
+    \`no Squad CLI\${version ? \` \${version} or newer\` : ''} found (looked at SQUAD_CLI, this project's node_modules and PATH). \` +
+      \`Install it with: npm install -g \${want}. Or set SQUAD_ALLOW_NPX=1 to let the plugin download and run it with npx.\`,
+  );
 }
 
 // npm's .cmd shims cannot safely forward arbitrary argv through cmd.exe. Run their JS entry instead.
@@ -421,7 +427,7 @@ Version ${version}. Squad ${REPOSITORY}.
 - The coordinator's on-demand skills and Squad's template skills (\`/${CLAUDE_PLUGIN_NAME}:<skill>\`).
 - Slash commands: ${COMMANDS.map((c) => `\`/${CLAUDE_PLUGIN_NAME}:${c.name}\``).join(', ')}.
 - Squad's advisory governance hooks. They act only when \`.squad/config.json\` has \`"claudeHooks": "advisory"\`.
-- \`squad\` on the Bash PATH. The launcher runs, in order: \`SQUAD_CLI\`, the project's \`node_modules/${CLI_PACKAGE}\`, a \`squad\` on PATH, or \`npx -y ${CLI_PACKAGE}@${version}\`.
+- \`squad\` on the Bash PATH. The launcher runs, in order: \`SQUAD_CLI\`, the project's \`node_modules/${CLI_PACKAGE}\`, or a \`squad\` on PATH. With none of them it fails and says how to install the CLI; set \`SQUAD_ALLOW_NPX=1\` to let it run \`npx -y ${CLI_PACKAGE}@${version}\` instead.
 
 ## Install
 

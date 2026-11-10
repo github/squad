@@ -13,7 +13,7 @@ Version 2.0.0-preview.4. Squad https://github.com/github/squad.
 - The coordinator's on-demand skills and Squad's template skills (`/squad:<skill>`).
 - Slash commands: `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status`, `/squad:dashboard`.
 - Squad's advisory governance hooks. They act only when `.squad/config.json` has `"claudeHooks": "advisory"`.
-- `squad` on the Bash PATH. The launcher runs, in order: `SQUAD_CLI`, the project's `node_modules/@bradygaster/squad-cli`, a `squad` on PATH, or `npx -y @bradygaster/squad-cli@2.0.0-preview.4`.
+- `squad` on the Bash PATH. The launcher runs, in order: `SQUAD_CLI`, the project's `node_modules/@bradygaster/squad-cli`, or a `squad` on PATH. With none of them it fails and says how to install the CLI; set `SQUAD_ALLOW_NPX=1` to let it run `npx -y @bradygaster/squad-cli@2.0.0-preview.4` instead.
 
 ## Install
 
