@@ -234,9 +234,9 @@ Both route approvals through one shared queue (`TurnApprovals`): requests are
 hash-bound (sha256 of the canonical action), offered one at a time because the
 broker holds one pending approval per turn, and a deny ends the turn.
 Approvals are scoped to their conversation, since runtime tool-call ids are
-not globally unique. The broker's approval record carries a short action
-summary and a redacted payload (secret-looking keys and inline credentials
-masked, long strings truncated); the hash still covers the full action.
+not globally unique. The broker's approval record carries only a short,
+redacted action summary and the hash: the tool input itself is never sent as
+`payload`, so it stays out of backend state. The hash covers the full input.
 
 Both also share one turn lifecycle (`TurnHarness`). Concurrent deliveries of
 an operation share one acceptance, and a failed start forgets it so the retry
@@ -264,7 +264,11 @@ followed by `session.idle` (completed) or `session.error` (failed); only
 main-agent `assistant.message` content enters the transcript.
 `onPermissionRequest` goes through the same queue, with `toolCallId` as the
 `approvalId`; approve answers `approve-once`, and deny answers `reject` and
-aborts the turn. Because `@github/copilot-sdk` is always installed, the MCP
+aborts the turn. The harness never answers with a remembered approval, but the
+Copilot runtime can keep "approve permanently" decisions (URL prompts) in its
+config directory; the `configDirectory` option points sessions at a
+harness-only directory so approvals made in the user's own Copilot CLI don't
+apply. Because `@github/copilot-sdk` is always installed, the MCP
 bridge registers this harness only when `SQUAD_BACKEND_HARNESSES` lists
 `copilot-sdk`.
 

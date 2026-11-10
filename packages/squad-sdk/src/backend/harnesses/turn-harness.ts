@@ -11,7 +11,13 @@
  *   previous one has fully stopped, including an in-flight interrupt (so late events from an aborted turn can't
  *   be attributed to the next one).
  * - **Conversation-scoped approvals** through {@link TurnApprovals}.
+ * - **Bounded memory** for long-running bridges: a finished turn is dropped (a late cancel or decision for it is a
+ *   no-op anyway), idle conversation tails are dropped, and the record of accepted deliveries keeps the most
+ *   recent {@link MAX_ACCEPTED}, which is what makes redelivery of a finished turn a no-op.
  */
+
+/** How many accepted delivery ids are remembered for deduplication. */
+export const MAX_ACCEPTED = 10_000;
 import type {
   ApprovalResponse,
   HarnessAdapter,
@@ -93,6 +99,7 @@ export abstract class TurnHarness implements HarnessAdapter {
       this.schedule(run, submission);
     })();
     this.accepted.set(key, acceptance);
+    while (this.accepted.size > MAX_ACCEPTED) this.accepted.delete(this.accepted.keys().next().value!);
     return acceptance;
   }
 
@@ -112,9 +119,14 @@ export abstract class TurnHarness implements HarnessAdapter {
     // Unknown or already decided in this conversation: a redelivered decision is a no-op.
   }
 
-  /** Waits for a submitted turn to finish (tests and orderly shutdown). */
+  /** Waits for a submitted turn to finish (tests and orderly shutdown); resolves at once for a finished turn. */
   async settled(conversationId: string, runId: string, seq: number): Promise<void> {
     await this.runs.get(this.runKey(conversationId, runId, seq))?.done.catch(() => undefined);
+  }
+
+  /** Turns currently held in memory (diagnostics and tests). */
+  get activeTurns(): number {
+    return this.runs.size;
   }
 
   protected emit(run: TurnRun, event: Record<string, unknown>): void {
@@ -167,7 +179,12 @@ export abstract class TurnHarness implements HarnessAdapter {
       .join('\n\n');
     const previous = this.tails.get(run.conversationId) ?? Promise.resolve();
     run.done = previous.then(() => this.execute(run, prompt));
-    this.tails.set(run.conversationId, run.done.catch(() => undefined));
+    const tail = run.done.catch(() => undefined).then(() => {
+      // Finished: forget the run, and the conversation's tail if no later turn was queued behind it.
+      this.runs.delete(this.runKey(run.conversationId, run.runId, run.seq));
+      if (this.tails.get(run.conversationId) === tail) this.tails.delete(run.conversationId);
+    });
+    this.tails.set(run.conversationId, tail);
   }
 
   private async execute(run: TurnRun, prompt: string): Promise<void> {

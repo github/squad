@@ -47,6 +47,7 @@ export interface CopilotSessionLike {
 export interface CopilotSessionConfig {
   workingDirectory?: string;
   model?: string;
+  configDirectory?: string;
   onPermissionRequest: (request: CopilotPermissionRequest, invocation: { sessionId: string }) => Promise<CopilotPermissionResult>;
 }
 
@@ -60,6 +61,13 @@ export interface CopilotSdkHarnessOptions {
   /** Working directory for every session (the repository root). */
   cwd: string;
   model?: string;
+  /**
+   * Copilot config directory for harness sessions. The runtime can remember approvals across sessions there
+   * ("approve permanently", URL prompts only), so a session sharing the user's default directory may fetch a
+   * URL the user once approved in their own Copilot CLI without the broker being asked. Point this at a
+   * harness-only directory to rule that out. The harness itself only ever answers `approve-once`.
+   */
+  configDirectory?: string;
   /** Builds the client. Defaults to `new CopilotClient({ workingDirectory: cwd })` from `@github/copilot-sdk`. */
   createClient?: () => Promise<CopilotClientLike>;
 }
@@ -152,6 +160,7 @@ export class CopilotSdkHarness extends TurnHarness {
     return {
       workingDirectory: this.options.cwd,
       ...(this.options.model ? { model: this.options.model } : {}),
+      ...(this.options.configDirectory ? { configDirectory: this.options.configDirectory } : {}),
       onPermissionRequest: async (request) => {
         const run = this.active.get(conversationId);
         if (!run) return { kind: 'reject', feedback: 'No Squad turn is running' };

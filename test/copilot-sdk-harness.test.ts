@@ -150,6 +150,27 @@ describe('copilot-sdk harness', () => {
     await expect(harness.submit({ conversationId: 'c', runId: 'r1', seq: 1, messages: [] })).rejects.toThrow(/could not start the Copilot client: not signed in/);
   });
 
+  it('passes a harness-only configDirectory to every session, and none by default', async () => {
+    const seen: Array<string | undefined> = [];
+    const make = (configDirectory?: string) => new CopilotSdkHarness({
+      cwd: '.', ...(configDirectory ? { configDirectory } : {}),
+      createClient: async () => ({
+        async start() {},
+        async resumeSession(_id, config) { return this.createSession(config); },
+        async createSession(config) {
+          seen.push(config.configDirectory);
+          let idle: (e: CopilotSessionEvent) => void = () => undefined;
+          return { sessionId: 's', on(h) { idle = h; return () => undefined; }, async abort() {}, async send() { setTimeout(() => idle({ type: 'session.idle' }), 0); return 'm'; } };
+        },
+      }),
+    });
+    for (const h of [make('/tmp/squad-copilot-harness'), make()]) {
+      await h.submit({ conversationId: 'c', runId: 'r1', seq: 1, messages: [{ runId: 'r1', seq: 1, role: 'user', content: 'x' }] });
+      await h.settled('c', 'r1', 1);
+    }
+    expect(seen).toEqual(['/tmp/squad-copilot-harness', undefined]);
+  });
+
   it('describes itself for capability negotiation', () => {
     expect(new CopilotSdkHarness({ cwd: '.' }).describe()).toMatchObject({ id: 'copilot-sdk', capabilities: { approvals: true, extensionNamespaces: ['x-copilot'] } });
   });

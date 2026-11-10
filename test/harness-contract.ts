@@ -180,18 +180,32 @@ export function harnessContract(name: string, driver: HarnessContractDriver): vo
       await settled('r1', 1);
     });
 
-    it('records a redacted approval while the hash still binds the full action', async () => {
+    it('records only a redacted summary (no payload) while the hash binds the full action', async () => {
       const command = 'curl -H "Authorization: Bearer sk-live-0123456789abcdef" https://api.example.com?token=s3cr3t';
       const { backend, send, settled } = await setup({ reply: 'ok', tools: [{ name: 'Bash', input: { command, apiKey: 'AKIA-SECRET' } }] });
       await send('r1', 1);
       await until(async () => (await backend.getApprovals('k')).length === 1);
       const [a] = await backend.getApprovals('k');
-      const recorded = JSON.stringify({ action: a!.action, payload: a!.payload });
+      expect(a!.payload).toBeUndefined(); // the raw input never leaves the harness
+      const recorded = JSON.stringify(a);
       for (const secret of ['sk-live-0123456789abcdef', 's3cr3t', 'AKIA-SECRET']) expect(recorded).not.toContain(secret);
       expect(a!.action).toContain('curl');
       await backend.respondApproval('k', { approvalId: a!.approvalId, hash: a!.hash, decision: 'approve' });
       await settled('r1', 1);
       expect((await backend.getTurn('k', 1)).state).toBe('completed');
+    });
+
+    it('forgets finished turns, while a late redelivery of one stays a no-op', async () => {
+      const { harness, send, settled } = await setup({ reply: 'done' });
+      await send('r1', 1);
+      await settled('r1', 1);
+      await new Promise((r) => setTimeout(r, 0));
+      expect((harness as unknown as { activeTurns: number }).activeTurns).toBe(0);
+      await harness.submit({ conversationId: 'k', runId: 'r1', seq: 1, operationId: 'k:r1:1', messages: [] });
+      await harness.submit({ conversationId: 'k', runId: 'r1', seq: 1, messages: [] });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(driver.dispatches(harness)).toBe(1);
+      await harness.cancel('k', 'r1', 1); // late cancel of a finished turn: no-op
     });
   });
 }

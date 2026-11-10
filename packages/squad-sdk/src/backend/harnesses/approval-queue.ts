@@ -6,9 +6,10 @@
  * response with a different hash never resolves it. A deny ends the turn, as the broker marks it
  * `cancelled`: the call and every queued call are denied and `onDeny` fires so the harness can stop.
  *
- * What reaches the broker's approval record is minimized: the payload is redacted (secret-looking keys and
- * inline credentials masked, long strings truncated) and the action is a short summary. The hash is still taken
- * over the full, unredacted action, so a decision stays bound to exactly what will run.
+ * What reaches the broker's approval record is minimal: the approval id, a short redacted summary of the action,
+ * and the hash. The tool input itself is never sent (no `payload`), so no redaction pattern has to be complete for
+ * a secret in it to stay out of backend state. The hash is taken over the full input, so a decision stays bound to
+ * exactly what will run.
  */
 import { createHash } from 'node:crypto';
 import type { ApprovalResponse, HarnessApprovalRequest } from '../types.js';
@@ -175,12 +176,7 @@ export class TurnApprovals {
     const next = this.queue[0];
     if (!next) return;
     next.offered = true;
-    this.offer({
-      approvalId: next.approvalId,
-      turnSeq: this.turnSeq,
-      action: next.action,
-      hash: next.hash,
-      payload: redactApprovalPayload(next.payload),
-    });
+    // No payload: the raw input stays in this process; the hash binds the decision to it.
+    this.offer({ approvalId: next.approvalId, turnSeq: this.turnSeq, action: next.action, hash: next.hash });
   }
 }
