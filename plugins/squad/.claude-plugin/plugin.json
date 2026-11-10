@@ -1,0 +1,19 @@
+{
+  "name": "squad",
+  "version": "2.0.0-preview.4",
+  "description": "Squad for Claude Code: a coordinator that routes work to a team of specialist subagents, with shared team state in the squad_state MCP server.",
+  "author": {
+    "name": "Brady Gaster",
+    "url": "https://github.com/bradygaster"
+  },
+  "homepage": "https://github.com/github/squad",
+  "repository": "https://github.com/github/squad",
+  "license": "MIT",
+  "keywords": [
+    "squad",
+    "multi-agent",
+    "coordinator",
+    "subagents",
+    "mcp"
+  ]
+}
