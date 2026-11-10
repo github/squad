@@ -9,7 +9,7 @@
  *
  * If this fails after an intended change: npm run build && node scripts/build-claude-plugin.mjs
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -109,7 +109,14 @@ describe('Claude plugin: contents', () => {
     for (const c of ['ralph', 'cast', 'ceremony', 'status', 'dashboard']) {
       expect(files.has(`commands/${c}.md`), c).toBe(true);
     }
-    expect(files.get('commands/dashboard.md')).toContain('allowed-tools: Bash(squad dashboard:*)');
+    expect(files.get('commands/dashboard.md')).toContain('allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/squad" dashboard:*)');
+    // Commands go through the plugin's own launcher: a bare `squad` can be an older global CLI earlier on PATH.
+    for (const [p, c] of files) {
+      if (!p.startsWith('commands/')) continue;
+      // The not-the-coordinator line tells the user what to run in their own terminal.
+      const forBash = c.split('\n').filter((l) => !l.startsWith('If you are not the Squad coordinator'));
+      expect(forBash.join('\n').match(/`squad [a-z]/g) ?? [], p).toEqual([]);
+    }
     const mcp = JSON.parse(files.get('.mcp.json')!);
     expect(mcp.mcpServers.squad_state).toEqual({
       command: 'node',
@@ -187,5 +194,73 @@ describe('Claude plugin: launcher', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // Claude Code appends the plugin's bin/ after the user's PATH, so an older global CLI must not win.
+  describe.skipIf(process.platform === 'win32')('skips a CLI older than the plugin', () => {
+    let dir: string;
+    let bin: string;
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-plugin-'));
+      bin = path.join(dir, 'bin');
+      fs.mkdirSync(bin);
+      stub(path.join(bin, 'npx'), 'npx');
+    });
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    function stub(file: string, label: string) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `#!/bin/sh\necho "${label}:$*"\n`, { mode: 0o755 });
+    }
+    /** A global install: <prefix>/lib/node_modules/<pkg>/bin/squad, linked from bin/squad. */
+    function globalCli(version: string) {
+      const pkg = path.join(dir, 'lib', 'node_modules', '@bradygaster', 'squad-cli');
+      stub(path.join(pkg, 'bin', 'squad'), `global@${version}`);
+      fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
+      fs.symlinkSync(path.join(pkg, 'bin', 'squad'), path.join(bin, 'squad'));
+    }
+    const go = (env: Record<string, string> = {}) => run({ PATH: `${bin}:/usr/bin:/bin`, ...env }, dir).stdout.trim();
+
+    it('falls through an older global squad to npx of the plugin version', () => {
+      globalCli('2.0.0-preview.3');
+      expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
+    });
+
+    it('uses a global squad at or past the plugin version, or one whose version is unknown', () => {
+      globalCli(committedVersion);
+      expect(go()).toBe(`global@${committedVersion}:one two words`);
+      fs.rmSync(path.join(bin, 'squad'));
+      stub(path.join(bin, 'squad'), 'standalone');
+      expect(go()).toBe('standalone:one two words');
+    });
+
+    it('skips an older standalone bundle (Homebrew cask) whose BUNDLE-INFO.json is outdated', () => {
+      // Layout: <prefix>/Caskroom/squad/<ver>/squad-darwin-arm64/squad + BUNDLE-INFO.json.
+      const bundleDir = path.join(dir, 'Caskroom', 'squad', '2.0.0-preview.3', 'squad-darwin-arm64');
+      stub(path.join(bundleDir, 'squad'), `bundle@preview.3`);
+      fs.writeFileSync(path.join(bundleDir, 'BUNDLE-INFO.json'), JSON.stringify({ squadVersion: '2.0.0-preview.3' }));
+      fs.symlinkSync(path.join(bundleDir, 'squad'), path.join(bin, 'squad'));
+      expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
+      // A bundle at or past the plugin version is used.
+      fs.writeFileSync(path.join(bundleDir, 'BUNDLE-INFO.json'), JSON.stringify({ squadVersion: committedVersion }));
+      expect(go()).toBe(`bundle@preview.3:one two words`);
+    });
+
+    it("skips an older project install, and orders prereleases by semver", () => {
+      const pkg = path.join(dir, 'node_modules', '@bradygaster', 'squad-cli');
+      fs.mkdirSync(path.join(pkg, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(pkg, 'dist', 'cli-entry.js'), 'console.log("local")\n');
+      const local = (version: string) => {
+        fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
+        return go({ CLAUDE_PROJECT_DIR: dir });
+      };
+      const [core, pre = ''] = committedVersion.split('-');
+      expect(local('1.1.0')).toMatch(/^npx:/);
+      if (pre) {
+        expect(local(`${core}-${pre.replace(/\d+$/, (n) => String(Number(n) + 1))}`)).toBe('local');
+        expect(local(core!)).toBe('local'); // a release sorts after its prereleases
+      }
+      expect(local('99.0.0')).toBe('local');
+    });
   });
 });

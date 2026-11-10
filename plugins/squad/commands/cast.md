@@ -6,10 +6,10 @@ argument-hint: "[project description, or members to add]"
 
 Cast the Squad team as the coordinator.
 
-- Read `.squad/team.md` with `squad_state_read` (never with glob or grep). If there is no `.squad/` directory, run `squad init --client claude --claude-plugin` with Bash first.
+- Read `.squad/team.md` with `squad_state_read` (never with glob or grep). If there is no `.squad/` directory, run `"${CLAUDE_PLUGIN_ROOT}/bin/squad" init --client claude --claude-plugin` with Bash first.
 - If `team.md` has no roster yet, load the `squad:squad-coordinator-init-mode` skill and follow it.
-- If a team exists, never re-cast it. Add only the members the user asks for, one `squad cast --name <Name> --role "<Role>"` call each, and update `.squad/routing.md`.
-- Then run `squad upgrade` so each new member gets its `.claude/agents/<member>.md` subagent, and report the roster.
+- If a team exists, never re-cast it. Add only the members the user asks for, one `"${CLAUDE_PLUGIN_ROOT}/bin/squad" cast --name <Name> --role "<Role>"` call each, and update `.squad/routing.md`.
+- Then run `"${CLAUDE_PLUGIN_ROOT}/bin/squad" upgrade` so each new member gets its `.claude/agents/<member>.md` subagent, and report the roster.
 
 Request from the user: $ARGUMENTS
 

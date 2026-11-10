@@ -49,7 +49,9 @@ Requires Node.js 22.5 or later on PATH.
 | Skills | The coordinator's on-demand skills and Squad's template skills, as `/squad:<skill>` |
 | Slash commands | `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status`, `/squad:dashboard` |
 | Hooks | Squad's advisory governance hooks; they act only when `.squad/config.json` has `"claudeHooks": "advisory"` |
-| `squad` on PATH | Inside Claude Code's Bash tool. The launcher uses, in order: `SQUAD_CLI`, the project's `node_modules/@bradygaster/squad-cli`, a `squad` on PATH, or `npx` of the CLI version the plugin was built with |
+| Squad CLI launcher | The plugin's slash commands, hooks and MCP server run the Squad CLI through the plugin's own launcher. It uses, in order: `SQUAD_CLI`, the project's `node_modules/@bradygaster/squad-cli`, a `squad` on PATH, or `npx` of the CLI version the plugin was built with. It skips a project or PATH install older than the plugin, since an older CLI lacks commands the plugin calls |
+
+Claude Code also puts the launcher on the Bash tool's PATH as `squad`, but after your own PATH entries: if you have an older global `squad`, a plain `squad` in Bash runs that one. Update it with `npm install -g @bradygaster/squad-cli`.
 
 Plugin updates arrive through `claude plugin update squad@squad` (or Claude Code's automatic marketplace updates); the per-repository files follow `squad upgrade` as before.
 

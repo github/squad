@@ -5,10 +5,10 @@ description: "Show the Squad team status: roster, backend health, decisions inbo
 
 Report this repository's Squad status. Do not change any file.
 
-1. Run `squad status` with Bash (which squad is active and why).
+1. Run `"${CLAUDE_PLUGIN_ROOT}/bin/squad" status` with Bash (which squad is active and why).
 2. Call `squad_state_health` (`mcp__plugin_squad_squad_state__squad_state_health`) and report the backend, team directory and version.
 3. Read `.squad/team.md` with `squad_state_read` and list the members and roles.
 4. Count the entries in `decisions/inbox` with `squad_state_list`.
-5. Run `squad lockout status` with Bash and report active reviewer lockouts.
+5. Run `"${CLAUDE_PLUGIN_ROOT}/bin/squad" lockout status` with Bash and report active reviewer lockouts.
 
 Keep the report short: one line per item, and say plainly when something is missing.

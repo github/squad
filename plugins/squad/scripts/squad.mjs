@@ -6,6 +6,9 @@
 //   2. the project's own install: node_modules/@bradygaster/squad-cli
 //   3. a `squad` on PATH (never this plugin's own bin/)
 //   4. npx -y @bradygaster/squad-cli@<this plugin's version>
+// 2 and 3 are skipped when their version is older than this plugin's: an older CLI lacks commands the
+// plugin calls (`dashboard`, `hook --plugin`). The version is read from package.json, BUNDLE-INFO.json
+// (standalone bundles), or an embedded node_modules. A CLI whose version cannot be read is used as found.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +25,70 @@ function pluginVersion() {
   } catch {
     return undefined;
   }
+}
+
+/** The version of the Squad CLI behind `entry` (a script, symlink or npm shim), if it can be found. */
+function cliVersion(entry) {
+  try {
+    let dir = path.dirname(fs.realpathSync(entry));
+    for (let i = 0; i < 8; i++) {
+      // npm's Windows shims sit beside node_modules rather than linking into it.
+      for (const file of [path.join(dir, 'package.json'), path.join(dir, 'node_modules', ...PKG.split('/'), 'package.json')]) {
+        if (!fs.existsSync(file)) continue;
+        const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (pkg.name === PKG) return pkg.version;
+      }
+      // Standalone bundle: BUNDLE-INFO.json or app/node_modules/<pkg>/package.json.
+      try {
+        const info = path.join(dir, 'BUNDLE-INFO.json');
+        if (fs.existsSync(info)) {
+          const v = JSON.parse(fs.readFileSync(info, 'utf8')).squadVersion;
+          if (v) return v;
+        }
+      } catch { /* skip */ }
+      try {
+        const nested = path.join(dir, 'app', 'node_modules', ...PKG.split('/'), 'package.json');
+        if (fs.existsSync(nested)) {
+          const pkg = JSON.parse(fs.readFileSync(nested, 'utf8'));
+          if (pkg.name === PKG) return pkg.version;
+        }
+      } catch { /* skip */ }
+      const up = path.dirname(dir);
+      if (up === dir) break;
+      dir = up;
+    }
+  } catch {
+    // unreadable: treat the version as unknown
+  }
+  return undefined;
+}
+
+/** Semver precedence, prerelease included: true when `a` sorts before `b`. */
+function older(a, b) {
+  const split = (v) => {
+    const s = String(v).split('+')[0];
+    const i = s.indexOf('-');
+    return [(i < 0 ? s : s.slice(0, i)).split('.').map(Number), i < 0 ? [] : s.slice(i + 1).split('.')];
+  };
+  const [ac, ap] = split(a);
+  const [bc, bp] = split(b);
+  for (let i = 0; i < 3; i++) if ((ac[i] || 0) !== (bc[i] || 0)) return (ac[i] || 0) < (bc[i] || 0);
+  if (!ap.length || !bp.length) return ap.length > bp.length;
+  for (let i = 0; i < Math.min(ap.length, bp.length); i++) {
+    if (ap[i] === bp[i]) continue;
+    const an = /^\d+$/.test(ap[i]);
+    const bn = /^\d+$/.test(bp[i]);
+    if (an && bn) return Number(ap[i]) < Number(bp[i]);
+    if (an !== bn) return an;
+    return ap[i] < bp[i];
+  }
+  return ap.length < bp.length;
+}
+
+/** False only for a CLI known to be older than this plugin. */
+function recentEnough(entry, version) {
+  const found = cliVersion(entry);
+  return !found || !version || !older(found, version);
 }
 
 function onPath(name) {
@@ -43,12 +110,12 @@ function onPath(name) {
 function resolveCli() {
   const override = process.env.SQUAD_CLI;
   if (override) return /\.[cm]?js$/.test(override) ? [process.execPath, [override]] : [override, []];
+  const version = pluginVersion();
   const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const local = path.join(project, 'node_modules', ...PKG.split('/'), 'dist', 'cli-entry.js');
-  if (fs.existsSync(local)) return [process.execPath, [local]];
+  if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
-  if (global) return [global, []];
-  const version = pluginVersion();
+  if (global && recentEnough(global, version)) return [global, []];
   return [win ? 'npx.cmd' : 'npx', ['-y', version ? `${PKG}@${version}` : PKG]];
 }
 

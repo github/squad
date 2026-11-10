@@ -111,6 +111,9 @@ export const CLAUDE_PLUGIN_LAUNCHER = `#!/usr/bin/env node
 //   2. the project's own install: node_modules/${CLI_PACKAGE}
 //   3. a \`squad\` on PATH (never this plugin's own bin/)
 //   4. npx -y ${CLI_PACKAGE}@<this plugin's version>
+// 2 and 3 are skipped when their version is older than this plugin's: an older CLI lacks commands the
+// plugin calls (\`dashboard\`, \`hook --plugin\`). The version is read from package.json, BUNDLE-INFO.json
+// (standalone bundles), or an embedded node_modules. A CLI whose version cannot be read is used as found.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -127,6 +130,70 @@ function pluginVersion() {
   } catch {
     return undefined;
   }
+}
+
+/** The version of the Squad CLI behind \`entry\` (a script, symlink or npm shim), if it can be found. */
+function cliVersion(entry) {
+  try {
+    let dir = path.dirname(fs.realpathSync(entry));
+    for (let i = 0; i < 8; i++) {
+      // npm's Windows shims sit beside node_modules rather than linking into it.
+      for (const file of [path.join(dir, 'package.json'), path.join(dir, 'node_modules', ...PKG.split('/'), 'package.json')]) {
+        if (!fs.existsSync(file)) continue;
+        const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (pkg.name === PKG) return pkg.version;
+      }
+      // Standalone bundle: BUNDLE-INFO.json or app/node_modules/<pkg>/package.json.
+      try {
+        const info = path.join(dir, 'BUNDLE-INFO.json');
+        if (fs.existsSync(info)) {
+          const v = JSON.parse(fs.readFileSync(info, 'utf8')).squadVersion;
+          if (v) return v;
+        }
+      } catch { /* skip */ }
+      try {
+        const nested = path.join(dir, 'app', 'node_modules', ...PKG.split('/'), 'package.json');
+        if (fs.existsSync(nested)) {
+          const pkg = JSON.parse(fs.readFileSync(nested, 'utf8'));
+          if (pkg.name === PKG) return pkg.version;
+        }
+      } catch { /* skip */ }
+      const up = path.dirname(dir);
+      if (up === dir) break;
+      dir = up;
+    }
+  } catch {
+    // unreadable: treat the version as unknown
+  }
+  return undefined;
+}
+
+/** Semver precedence, prerelease included: true when \`a\` sorts before \`b\`. */
+function older(a, b) {
+  const split = (v) => {
+    const s = String(v).split('+')[0];
+    const i = s.indexOf('-');
+    return [(i < 0 ? s : s.slice(0, i)).split('.').map(Number), i < 0 ? [] : s.slice(i + 1).split('.')];
+  };
+  const [ac, ap] = split(a);
+  const [bc, bp] = split(b);
+  for (let i = 0; i < 3; i++) if ((ac[i] || 0) !== (bc[i] || 0)) return (ac[i] || 0) < (bc[i] || 0);
+  if (!ap.length || !bp.length) return ap.length > bp.length;
+  for (let i = 0; i < Math.min(ap.length, bp.length); i++) {
+    if (ap[i] === bp[i]) continue;
+    const an = /^\\d+$/.test(ap[i]);
+    const bn = /^\\d+$/.test(bp[i]);
+    if (an && bn) return Number(ap[i]) < Number(bp[i]);
+    if (an !== bn) return an;
+    return ap[i] < bp[i];
+  }
+  return ap.length < bp.length;
+}
+
+/** False only for a CLI known to be older than this plugin. */
+function recentEnough(entry, version) {
+  const found = cliVersion(entry);
+  return !found || !version || !older(found, version);
 }
 
 function onPath(name) {
@@ -148,12 +215,12 @@ function onPath(name) {
 function resolveCli() {
   const override = process.env.SQUAD_CLI;
   if (override) return /\\.[cm]?js$/.test(override) ? [process.execPath, [override]] : [override, []];
+  const version = pluginVersion();
   const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const local = path.join(project, 'node_modules', ...PKG.split('/'), 'dist', 'cli-entry.js');
-  if (fs.existsSync(local)) return [process.execPath, [local]];
+  if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
-  if (global) return [global, []];
-  const version = pluginVersion();
+  if (global && recentEnough(global, version)) return [global, []];
   return [win ? 'npx.cmd' : 'npx', ['-y', version ? \`\${PKG}@\${version}\` : PKG]];
 }
 
@@ -196,6 +263,13 @@ interface Command {
   body: string;
 }
 
+/**
+ * The plugin's own launcher, for Bash calls in commands. Claude Code appends the plugin's bin/ to PATH after
+ * the user's entries, so a bare \`squad\` can run an older global CLI; this path always goes through the
+ * launcher's version check. Claude Code expands \`\${CLAUDE_PLUGIN_ROOT}\` in command bodies and \`allowed-tools\`.
+ */
+const SQUAD = '"${CLAUDE_PLUGIN_ROOT}/bin/squad"';
+
 const NOT_COORDINATOR = `If you are not the Squad coordinator (the main agent \`${CLAUDE_PLUGIN_AGENT}\` or a project \`squad\` agent), do not act as one: tell the user to start Claude Code as the coordinator (\`claude --agent ${CLAUDE_PLUGIN_AGENT}\`, or run \`squad upgrade --client claude --claude-plugin\` once so a plain \`claude\` starts it in this repository) and stop.`;
 
 const COMMANDS: readonly Command[] = [
@@ -215,10 +289,10 @@ ${NOT_COORDINATOR}`,
     hint: '[project description, or members to add]',
     body: `Cast the Squad team as the coordinator.
 
-- Read \`.squad/team.md\` with \`squad_state_read\` (never with glob or grep). If there is no \`.squad/\` directory, run \`squad init --client claude --claude-plugin\` with Bash first.
+- Read \`.squad/team.md\` with \`squad_state_read\` (never with glob or grep). If there is no \`.squad/\` directory, run \`${SQUAD} init --client claude --claude-plugin\` with Bash first.
 - If \`team.md\` has no roster yet, load the \`${CLAUDE_PLUGIN_NAME}:squad-coordinator-init-mode\` skill and follow it.
-- If a team exists, never re-cast it. Add only the members the user asks for, one \`squad cast --name <Name> --role "<Role>"\` call each, and update \`.squad/routing.md\`.
-- Then run \`squad upgrade\` so each new member gets its \`.claude/agents/<member>.md\` subagent, and report the roster.
+- If a team exists, never re-cast it. Add only the members the user asks for, one \`${SQUAD} cast --name <Name> --role "<Role>"\` call each, and update \`.squad/routing.md\`.
+- Then run \`${SQUAD} upgrade\` so each new member gets its \`.claude/agents/<member>.md\` subagent, and report the roster.
 
 Request from the user: $ARGUMENTS
 
@@ -239,11 +313,11 @@ ${NOT_COORDINATOR}`,
     description: 'Show the Squad team status: roster, backend health, decisions inbox and reviewer lockouts.',
     body: `Report this repository's Squad status. Do not change any file.
 
-1. Run \`squad status\` with Bash (which squad is active and why).
+1. Run \`${SQUAD} status\` with Bash (which squad is active and why).
 2. Call \`squad_state_health\` (\`${CLAUDE_PLUGIN_MCP_PREFIX}squad_state_health\`) and report the backend, team directory and version.
 3. Read \`.squad/team.md\` with \`squad_state_read\` and list the members and roles.
 4. Count the entries in \`decisions/inbox\` with \`squad_state_list\`.
-5. Run \`squad lockout status\` with Bash and report active reviewer lockouts.
+5. Run \`${SQUAD} lockout status\` with Bash and report active reviewer lockouts.
 
 Keep the report short: one line per item, and say plainly when something is missing.`,
   },
@@ -251,12 +325,12 @@ Keep the report short: one line per item, and say plainly when something is miss
     name: 'dashboard',
     description: "Open the Squad dashboard: a live local web view of this session's coordinator and member runs.",
     hint: '[stop | status]',
-    allowedTools: 'Bash(squad dashboard:*)',
+    allowedTools: `Bash(${SQUAD} dashboard:*)`,
     body: `Manage the Squad dashboard for this directory with one Bash call, then reply with one line.
 
-- If the user asked to stop it, run \`squad dashboard stop\`.
-- If the user asked for its status, run \`squad dashboard status\`.
-- Otherwise run \`squad dashboard --detach --open\`. It starts the dashboard in the background, or finds the one already running, and opens it in the browser.
+- If the user asked to stop it, run \`${SQUAD} dashboard stop\`.
+- If the user asked for its status, run \`${SQUAD} dashboard status\`.
+- Otherwise run \`${SQUAD} dashboard --detach --open\`. It starts the dashboard in the background, or finds the one already running, and opens it in the browser.
 
 Reply with the URL it printed (it serves on 127.0.0.1 only), or say it stopped. Never pass the user's words to the shell: choose one of the three commands above.
 

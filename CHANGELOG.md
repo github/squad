@@ -24,7 +24,7 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
   - the coordinator's on-demand skills and Squad's template skills, as `/squad:<skill>`
   - the slash commands `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status` and `/squad:dashboard`
   - the advisory governance hooks
-  - a launcher that puts `squad` on the Bash tool's PATH. It runs, in order, `SQUAD_CLI`, the project's `@bradygaster/squad-cli`, a `squad` on PATH, or the plugin's pinned version through `npx`.
+  - a launcher that the slash commands, hooks and MCP server call by path, also on the Bash tool's PATH as `squad`. It runs, in order, `SQUAD_CLI`, the project's `@bradygaster/squad-cli`, a `squad` on PATH, or the plugin's pinned version through `npx`, and skips a project or PATH install older than the plugin.
 - **Plugin mode for the Claude projection** (#2443, #2463). `squad init --client claude --claude-plugin` (or `squad upgrade --claude-plugin`) records `"claudePlugin": true` in `.squad/config.json`. Squad then writes only the per-repository files: the member subagents, the `CLAUDE.md` block, and two keys in `.claude/settings.json`:
   - `agent`, so a plain `claude` starts the coordinator
   - `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` neither prompts nor duplicates the plugin's tools
