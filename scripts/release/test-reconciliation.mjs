@@ -65,6 +65,16 @@ export const CATEGORY_RULES = Object.freeze([
     runsOn: 'non-win32',
     reason: "it.runIf(process.platform !== 'win32'): POSIX-only legacy symlink-hash reconciliation",
   },
+  ...[
+    '[platform: win32] a teamRoot naming the team repo, with a different drive-letter and path case',
+    "[platform: win32] a teamRoot naming the team's .squad dir (spelled .SQUAD), with a different drive-letter and path case",
+  ].map((title) => ({
+    category: 'env-gated',
+    file: 'test/linked-team-state-boundary.test.ts',
+    title,
+    runsOn: 'win32',
+    reason: "it.runIf(process.platform === 'win32'): Windows-only drive-letter and case-insensitive team root resolution",
+  })),
   { category: 'env-gated', file: /profile-boundary\.test\.ts$/, reason: 'host lacks 8.3 short names or symlink/junction privilege' },
   { category: 'env-gated', file: /state-backend\.test\.ts$/, reason: 'platform-gated state backend case' },
   { category: 'env-gated', file: /docs-build\.test\.ts$/, reason: 'docs dependencies not installed' },

@@ -114,7 +114,7 @@ describe('linked team on a git state backend: repository boundary (#2320)', () =
     it.runIf(process.platform === 'win32').each([
       ['the team repo', ''],
       ["the team's .squad dir (spelled .SQUAD)", '\\.SQUAD'],
-    ])('a teamRoot naming %s, with a different drive-letter and path case', (_label, suffix) => {
+    ])('[platform: win32] a teamRoot naming %s, with a different drive-letter and path case', (_label, suffix) => {
       const team = join(root, 'team');
       makeTeam(team);
       initRepo(team);
