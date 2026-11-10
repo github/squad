@@ -109,7 +109,14 @@ describe('Claude plugin: contents', () => {
     for (const c of ['ralph', 'cast', 'ceremony', 'status', 'dashboard']) {
       expect(files.has(`commands/${c}.md`), c).toBe(true);
     }
-    expect(files.get('commands/dashboard.md')).toContain('allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/squad" dashboard:*)');
+    // The dashboard command may run exactly three invocations, chosen by the first argument word only.
+    const dashboard = files.get('commands/dashboard.md')!;
+    const L = '"${CLAUDE_PLUGIN_ROOT}/bin/squad" dashboard';
+    expect(dashboard).toContain(`allowed-tools: Bash(${L} stop), Bash(${L} status), Bash(${L} --detach --open)\n`);
+    expect(dashboard).not.toContain('$ARGUMENTS');
+    expect(dashboard).toContain('`$0`');
+    // Ralph's free-text scope is fenced as data.
+    expect(files.get('commands/ralph.md')).toMatch(/<ralph-scope>\n\$ARGUMENTS\n<\/ralph-scope>/);
     // Commands go through the plugin's own launcher: a bare `squad` can be an older global CLI earlier on PATH.
     for (const [p, c] of files) {
       if (!p.startsWith('commands/')) continue;
