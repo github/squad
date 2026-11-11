@@ -1003,7 +1003,10 @@ describe('gh-aw implement worker: retro-origin provenance enforcement', () => {
     function assertRelay(lock: string) {
       const { jobs } = parse(lock);
       expect(jobs.repair_activated_lifecycle.if).toContain('!cancelled()');
-      expect(jobs.repair_activated_lifecycle.if).not.toContain('${{');
+      expect(jobs.repair_activated_lifecycle.if).toMatch(/^\$\{\{[\s\S]*\}\}$/);
+      expect(jobs.repair_activated_lifecycle.if.match(/\$\{\{/g)).toHaveLength(1);
+      expect(jobs.repair_activated_lifecycle.if).toContain("needs.detection.result == 'success'");
+      expect(jobs.repair_activated_lifecycle.if).toContain("needs.detection.outputs.detection_success == 'true'");
       for (const [jobName, stepName, following] of [
         ['agent', 'Refuse merge relay without a clearing independent review', 'Execute GitHub Copilot CLI'],
         ['safe_outputs', 'Recheck clearing verdict before relay outputs', 'Process Safe Outputs'],

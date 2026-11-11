@@ -57,7 +57,7 @@ beforeAll(async () => {
   // in memory, with no GitHub clients or writes and no approximate sanitizer stubs.
   const runtimeSha = DIAGNOSTIC_RUNTIME_SHA;
   expect(fixture.consumerFiles.get('.github/workflows/squad.lock.yml')!.toString())
-    .toContain(`github/gh-aw-actions/setup@${runtimeSha} # v0.91.5`);
+    .toContain(`github/gh-aw-actions/setup@${runtimeSha} # v1.0.1`);
   const sources = new Map(await Promise.all([
     'sanitize_content.cjs', 'sanitize_content_core.cjs', 'markdown_code_region_balancer.cjs',
     'repo_helpers.cjs', 'slash_command_matcher.cjs', 'glob_pattern_helpers.cjs', 'error_codes.cjs',
@@ -271,6 +271,31 @@ async function writeComments(items: Item[]) {
 }
 
 describe('compiled Squad command authorization boundary (#2185)', () => {
+  it('permits pure IP parsing but forbids sockets in the pinned runtime harness', () => {
+    const sources = new Map([['js/net_probe.cjs', `
+      const net = require('net');
+      module.exports = {
+        isIP: net.isIP,
+        connect: () => require('node:net').connect(),
+        socket: () => new net.Socket(),
+        tls: () => require('tls').connect(),
+        database: () => new (require('node:sqlite').DatabaseSync)('/outside-fixture.db'),
+      };
+    `]]);
+    const runtime = diagnosticRuntime(sources, scratch, [], {});
+    const probe = runtime.load('js/net_probe.cjs');
+    expect(probe.isIP('127.0.0.1')).toBe(4);
+    expect(probe.isIP('::1')).toBe(6);
+    expect(() => probe.connect()).toThrow('Forbidden external IO: node:net.connect');
+    expect(() => probe.socket()).toThrow('Forbidden external IO: net.Socket');
+    expect(() => probe.tls()).toThrow('Forbidden external IO: tls.connect');
+    expect(() => probe.database()).toThrow('Forbidden external IO: node:sqlite.DatabaseSync');
+    expect(runtime.ioErrors).toEqual([
+      'Forbidden external IO: node:net.connect', 'Forbidden external IO: net.Socket',
+      'Forbidden external IO: tls.connect', 'Forbidden external IO: node:sqlite.DatabaseSync',
+    ]);
+  });
+
   it('kills a live-source mutation that checks only HTML-comment-stripped authority', async () => {
     const source = readFileSync(join(trusted, 'squad-command-contract.mjs'), 'utf8');
     const mutated = source.replace('const bodies = [rawBody, rawBody.replace(', 'const bodies = [rawBody.replace(');
@@ -419,7 +444,7 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
     expect(Object.keys(comment).sort()).toEqual(['body', 'data', 'item_number', 'temporary_id', 'type']);
     expect(comment.temporary_id).toMatch(/^aw_[A-Za-z0-9]{8}$/);
     expect(comment.data).toEqual(data);
-    expect(comment.body).toBe(`${requests[0].arguments.body}\n\nStructured data:\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``);
+    expect(comment.body).toBe(`## Plan\n\nDraft implementation tasks.\n\nStructured data:\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``);
     expect(lifecycle).toEqual({ type: 'upsert_lifecycle_state', body });
     const result = await runGuard({ payload: payloadFor('plan'), permission: 'read', items: output.items });
     const withoutMetadata = structuredClone(output.items);
@@ -701,7 +726,7 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
     },
   );
 
-  it('real pinned handlers expose the original tracking and completion writes when enabled', async () => {
+  it('real pinned handlers expose tracking and diagnostic writes when enabled', async () => {
     for (const existingIssue of [false, true]) {
       for (const [handler, items, env] of [
         ['handle_agent_failure.cjs', [{ type: 'report_incomplete', reason: 'Could not finish' }], { GH_AW_FAILURE_REPORT_AS_ISSUE: 'true' }],
@@ -722,7 +747,8 @@ describe('compiled Squad command authorization boundary (#2185)', () => {
         expect(runtime.ioErrors, `${handler}\n${runtime.logs.join('\n')}`).toEqual([]);
         expect(runtime.writes.length, `${handler}\n${runtime.logs.join('\n')}\n${runtime.failures}`).toBeGreaterThan(0);
         if (handler === 'notify_comment_error.cjs') {
-          expect(runtime.writes[0].params.body).toContain('"squad_artifact":"activated"');
+          expect(runtime.writes[0].params.body).toContain('failed to deliver outputs');
+          expect(runtime.writes[0].params.body).not.toContain('"squad_artifact":"activated"');
         }
       }
     }

@@ -11,19 +11,25 @@ request you can review before merging.
 
 This guide covers setup, every slash command, and daily usage patterns.
 
-> **v0.91.5 permission migration.** Review the permission change before installing
+> **Compiler permission migration.** Review compiled permissions before installing
 > this compiler upgrade in a consumer repository. Compared with v0.89.22,
-> v0.91.5 adds `actions: read` and `pull-requests: read` to the Bootstrap
+> the compiler adds `actions: read` and `pull-requests: read` to the Bootstrap
 > `conclusion` job, which previously requested only `issues: write`. The compiler
 > requires these reads for existing automatic failure-issue reporting; disabling
 > that reporting would change standalone behavior. No additional write scope is
 > introduced. Local installation and strict verification do not approve hosted
 > permissions, and the dispatcher SDK adapter's hosted runtime parity still
-> requires runtime evidence.
+> requires runtime evidence. gh-aw v1.0.1 also adds `checks: read` to the
+> compiler-owned conclusion diagnostics.
 
 ---
 
 ## Quick start
+
+> **Compatibility prerequisite:** Read [gh-aw 1.x compatibility](#gh-aw-1x-compatibility).
+> Install the current stable 1.x CLI without an exact patch installation pin.
+> This package currently validates v1.0.1 compilation and immutable action pins;
+> newer compiler output requires a reviewed package update, not weaker checks.
 
 Seven steps from zero to a validated, reviewable Squad bootstrap:
 
@@ -33,22 +39,26 @@ Seven steps from zero to a validated, reviewable Squad bootstrap:
 > the repository at runtime, installs and validates the workflows, and opens the
 > human-reviewed bootstrap pull request. The agent stops at the pull request;
 > a human reviews and merges it.
+> Before installing extensions/workflows or changing repository settings, show
+> the exact branch, approved `SQUAD_SHA`, commands, and settings changes; pause
+> for explicit human confirmation. Split the block at publication: show the
+> staged diff, validation results, and exact push/PR commands, then pause again
+> for explicit confirmation before publishing. Tool success is not consent.
 
 ```bash
 set -euo pipefail
 
-# 1. Verify GitHub access and prove the exact supported gh-aw version
+# 1. Verify GitHub access and require the stable gh-aw 1.x compiler family
 gh auth status --hostname github.com
 
 # gh-aw-exact-version-start
-required_gh_aw_version="v0.91.5"
 gh_aw_version_output="$(gh aw --version 2>&1)" || gh_aw_version_output=""
 gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 
-if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
-  echo "Installing exact supported gh-aw ${required_gh_aw_version}."
+if [ -z "${gh_aw_version}" ] || [[ "${gh_aw_version}" =~ ^v0\. ]]; then
+  echo "Installing the current stable gh-aw release."
   gh extension remove gh-aw >/dev/null 2>&1 || true
-  gh extension install --pin "${required_gh_aw_version}" github/gh-aw
+  gh extension install github/gh-aw
   gh_aw_version_output="$(gh aw --version 2>&1)" || {
     echo "STOP: gh-aw version could not be verified after clean installation." >&2
     exit 1
@@ -56,8 +66,13 @@ if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
   gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 fi
 
-test "${gh_aw_version}" = "${required_gh_aw_version}" || {
-  echo "STOP: required gh-aw v0.91.5, but found ${gh_aw_version:-unavailable} after clean installation." >&2
+[[ "${gh_aw_version}" =~ ^v1\.[0-9]+\.[0-9]+$ ]] || {
+  echo "STOP: stable gh-aw 1.x is required, but found ${gh_aw_version:-unavailable}." >&2
+  exit 1
+}
+test "${gh_aw_version}" = "v1.0.1" || {
+  echo "STOP: this Squad package authenticates gh-aw v1.0.1 output, not ${gh_aw_version}." >&2
+  echo "No repository settings or workflows were changed. Obtain a maintainer-reviewed Squad revision covering this compiler; do not downgrade, patch trusted digests, or bypass verification." >&2
   exit 1
 }
 # gh-aw-exact-version-end
@@ -132,8 +147,8 @@ gh aw add "github/squad/workflows@${SQUAD_SHA}"
 rm -f .github/skills/agentic-workflows/SKILL.md
 
 # 5. On first install, review the safe-update report. Approve ONLY if it
-# contains exactly the three documented secrets (GH_AW_GITHUB_READ_APP_PRIVATE_KEY,
-# SQUAD_GITHUB_APP_PRIVATE_KEY, SQUAD_GITHUB_TOKEN) and the one documented action
+# contains exactly the two documented secrets (SQUAD_GITHUB_APP_PRIVATE_KEY,
+# SQUAD_GITHUB_TOKEN) and the one documented action
 # (github/squad/.github/actions/squad-init) and nothing else. STOP and
 # report any other entry instead of approving.
 gh aw compile --strict --approve   # first install only, when the safe-update warning appears
@@ -150,7 +165,7 @@ node .github/workflows/shared/squad-install-verifier.mjs \
   --strict-compile
 
 # 7. Commit the generated files and open the bootstrap PR
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -670,7 +685,7 @@ retrospective proposal (see [Retrospective
 auto-implementation](#retrospective-auto-implementation-opt-in) below).
 
 `gh aw add` also installs the Squad skill under `.github/skills/`, which is why
-the bootstrap commit stages that path alongside the workflows. gh-aw v0.91.5
+the bootstrap commit stages that path alongside the workflows. gh-aw v1.0.1
 additionally generates `.github/skills/agentic-workflows/SKILL.md`. That
 tool-owned router loads mutable prompt files from the current `github/gh-aw`
 repository and is not bound to the pinned Squad revision or compiler version.
@@ -697,7 +712,7 @@ source/lock pairs, and one coherent 40-character revision.
 
 On a clean repository, `gh aw add` reports these expected safe-update changes:
 
-- Restricted secrets: `GH_AW_GITHUB_READ_APP_PRIVATE_KEY`, `SQUAD_GITHUB_APP_PRIVATE_KEY`, and `SQUAD_GITHUB_TOKEN`
+- Restricted secrets: `SQUAD_GITHUB_APP_PRIVATE_KEY` and `SQUAD_GITHUB_TOKEN`
 - Action: `github/squad/.github/actions/squad-init`
 
 > **These are referenced names, not prerequisites.** `gh aw add` lists the secrets
@@ -728,7 +743,7 @@ gh aw compile --strict
 ```
 
 Run this exact command after any required first-install approval and before
-committing. With gh-aw v0.91.5, require exactly two warnings, one occurrence
+committing. With gh-aw v1.0.1, require exactly two warnings, one occurrence
 of each exact diagnostic header below (including its workflow path):
 
 <!-- compile-warning-allowlist-start -->
@@ -809,7 +824,7 @@ node .github/workflows/shared/squad-install-verifier.mjs \
 ### Open the bootstrap pull request
 
 ```bash
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -876,10 +891,19 @@ omitted required files or staged digest mismatches stop the install before
 commit/push. Never force-add a directory or glob; rerun the gate after edits or
 restaging, including package upgrades.
 
-`gh aw add` may also create `.vscode/settings.json` to enable Copilot for
-Markdown workflow files. The command above intentionally leaves that optional
-editor setting untracked. Delete it if you do not want the local setting, or
-stage it explicitly if your team wants to share it.
+gh-aw v1.0.1 may also generate `.vscode/settings.json` (optional Markdown editor
+settings) and `.github/workflows/agentics-maintenance.yml` (the compiler's
+maintenance workflow). Neither auxiliary file is authenticated by Squad's
+package manifest. The staging commands intentionally exclude both from the
+bootstrap PR; review and stage an exact auxiliary path only after explicit
+approval.
+
+Before installation, record whether these paths already exist. Never delete
+or overwrite pre-existing editor settings or maintenance workflows; stop and
+report their diff if gh-aw changes them. Remove an unwanted auxiliary file
+only when it was absent beforehand and this invocation created it. Known,
+newly generated auxiliary files left untracked are expected output, not an
+unrelated-change failure.
 
 > **Troubleshooting:** If the lock files are missing, rerun `gh aw compile
 > --strict`. Do not open or merge the bootstrap PR until all eight source/lock
@@ -929,7 +953,7 @@ activation with a GitHub App instead, configure:
 | `SQUAD_GITHUB_APP_OWNER` | Variable | App installation owner (org or user) |
 
 The workflow mints an installation token at activation time, explicitly scoped
-to the current repository with `contents: read`, as required by gh-aw v0.91.5
+to the current repository with `contents: read`, as required by gh-aw v1.0.1
 strict compilation. Only `squad init` and `squad health` receive this token.
 The repository is passed as its full `owner/name`; a configured installation
 owner that does not match the current repository fails explicitly rather than
@@ -1127,7 +1151,7 @@ gh-aw preserves HTML comments inside code fences, and lifecycle readers inspect
 the complete posted text rather than its rendered visibility.
 
 This tool-input rule is distinct from serialized output. The pinned gh-aw
-v0.91.5 `add_comment` adapter adds a `temporary_id`; its collector appends the
+v1.0.1 `add_comment` adapter adds a `temporary_id`; its collector appends the
 `Structured data:` JSON suffix while retaining `data`. The guard accepts only
 a string ID in the adapter's bare `aw_` format (3–12 alphanumeric or underscore
 characters), not other mutation fields. For serialized plan comments, it first
@@ -1746,7 +1770,7 @@ is test data, not production authorization.
 
 Run from a Squad repository checkout with Node.js **22.5.0 or newer**, npm, Git,
 GitHub CLI, and the repository's npm dependencies already installed. Install the
-exact compiler once with `gh extension install --pin v0.91.5 github/gh-aw`.
+exact compiler once with `gh extension install --pin v1.0.1 github/gh-aw`.
 If a different gh-aw version is installed, remove that extension with
 `gh extension remove gh-aw` before the pinned installation; v0.89.22 is unsupported
 for this fixture. Before **either compiler path below**, build the current
@@ -1759,16 +1783,16 @@ npm run build -w packages/squad-sdk
 With the pinned extension available, run:
 
 ```bash
-test "$(gh aw --version | awk 'END {print $NF}')" = "v0.91.5" &&
+test "$(gh aw --version | awk 'END {print $NF}')" = "v1.0.1" &&
 npm test -- test/gh-aw-activation-finalization.test.ts test/agent-provenance.test.ts
 ```
 
 Alternatively, set `SQUAD_GH_AW_BIN` to an **absolute path** to an already obtained
-v0.91.5 executable when running that same `npm test` command. The fixture checks
+v1.0.1 executable when running that same `npm test` command. The fixture checks
 the exact compiler version, strict-compiles an isolated package installation,
 and validates immutable action pins. Outbound HTTPS access to
 `raw.githubusercontent.com` is required to fetch the runtime closure at
-`github/gh-aw-actions` commit `16b430146d5d5646eccef5a1ceb72152333b18b9`.
+`github/gh-aw-actions` commit `221ba4f4319de6b8e809d1a15528b3ae6a818aa5`.
 GitHub issue APIs are synthetic and writes stay local: this example neither
 creates live issues nor demonstrates hosted credentials or permissions.
 A missing compiler, mismatched pin, failed runtime download or failed assertion
@@ -2697,7 +2721,7 @@ to move it.
 
 The schema-v2 integrity manifest records two complete compiled lock digests per
 workflow: `lock_sha256` for a per-workflow source annotation and
-`package_lock_sha256` for a package-root annotation. gh-aw v0.91.5 emits
+`package_lock_sha256` for a package-root annotation. gh-aw v1.0.1 emits
 `github/squad/workflows@SHA` for direct package includes, but can emit
 `github/squad/workflows/package/<workflow>.md@SHA` when installing dispatched
 dependencies. Fresh and forced installs can therefore contain different mixtures.
@@ -2725,13 +2749,13 @@ all native lock bytes, and staged verification includes the unchanged consumer
 configuration. Squad never rewrites that file.
 
 Manifest generation and installation test fixtures seed isolated compiler action
-locks with the immutable `setup` and `setup-cli` pins for gh-aw v0.91.5. Both
+locks with the immutable `setup` and `setup-cli` pins for gh-aw v1.0.1. Both
 source variants use the real strict compiler and validate its version and emitted
 action pins. This avoids a second network resolution returning a mutable version
 tag when credentials or the API are unavailable. Missing or altered pins fail
 generation; mutable-tag compiled locks still fail installation integrity.
 
-The v0.91.5 compiler owns the reserved `aw_context` dispatch input; workflow
+The v1.0.1 compiler owns the reserved `aw_context` dispatch input; workflow
 sources must not declare it. The generated workflows retain that optional
 string input and Squad's existing provenance checks. The dispatcher alone uses
 Copilot SDK mode because this compiler disables native CLI web-fetch in offline
@@ -2785,6 +2809,66 @@ other refs.
 | A command run was cancelled or its result is uncertain | The run stopped before a durable output was confirmed | Check existing durable outputs before repeating Cast, implementation, or review commands. For activation, inspect the pending reservation and receipts and use explicit no-create current-state reconciliation; do not retry an interrupted batch to fill missing issues |
 
 ---
+
+## gh-aw 1.x compatibility
+
+The bootstrap target is `github/squad` with a stable gh-aw 1.x release,
+**without an exact patch-version lock on CLI installation**. The
+[repository-agent prompt](https://github.com/github/squad/blob/dev/agents-agentic-workflows.md)
+preserves the inspection, immutable-revision, installation-verification,
+explicit-staging, and human-review gates. Select a published immutable Squad
+revision carrying the migrated package contract; older upstream revisions do
+not acquire compatibility merely because their repository name is unchanged.
+
+The current validated compiler is
+[gh-aw v1.0.1](https://github.com/github/gh-aw/releases/tag/v1.0.1), with immutable
+`setup` and `setup-cli` action SHA
+`221ba4f4319de6b8e809d1a15528b3ae6a818aa5`. The tested official `darwin-arm64`
+binary matched the published SHA256 checksum
+`e159eca9db8d9fed6eee61695c6b9a9235c8fcc83bda3a0915773ca0a50e4288`.
+
+Compilation is not installation verification. The current verifier additionally
+requires exactly v1.0.1 for package installer metadata and canonical compilation,
+checks immutable compiler-action pins, and compares complete normalized lock
+digests for workflow and package source annotations, including supported
+failure-retention variants. Native upstream ownership is
+`.github/aw/packages/github-squad-workflows-23a7638f599e.json`. Both the
+package-owned runtime resources and their materialized destinations are checked.
+Staged verification checks the exact owned files, not whole-directory claims.
+
+The stable-major preflight deliberately does not reinstall or downgrade an
+existing stable 1.x CLI. **This does not promise compatibility with arbitrary
+future 1.x releases:** a different installer/compiler version or different
+compiled bytes fails the published contract. Stop and request a reviewed package
+update instead of changing consumer ownership records or trusted digests.
+
+The first-install approval list is the two optional secrets
+`SQUAD_GITHUB_APP_PRIVATE_KEY`, `SQUAD_GITHUB_TOKEN`, and the immutable
+`github/squad/.github/actions/squad-init` action. The workflow explicitly selects
+`github/squad` release assets; the older pinned action's fork default is not used.
+The 1.0.1 compiler adds `checks: read` to Bootstrap's conclusion job for its
+compiler-owned diagnostic reporting. Review that read permission along with the
+rest of the emitted artifact. The two documented source warnings remain
+`pull_request_target` in `squad-review.md` and combined `slash_command`/`bots` in
+`squad.md`. Local compilation and installation checks do not prove hosted
+activation, repository Actions policy, or GitHub App permissions.
+
+For maintainers upgrading the compiler: review the official release and immutable
+action SHA, update the verifier and runtime-test pins together, then run
+`node workflows/shared/squad-install-verifier.mjs --write-source` followed by
+`node workflows/shared/squad-install-verifier.mjs --check-source` with that
+compiler (`SQUAD_GH_AW_BIN` can select a standalone official binary). Run the real
+compile/install/staging and mutation suites, inspect permissions and warnings,
+and publish the coherent source/package/manifest/tests revision. Consumers then
+select that approved immutable revision. Never regenerate the trusted contract
+inside a consumer repository to make its installation pass.
+
+The original upstream revision
+`7b731ec97f35346bdc4fa87c3edaf16b808fc0ae` demonstrated why the complete migration
+was necessary: v1.0.1 installation, materialization, and strict compilation
+succeeded, but `--verify-install --source-revision` failed with
+`Expected exactly one bradygaster/squad/workflows ownership record; found 0.`
+That historical failure is not the contract of a revision carrying this migration.
 
 ## See also
 

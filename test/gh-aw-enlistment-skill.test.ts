@@ -218,13 +218,14 @@ gh() {
     return 0
   fi
   if [ "$1" = "extension" ] && [ "$2" = "install" ]; then
-    printf 'CALL install %s %s\\n' "$3" "$4" >&3
+    printf 'CALL install %s %s\\n' "$3" "\${4:-}" >&3
     installed=1
     return 0
   fi
   return 64
 }
 ${gate}
+echo "COMPATIBILITY PASSED"
 `;
   return spawnSync('bash', ['-c', script], {
     encoding: 'utf8',
@@ -571,7 +572,7 @@ exec 3>&2
 gh() {
   printf 'CALL gh %s\\n' "$*" >&3
   case "$*" in
-    "aw --version") printf 'gh aw version v0.91.5\\n' ;;
+    "aw --version") printf 'gh aw version v1.0.1\\n' ;;
     "repo view --json nameWithOwner --jq .nameWithOwner") printf 'octo/example\\n' ;;
     "repo view --json defaultBranchRef --jq .defaultBranchRef.name") printf 'main\\n' ;;
     *"--jq .has_issues") printf 'true\\n' ;;
@@ -843,7 +844,7 @@ describe('gh-aw-enlistment skill', () => {
       expect(endMatches.length,   '<!-- allowlist-end --> must appear exactly once').toBe(1);
     });
 
-    it('allowlist region contains EXACTLY the three documented secrets and the one documented action — no more, no fewer', () => {
+    it('allowlist region contains EXACTLY the two documented secrets and the one documented action — no more, no fewer', () => {
       const startTag = '<!-- allowlist-start -->';
       const endTag   = '<!-- allowlist-end -->';
       const startIdx = content.indexOf(startTag);
@@ -856,9 +857,8 @@ describe('gh-aw-enlistment skill', () => {
 
       // Every backtick-delimited token in the region — order-independent exact set.
       const tokens = [...region.matchAll(/`([^`]+)`/g)].map(m => m[1]);
-      expect(tokens.slice().sort(), 'allowlist tokens must be exactly the four documented entries').toEqual(
+      expect(tokens.slice().sort(), 'allowlist tokens must be exactly the three documented entries').toEqual(
         [
-          'GH_AW_GITHUB_READ_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_APP_PRIVATE_KEY',
           'SQUAD_GITHUB_TOKEN',
           SQUAD_INIT_ACTION,
@@ -879,7 +879,7 @@ describe('gh-aw-enlistment skill', () => {
         expect(block, `no executable block may install the legacy ${LEGACY_PACKAGE_NAME} identity`)
           .not.toContain(LEGACY_INSTALL_PREFIX);
       }
-      expect(content).toContain('exactly eight workflows, seventeen runtime resources, and one');
+      expect(content).toContain('exactly eight workflows, twenty-one runtime resources, and one');
       for (const workflow of [
         'squad.md',
         'squad-implement-worker.md',
@@ -1126,7 +1126,7 @@ describe('gh-aw-enlistment skill', () => {
           .not.toContain(LEGACY_SQUAD_INIT_ACTION);
       }
       expect(antiPatterns.replace(/\s+/g, ' ')).toContain(
-        `Approve ONLY \`GH_AW_GITHUB_READ_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_TOKEN\`, and \`${SQUAD_INIT_ACTION}\`. `
+        `Approve ONLY \`SQUAD_GITHUB_APP_PRIVATE_KEY\`, \`SQUAD_GITHUB_TOKEN\`, and \`${SQUAD_INIT_ACTION}\`. `
         + 'Anything else is a STOP.',
       );
     });
@@ -1206,12 +1206,13 @@ describe('gh-aw-enlistment skill', () => {
       expect(content).toContain('[Agentic Research] owner/repo — initial proposals');
     });
 
-    it('pins and verifies the package-capable gh-aw compiler', () => {
+    it('installs stable 1.x without a CLI patch pin and retains the separate compiler contract', () => {
       expect(content).toContain('gh_aw_version_output="$(gh aw --version 2>&1)"');
       expect(content).toContain('gh extension remove gh-aw');
-      expect(content).toContain('required_gh_aw_version="v0.91.5"');
-      expect(content).toContain('gh extension install --pin "${required_gh_aw_version}" github/gh-aw');
-      expect(content).toContain('never select a newer release');
+      expect(content).toContain('gh extension install github/gh-aw');
+      expect(content).not.toContain('gh extension install --pin');
+      expect(content).toContain('never\n> downgrade a newer major version automatically');
+      expect(content).toContain('v1.0.1 compiler bytes and immutable action pins');
       expect(content).toContain('PowerShell');
     });
 
@@ -1273,37 +1274,37 @@ describe('gh-aw-enlistment skill', () => {
     const agentGuide = readLF(AGENT_GUIDE);
     const versionGate = extractVersionGate(guide);
 
-    it('accepts an existing exact v0.91.5 installation without reinstalling', () => {
-      const result = runVersionGate(versionGate, 'v0.91.5', 'v0.91.5');
+    it('accepts an existing exact v1.0.1 installation without reinstalling', () => {
+      const result = runVersionGate(versionGate, 'v1.0.1', 'v1.0.1');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(1);
       expect(result.stderr).not.toContain('CALL remove');
       expect(result.stderr).not.toContain('CALL install');
     });
 
-    it('captures exact v0.91.5 version output emitted on stderr', () => {
-      const result = runVersionGate(versionGate, 'v0.91.5', 'v0.91.5', 'stderr');
+    it('captures exact v1.0.1 version output emitted on stderr', () => {
+      const result = runVersionGate(versionGate, 'v1.0.1', 'v1.0.1', 'stderr');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(1);
       expect(result.stderr).not.toContain('CALL remove');
       expect(result.stderr).not.toContain('CALL install');
     });
 
-    it('removes pre-existing v0.89.21 and verifies a clean v0.91.5 install', () => {
-      const result = runVersionGate(versionGate, 'v0.89.21', 'v0.91.5');
+    it('removes pre-existing v0.89.21 and verifies a clean v1.0.1 install', () => {
+      const result = runVersionGate(versionGate, 'v0.89.21', 'v1.0.1');
       expect(result.status).toBe(0);
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(2);
       expect(result.stderr.match(/^CALL remove$/gm)).toHaveLength(1);
-      expect(result.stderr.match(/^CALL install --pin v0\.91\.5$/gm)).toHaveLength(1);
+      expect(result.stderr.match(/^CALL install github\/gh-aw *$/gm)).toHaveLength(1);
     });
 
     it('fails closed when a clean reinstall persistently reports v0.89.21', () => {
       const result = runVersionGate(versionGate, 'v0.89.21', 'v0.89.21');
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('required gh-aw v0.91.5, but found v0.89.21');
+      expect(result.stderr).toContain('stable gh-aw 1.x is required, but found v0.89.21');
       expect(result.stderr.match(/^CALL version$/gm)).toHaveLength(2);
       expect(result.stderr.match(/^CALL remove$/gm)).toHaveLength(1);
-      expect(result.stderr.match(/^CALL install --pin v0\.91\.5$/gm)).toHaveLength(1);
+      expect(result.stderr.match(/^CALL install github\/gh-aw *$/gm)).toHaveLength(1);
       expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(
         guide.indexOf('git switch -c chore/squad-gh-aw-bootstrap'),
       );
@@ -1314,6 +1315,35 @@ describe('gh-aw-enlistment skill', () => {
 
     it('keeps the canonical skill version gate synchronized with the guide', () => {
       expect(extractVersionGate(readLF(CANONICAL))).toBe(versionGate);
+    });
+
+    it.each(['v1.0.2', 'v1.12.3'])('stops unsupported stable 1.x %s before repository changes, without downgrading', (version) => {
+      const result = runVersionGate(versionGate, version, 'v1.0.1');
+      expect(result.status, `unreviewed compiler ${version} passed compatibility`).toBe(1);
+      expect(result.stderr).toContain(`authenticates gh-aw v1.0.1 output, not ${version}`);
+      expect(result.stderr).toContain('Obtain a maintainer-reviewed Squad revision covering this compiler');
+      expect(result.stdout).not.toContain('COMPATIBILITY PASSED');
+      expect(result.stderr).not.toContain('CALL install');
+      expect(result.stderr).not.toContain('CALL remove');
+      expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(guide.indexOf('gh api --method PATCH'));
+      expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(guide.indexOf('gh api --method PUT'));
+      expect(guide.indexOf(VERSION_GATE_END)).toBeLessThan(guide.indexOf(INSTALL_COMMAND));
+    });
+
+    it.each(['v1.0.2', 'v1.12.3'])('stops if an unpinned clean install returns unsupported %s', (version) => {
+      const result = runVersionGate(versionGate, 'v0.89.21', version);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`authenticates gh-aw v1.0.1 output, not ${version}`);
+      expect(result.stderr.match(/^CALL install github\/gh-aw *$/gm)).toHaveLength(1);
+      expect(result.stdout).not.toContain('COMPATIBILITY PASSED');
+    });
+
+    it.each(['v1.0.1-preview', 'v2.0.0', 'unknown'])('rejects %s without automatically replacing a non-0.x installation', (version) => {
+      const result = runVersionGate(versionGate, version, 'v1.0.1');
+      expect(result.status, `unsupported compiler family ${version} passed preflight`).toBe(1);
+      expect(result.stderr).toContain(`stable gh-aw 1.x is required, but found ${version}`);
+      expect(result.stderr).not.toContain('CALL install');
+      expect(result.stderr).not.toContain('CALL remove');
     });
 
     it('checks the staged installation before every bootstrap commit', () => {
@@ -1354,7 +1384,7 @@ describe('gh-aw-enlistment skill', () => {
         }
       }
       expect(guide).toContain('gh auth status --hostname github.com');
-      expect(guide).toContain('GH_AW_GITHUB_READ_APP_PRIVATE_KEY');
+      expect(guide).not.toContain('GH_AW_GITHUB_READ_APP_PRIVATE_KEY');
       expect(guide).toContain(`# (${SQUAD_INIT_ACTION}) and nothing else. STOP and`);
       expect(guide).toContain(`- Action: \`${SQUAD_INIT_ACTION}\``);
       expect(guide.replace(/\s+/g, ' '), `${GUIDE} must not offer ${LEGACY_SQUAD_INIT_ACTION} as a referenced name`)

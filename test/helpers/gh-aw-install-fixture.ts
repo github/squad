@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path';
 import {
   CONTRACT_DESTINATION,
   CONTRACT_SOURCE,
+  COMPILER_ACTION_PINS,
   PACKAGE_NAME,
   compileWithPinnedActions,
 } from '../../workflows/shared/squad-install-verifier.mjs';
@@ -59,6 +60,14 @@ export interface InstallFixture {
 }
 
 const fixtureCache = new Map<string, InstallFixture>();
+
+export function seedCompilerActionPins(root: string): void {
+  const path = resolve(root, '.github/aw/actions-lock.json');
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({
+    entries: Object.fromEntries(COMPILER_ACTION_PINS.map(pin => [`${pin.repo}@${pin.version}`, pin])),
+  }), { flag: 'wx' });
+}
 
 function cloneFixture(fixture: InstallFixture): InstallFixture {
   return {
@@ -176,7 +185,7 @@ export function createFirstInstallFixture(
         package: packageName,
         source: `${packageName}@${revision}`,
         resolvedCommit: revision,
-        installer: 'gh-aw v0.91.5 test',
+        installer: 'gh-aw v1.0.1 test',
         files,
       },
       consumerFiles,

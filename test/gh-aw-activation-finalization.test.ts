@@ -1180,6 +1180,7 @@ describe('trusted synchronous publication completion (source and strict-compiled
           if (name === join(f.root, 'gh-aw/actions/index.cjs')) return api;
           if (name === join(f.root, 'gh-aw/actions/sanitize_content.cjs')) return runtime.load('js/sanitize_content.cjs');
           if (name === join(f.root, 'gh-aw/actions/issue_body.cjs')) return runtime.load('js/issue_body.cjs');
+          if (name === join(f.root, 'gh-aw/actions/report_ast.cjs')) return runtime.load('js/report_ast.cjs');
           return createRequire(import.meta.url)(name);
         }, {}, {}, () => github,
       );
@@ -1212,11 +1213,21 @@ describe('trusted synchronous publication completion (source and strict-compiled
       const baselineRun = compiled(baseline);
       await baselineRun.create(await baselineRun.prepare());
       const attributedBody = baseline.writes.find(write => write.method === 'createIssue')!.params.body;
+      const probeSize = async (units: number) => {
+        const probe = fixture({ count: 1 });
+        probe.comments.get(10)!.body += '\nx'.repeat(units);
+        const probeRun = compiled(probe);
+        await probeRun.create(await probeRun.prepare());
+        return probe.writes.find(write => write.method === 'createIssue')!.params.body.length;
+      };
+      const firstProbe = await probeSize(100);
+      const unitSize = (await probeSize(200) - firstProbe) / 100;
+      const paragraphOffset = firstProbe - attributedBody.length - 100 * unitSize;
       const f = fixture({ count: 1 });
-      const extra = size - attributedBody.length;
-      const newlines = Math.floor((extra - (unicode ? 3 : 1)) / 3);
-      f.comments.get(10)!.body += '\n'.repeat(newlines) + (unicode ? '😀' : '')
-        + 'x'.repeat(extra - newlines * 3 - (unicode ? 2 : 0));
+      const extra = size - attributedBody.length - paragraphOffset;
+      const units = Math.floor((extra - (unicode ? 2 : 0)) / unitSize);
+      f.comments.get(10)!.body += '\nx'.repeat(units) + (unicode ? '😀' : '')
+        + 'x'.repeat(extra - units * unitSize - (unicode ? 2 : 0));
       const run = compiled(f);
       const capture = await run.prepare();
       if (size > 65536) {
@@ -1230,6 +1241,8 @@ describe('trusted synchronous publication completion (source and strict-compiled
         expect(f.createIssue).toHaveBeenCalledTimes(1);
       }
     },
+    // The pinned renderer processes thousands of quoted lines through real prepare/create/finalize jobs.
+    20_000,
   );
 
   for (const implementation of ['source', 'compiled']) {

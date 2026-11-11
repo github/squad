@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { extractSafeOutputsConfigJson } from './helpers/gh-aw-lock.js';
 import { parse } from 'yaml';
+import { seedCompilerActionPins } from './helpers/gh-aw-install-fixture.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REVIEWER = read('workflows/squad-review.md');
@@ -161,6 +162,7 @@ function compileReviewer(workflow = REVIEWER): CompiledContract {
   mkdirSync(workflowDir, { recursive: true });
   cpSync(resolve(ROOT, 'workflows'), workflowDir, { recursive: true });
   writeFileSync(resolve(workflowDir, 'squad-review.md'), workflow);
+  seedCompilerActionPins(workspace);
   execFileSync('git', ['init', '--quiet'], { cwd: workspace });
   execFileSync(
     'gh',
@@ -378,12 +380,12 @@ describe('gh-aw enforcing Squad reviewer', () => {
 
   it('declares the complete native package for the pinned compiler job', () => {
     const manifest = read('workflows/aw.yml');
-    expect(manifest).toContain('min-version: v0.91.5');
+    expect(manifest).toContain('min-version: v1.0.1');
     expect(manifest.match(/destination: \.github\/workflows\/squad(?:-[\w-]+)?\.md/g)).toHaveLength(8);
     expect(manifest.match(/source: package\/squad(?:-[\w-]+)?\.md/g)).toHaveLength(8);
     expect(manifest).toContain('  - skills/gh-aw-enlistment');
     expect(read('.github/workflows/squad-ci.yml')).toContain(
-      'gh extension install --force --pin v0.91.5 github/gh-aw',
+      'gh extension install --force --pin v1.0.1 github/gh-aw',
     );
   });
 

@@ -30,7 +30,7 @@ export const ACCEPTED_PACKAGE_NAMES = Object.freeze([PACKAGE_NAME, ...LEGACY_PAC
 export const PACKAGE_MANIFEST = 'workflows/aw.yml';
 export const CONTRACT_SOURCE = 'workflows/squad-workflows.manifest.json';
 export const CONTRACT_DESTINATION = '.github/aw/squad-workflows.manifest.json';
-export const MIN_GH_AW_VERSION = 'v0.91.5';
+export const MIN_GH_AW_VERSION = 'v1.0.1';
 export const OWNERSHIP_ENTRY_COUNT = 30;
 export const OWNERSHIP_DESTINATION = packageOwnershipDestination(PACKAGE_NAME);
 export const LEGACY_OWNERSHIP_DESTINATIONS = Object.freeze(
@@ -45,9 +45,22 @@ export const TRIGGER_PROBE_DESTINATION =
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const REVISION_PATTERN = /^[0-9a-f]{40}$/;
 const LOCK_REVISION_PLACEHOLDER = 'f'.repeat(40);
-const COMPILER_ACTION_VERSION = 'v0.91.5';
-const COMPILER_ACTION_SHA = '16b430146d5d5646eccef5a1ceb72152333b18b9';
+const COMPILER_ACTION_VERSION = 'v1.0.1';
+const COMPILER_ACTION_SHA = '221ba4f4319de6b8e809d1a15528b3ae6a818aa5';
 const COMPILER_ACTION_REPOS = ['github/gh-aw-actions/setup', 'github/gh-aw-actions/setup-cli'];
+export const COMPILER_ACTION_PINS = Object.freeze([
+  ...COMPILER_ACTION_REPOS.map(repo => ({
+    repo, version: COMPILER_ACTION_VERSION, sha: COMPILER_ACTION_SHA,
+  })),
+  { repo: 'actions/checkout', version: 'v7.0.1', sha: '3d3c42e5aac5ba805825da76410c181273ba90b1' },
+  { repo: 'actions/github-script', version: 'v9.0.0', sha: '3a2844b7e9c422d3c10d287c895573f7108da1b3' },
+  { repo: 'actions/setup-node', version: 'v7.1.0', sha: '949feb2413d6458794dcd2491c4babbbce0c15c1' },
+  { repo: 'actions/download-artifact', version: 'v8.0.2', sha: '9000827ccba6bdab643e8b6fd33ac0654aef8333' },
+  { repo: 'actions/upload-artifact', version: 'v7.0.2', sha: 'cf430e030ddbb5b0abf93d22962f4752f3646cd9' },
+  { repo: 'actions/create-github-app-token', version: 'v3.2.0', sha: 'bcd2ba49218906704ab6c1aa796996da409d3eb1' },
+  { repo: 'actions/download-artifact', version: 'v8.0.1', sha: '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c' },
+  { repo: 'actions/upload-artifact', version: 'v7.0.1', sha: '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' },
+]);
 const REPO_CONFIG_PATH = '.github/workflows/aw.json';
 const FAILURE_EXPIRY_VARIANTS = Object.freeze([24]);
 
@@ -504,19 +517,24 @@ export function compileWithPinnedActions(root, env = process.env) {
   }
   const path = resolve(root, '.github/aw/actions-lock.json');
   const pins = {
-    entries: Object.fromEntries(COMPILER_ACTION_REPOS.map(repo => [
-      `${repo}@${COMPILER_ACTION_VERSION}`,
-      { repo, version: COMPILER_ACTION_VERSION, sha: COMPILER_ACTION_SHA },
+    entries: Object.fromEntries(COMPILER_ACTION_PINS.map(pin => [
+      `${pin.repo}@${pin.version}`,
+      pin,
     ])),
   };
   if (existsSync(path)) {
     const existing = JSON.parse(readFileSync(path, 'utf8'));
     for (const [key, pin] of Object.entries(pins.entries)) {
       const actual = existing.entries?.[key];
+      if (actual === undefined && !COMPILER_ACTION_REPOS.includes(pin.repo)) continue;
       if (!actual || actual.repo !== pin.repo || actual.version !== pin.version || actual.sha !== pin.sha) {
         throw new Error(`Compiler action lock has a missing or noncanonical pin: ${key}`);
       }
     }
+    writeFileSync(path, stableJson({
+      ...existing,
+      entries: { ...existing.entries, ...pins.entries },
+    }));
   } else {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, stableJson(pins), { flag: 'wx' });
@@ -845,8 +863,8 @@ function verifyOwnership(root, contract, expectedRevision) {
   if (record.source !== `${record.package}@${record.resolvedCommit}`) {
     throw new Error(`Package ownership source must be ${record.package}@${record.resolvedCommit}.`);
   }
-  if (typeof record.installer !== 'string' || !/^gh-aw v0\.91\.5(?:\s|$)/.test(record.installer)) {
-    throw new Error('Package ownership installer must be gh-aw v0.91.5.');
+  if (typeof record.installer !== 'string' || !/^gh-aw v1\.0\.1(?:\s|$)/.test(record.installer)) {
+    throw new Error('Package ownership installer must be gh-aw v1.0.1.');
   }
   assertArray(record.files, OWNERSHIP_ENTRY_COUNT, 'Package ownership files');
   const expected = expectedOwnership(contract);
@@ -1286,7 +1304,7 @@ export function writeLocalTestOwnership(root, revision) {
     package: PACKAGE_NAME,
     source: `${PACKAGE_NAME}@${revision}`,
     resolvedCommit: revision,
-    installer: 'gh-aw v0.91.5 local package contract test',
+    installer: 'gh-aw v1.0.1 local package contract test',
     files,
   }));
 }

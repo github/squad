@@ -33,6 +33,7 @@ import {
 import {
   CONTRACT_DESTINATION,
   CONTRACT_SOURCE,
+  COMPILER_ACTION_PINS,
   LEGACY_OWNERSHIP_DESTINATIONS,
   LEGACY_PACKAGE_NAMES,
   MIN_GH_AW_VERSION,
@@ -1734,7 +1735,7 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
       ref: '${{ github.workflow_sha }}', 'persist-credentials': false, path: '.squad-activation-trusted-base',
     });
     expect(step('Setup pinned issue creation API').uses)
-      .toBe('github/gh-aw-actions/setup@16b430146d5d5646eccef5a1ceb72152333b18b9');
+      .toBe('github/gh-aw-actions/setup@221ba4f4319de6b8e809d1a15528b3ae6a818aa5');
     const prepare = step('Freeze and validate activation inputs');
     const capture = step('Persist frozen activation capture');
     const create = step('Reserve activation and record actual create results');
@@ -1788,16 +1789,15 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
     const mutantPath = join(workspace, '.github', 'workflows', 'squad.md');
     writeFileSync(mutantPath, readText(mutantPath).replace(safeExpression, `activation-comments: ${unsafeExpression}`));
 
-    execFileSync('gh', ['aw', 'compile', mutantPath, '--strict', '--approve'], {
+    const compile = spawnSync('gh', ['aw', 'compile', mutantPath, '--strict', '--approve'], {
       cwd: workspace,
       encoding: 'utf8',
       stdio: 'pipe',
     });
 
-    const mutantLock = readText(join(workspace, '.github', 'workflows', 'squad.lock.yml'));
-    expect(mutantLock).toMatch(
-      /\$\{\{[^}\n]*\\\\u0026\\\\u0026[^}\n]*\}\}/,
-    );
+    expect(compile.status, `${mutantPath}: unsafe activation-comments expression must fail strict compilation`).not.toBe(0);
+    expect(`${compile.stdout}\n${compile.stderr}`, `${mutantPath}: compiler must identify the offending expression`)
+      .toContain('invalid Actions expression');
   }, 20000);
 
   it('compiles the lifecycle upsert as a post-safe-output job (#1916)', () => {
@@ -4076,7 +4076,7 @@ describe('gh-aw: canonical package integrity contract', () => {
       package: packageName,
       source: `${packageName}@${revision}`,
       resolvedCommit: revision,
-      installer: 'gh-aw v0.91.5 test',
+      installer: 'gh-aw v1.0.1 test',
       files: owned,
     }, null, 2)}\n`);
     return root;
@@ -4221,6 +4221,7 @@ describe('gh-aw: canonical package integrity contract', () => {
       if (name === 'squad-bootstrap') {
         expect(lock.jobs.conclusion.permissions).toEqual({
           actions: 'read',
+          checks: 'read',
           issues: 'write',
           'pull-requests': 'read',
         });
@@ -4320,14 +4321,14 @@ describe('gh-aw: canonical package integrity contract', () => {
     }
   });
 
-  it.each(['v0.89.22', 'v0.91.4', 'v0.91.50', 'v0.91.5-preview'])(
+  it.each(['v0.89.22', 'v0.91.4', 'v1.0.10', 'v1.0.1-preview'])(
     'rejects ownership from unsupported installer %s', version => {
       const root = makeConsumer();
       const path = join(root, OWNERSHIP_FIXTURE);
       const record = JSON.parse(readText(path));
       record.installer = `gh-aw ${version}`;
       writeFileSync(path, JSON.stringify(record));
-      expect(verifyInstall(root).failures.join('\n')).toContain('Package ownership installer must be gh-aw v0.91.5');
+      expect(verifyInstall(root).failures.join('\n')).toContain('Package ownership installer must be gh-aw v1.0.1');
     },
   );
 
@@ -4405,8 +4406,12 @@ describe('gh-aw: canonical package integrity contract', () => {
         .toContain('Installed digest mismatch for .github/workflows/squad.lock.yml');
       writeFileSync(lockPath, original);
 
-      for (const key of Object.keys(pins.entries)) {
-        for (const value of [undefined, MIN_GH_AW_VERSION, '0'.repeat(40)]) {
+      for (const { repo, version } of COMPILER_ACTION_PINS) {
+        const key = `${repo}@${version}`;
+        const values = repo.startsWith('github/gh-aw-actions/')
+          ? [undefined, MIN_GH_AW_VERSION, '0'.repeat(40)]
+          : [MIN_GH_AW_VERSION, '0'.repeat(40)];
+        for (const value of values) {
           const altered = structuredClone(pins);
           if (value === undefined) delete altered.entries[key];
           else altered.entries[key].sha = value;
@@ -4448,23 +4453,22 @@ describe('gh-aw: canonical package integrity contract', () => {
     execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/example/squad-consumer.git'], { cwd: root });
     // A deliberately invalid test credential prevents fallback to local keychain authentication.
     const env = { ...process.env, GH_TOKEN: 'invalid-test-token', GITHUB_TOKEN: '' };
-    const compile = () => execFileSync('gh', ['aw', 'compile', '--strict', '--no-check-update'], {
-      cwd: root, env, stdio: 'pipe', timeout: 120_000,
+    const compile = () => spawnSync('gh', ['aw', 'compile', '--strict', '--no-check-update'], {
+      cwd: root, env, encoding: 'utf8', timeout: 120_000,
     });
     const lockPath = join(root, '.github/workflows/squad.lock.yml');
-    compile();
-    const unpinned = readText(lockPath);
-    expect(createHash('sha256').update(normalizeCompiledLock(unpinned, revisionA)).digest('hex'))
-      .not.toBe(JSON.parse(readText(join(root, CONTRACT_DESTINATION))).workflows
-        .find((entry: { name: string }) => entry.name === 'squad').package_lock_sha256);
-    expect(verifyInstall(root).failures.join('\n')).toContain('Installed digest mismatch');
+    const unseeded = compile();
+    expect(unseeded.status, `${root}: unseeded compilation with invalid credentials must fail closed`).not.toBe(0);
+    expect(`${unseeded.stdout}\n${unseeded.stderr}`, `${root}: report immutable action-resolution failure`)
+      .toMatch(/401|unauthorized|resolve/i);
 
     const seedPins = () => spawnSync(process.execPath, [helperPath], {
       cwd: root, env, encoding: 'utf8', timeout: 120_000,
     });
     const seeded = seedPins();
     expect(seeded.status, seeded.stderr).toBe(0);
-    compile();
+    const compiled = compile();
+    expect(compiled.status, `${compiled.stdout}\n${compiled.stderr}`).toBe(0);
     expect(verifyInstall(root, { expectedRevision: revisionA, strictCompile: true }).failures).toEqual([]);
     const contract = JSON.parse(readText(join(root, CONTRACT_DESTINATION)));
     for (const entry of contract.workflows) {

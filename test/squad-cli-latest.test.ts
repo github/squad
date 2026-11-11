@@ -169,6 +169,7 @@ describe('Squad standalone activation latest-release default', () => {
     expect(install).toContain(
       `uses: github/squad/.github/actions/squad-init@${revision}`,
     );
+    expect(install).toContain("repository: 'github/squad'");
     expect(install).toContain("skip-init: 'true'");
     expect(install, 'workflows/shared/squad.md must use the action default, not a version input')
       .not.toMatch(/^\s+version:/m);

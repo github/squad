@@ -77,6 +77,7 @@ jobs:
       actions: read
   review:
     name: review
+    detection-gate: status-only
     if: always()
     needs: [agent, safe_outputs]
     runs-on: ubuntu-latest

@@ -48,22 +48,27 @@ any unsafe or ambiguous condition rather than guessing.
 Run these steps in order. Treat every "STOP" as a hard halt: report the exact
 condition and wait for a human decision — do not work around it.
 
+Before any extension/workflow installation or repository settings change, show
+the exact branch, approved `SQUAD_SHA`, commands, and planned settings changes;
+pause for explicit human confirmation. Before publication, push, or PR creation,
+show the staged diff, validation results, and exact push/PR commands and pause
+again for explicit confirmation. Verifier success proves facts, not consent.
+
 ### 0. Preflight — verify before you touch anything
 
 ```bash
 # gh is authenticated on github.com
 gh auth status --hostname github.com
 
-# Prove the exact package-capable compiler version before creating artifacts
+# Require stable gh-aw 1.x without pinning the CLI installation to a patch
 # gh-aw-exact-version-start
-required_gh_aw_version="v0.91.5"
 gh_aw_version_output="$(gh aw --version 2>&1)" || gh_aw_version_output=""
 gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 
-if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
-  echo "Installing exact supported gh-aw ${required_gh_aw_version}."
+if [ -z "${gh_aw_version}" ] || [[ "${gh_aw_version}" =~ ^v0\. ]]; then
+  echo "Installing the current stable gh-aw release."
   gh extension remove gh-aw >/dev/null 2>&1 || true
-  gh extension install --pin "${required_gh_aw_version}" github/gh-aw
+  gh extension install github/gh-aw
   gh_aw_version_output="$(gh aw --version 2>&1)" || {
     echo "STOP: gh-aw version could not be verified after clean installation." >&2
     exit 1
@@ -71,8 +76,13 @@ if [ "${gh_aw_version}" != "${required_gh_aw_version}" ]; then
   gh_aw_version="$(printf '%s\n' "${gh_aw_version_output}" | awk 'END {print $NF}')"
 fi
 
-test "${gh_aw_version}" = "${required_gh_aw_version}" || {
-  echo "STOP: required gh-aw v0.91.5, but found ${gh_aw_version:-unavailable} after clean installation." >&2
+[[ "${gh_aw_version}" =~ ^v1\.[0-9]+\.[0-9]+$ ]] || {
+  echo "STOP: stable gh-aw 1.x is required, but found ${gh_aw_version:-unavailable}." >&2
+  exit 1
+}
+test "${gh_aw_version}" = "v1.0.1" || {
+  echo "STOP: this Squad package authenticates gh-aw v1.0.1 output, not ${gh_aw_version}." >&2
+  echo "No repository settings or workflows were changed. Obtain a maintainer-reviewed Squad revision covering this compiler; do not downgrade, patch trusted digests, or bypass verification." >&2
   exit 1
 }
 # gh-aw-exact-version-end
@@ -87,21 +97,27 @@ git status --short
 ```
 
 > **Portability — compiler check:** use the equivalent PowerShell commands to
-> capture both output streams from `gh aw --version`. On any mismatch, remove
-> `github/gh-aw`, cleanly install the exact `v0.91.5` pin, and verify both
-> streams again. Stop before branch creation or file generation unless that
-> second check proves exactly `v0.91.5`; never select a newer release.
+> capture both output streams from `gh aw --version`. If absent or 0.x, cleanly
+> install the current stable `github/gh-aw` release without `--pin` and verify
+> both streams again. Stop unless the result is a stable 1.x release; never
+> downgrade a newer major version automatically. The current package validates
+> v1.0.1 compiler bytes and immutable action pins. Other 1.x releases require
+> a maintainer-reviewed package update, not a consumer-side digest refresh.
 
 - **STOP** if `gh auth status --hostname github.com` is not logged in, or is logged in as the wrong
   identity for this repo (see the `gh-auth-isolation` skill to operate as a
   specific account without switching the global default).
 - **STOP** if `owner_repo` or `default_branch` cannot be resolved.
-- **STOP** if exact gh-aw `v0.91.5` cannot be proven after the clean pinned
-  reinstall. Do not create a branch or generate repository files.
+- **STOP** if stable gh-aw 1.x cannot be proven after installation, or the
+  package's published compiler contract does not cover the installed release.
+  Do not create a branch or generate repository files.
 - **STOP** if the working tree has unrelated uncommitted changes you cannot
   account for — the bootstrap must land as an isolated, reviewable change.
 - Confirm Copilot is enabled for the repository where checkable; the activation
   run and the requested `@copilot` review both depend on it.
+- Before installation, record whether `.vscode/settings.json` and
+  `.github/workflows/agentics-maintenance.yml` already exist. Preserve pre-existing
+  files; stop and report their diff if gh-aw changes them.
 
 ### 1. Require GitHub Issues, then allow Actions-created PRs with a read-only token
 
@@ -223,7 +239,7 @@ fork, which has no releases. Use a revision whose manifest declares
 
 The nested `workflows/aw.yml` is the only supported distribution registration.
 It isolates package auto-discovery from unrelated repository skills and agents,
-and installs exactly eight workflows, seventeen runtime resources, and one
+and installs exactly eight workflows, twenty-one runtime resources, and one
 `gh-aw-enlistment` skill at the same resolved revision:
 
 - `squad.md` + `squad.lock.yml`
@@ -241,7 +257,7 @@ governance-scoped retrospective proposal (see the gh-aw guide's retrospective
 auto-implementation section); installing it alongside the other seven keeps the
 full stack consistent and avoids a second bootstrap pass later.
 
-gh-aw v0.91.5 also materializes
+gh-aw v1.0.1 also materializes
 `.github/skills/agentic-workflows/SKILL.md`. That generic tool-owned router is
 not part of the Squad package and directs agents to mutable prompts from the
 current `github/gh-aw` repository rather than the pinned Squad revision. Remove
@@ -329,7 +345,7 @@ already-approved revision.
 On a clean repo, `gh aw add` reports these expected safe updates and **nothing else**:
 
 <!-- allowlist-start -->
-- Restricted secrets: **`GH_AW_GITHUB_READ_APP_PRIVATE_KEY`**, **`SQUAD_GITHUB_APP_PRIVATE_KEY`**, and **`SQUAD_GITHUB_TOKEN`**
+- Restricted secrets: **`SQUAD_GITHUB_APP_PRIVATE_KEY`** and **`SQUAD_GITHUB_TOKEN`**
 - Action: **`github/squad/.github/actions/squad-init`**
 <!-- allowlist-end -->
 
@@ -368,7 +384,7 @@ This must run after any first-install approval and before committing. Success
 criteria:
 
 - All eight workflows compile successfully.
-- With gh-aw v0.91.5, require exactly two warnings, one occurrence of each
+- With gh-aw v1.0.1, require exactly two warnings, one occurrence of each
   exact diagnostic header below (including its workflow path):
 
 <!-- compile-warning-allowlist-start -->
@@ -455,15 +471,22 @@ If `.github/aw/logs/` lacks a `.gitignore`, add one there:
 !.gitignore
 ```
 
-`gh aw add` may also create `.vscode/settings.json` (enables Copilot for Markdown
-workflow files). This is an **optional editor setting** — the stage command below
-intentionally leaves it untracked. Delete it if unwanted, or stage it explicitly
-if your team wants to share it. Decide deliberately; do not stage it by accident.
+gh-aw v1.0.1 may generate two auxiliary outputs: `.vscode/settings.json`
+(optional Markdown editor settings) and `.github/workflows/agentics-maintenance.yml`
+(the compiler's maintenance workflow). Neither is authenticated by Squad's
+package manifest. Leave both outside the bootstrap PR by default; the staging
+commands below exclude them. Review and stage an auxiliary file by its exact
+path only after explicit approval.
+
+Only remove an unwanted auxiliary file if it was absent before installation
+and was created by this invocation. Never delete or overwrite pre-existing
+editor settings or maintenance workflows. Known, newly generated auxiliary
+files left untracked are expected output, not an unrelated-change failure.
 
 Stage **only** the documented generated surfaces, then verify the staged set:
 
 ```bash
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git diff --cached --stat
@@ -664,7 +687,7 @@ gh aw compile --strict           # final, no --approve; exactly the two document
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-install --source-revision "${SQUAD_SHA}" --strict-compile
 
-git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/
+git add -- .gitattributes .github/aw/ .github/workflows/ .github/skills/ ':(exclude).github/workflows/agentics-maintenance.yml'
 node .github/workflows/shared/squad-install-verifier.mjs \
   --verify-staged-install --stage-ownership --source-revision "${SQUAD_SHA}" || exit 1
 git commit -m "ci: add Squad agentic workflow"
@@ -721,7 +744,7 @@ gh pr merge --squash                # auto-merge before human review. NEVER.
 - ❌ **Committing gh-aw's mutable router.** Remove only
   `.github/skills/agentic-workflows/SKILL.md`; keep the exact Squad-owned
   `.github/skills/gh-aw-enlistment/SKILL.md`.
-- ❌ **Approving unknown safe updates.** Approve ONLY `GH_AW_GITHUB_READ_APP_PRIVATE_KEY`, `SQUAD_GITHUB_APP_PRIVATE_KEY`,
+- ❌ **Approving unknown safe updates.** Approve ONLY `SQUAD_GITHUB_APP_PRIVATE_KEY`,
   `SQUAD_GITHUB_TOKEN`, and `github/squad/.github/actions/squad-init`. Anything
   else is a STOP.
 - ❌ **Treating `--approve` as the final compile.** Always finish with a plain

@@ -440,7 +440,7 @@ safe-outputs:
             persist-credentials: false
             path: .squad-activation-trusted-base
         - name: Setup pinned issue creation API
-          uses: github/gh-aw-actions/setup@v0.91.5
+          uses: github/gh-aw-actions/setup@v1.0.1
           with:
             destination: ${{ runner.temp }}/gh-aw/actions
         - name: Freeze and validate activation inputs
@@ -485,7 +485,11 @@ safe-outputs:
               const actionsDir = join(process.env.RUNNER_TEMP, 'gh-aw/actions');
               const { setupGlobals, createIssue } = require(join(actionsDir, 'index.cjs'));
               const { sanitizeContent } = require(join(actionsDir, 'sanitize_content.cjs'));
-              const { formatIssueBody } = require(join(actionsDir, 'issue_body.cjs'));
+              const { buildIssueBodyReport } = require(join(actionsDir, 'issue_body.cjs'));
+              const { renderReport } = require(join(actionsDir, 'report_ast.cjs'));
+              // Measure before the pinned runtime can redact oversized plan context.
+              const formatIssueBody = (body, options) =>
+                renderReport(buildIssueBodyReport('Issue', body, options)).body.trimEnd();
               setupGlobals(core, github, context, exec, io, getOctokit);
               const activation = await import(pathToFileURL(join(process.env.GITHUB_WORKSPACE,
                 '.squad-activation-trusted-base/.github/workflows/shared/squad-activation.mjs')).href);
@@ -1471,7 +1475,7 @@ gate `create-pull-request`. It diagnoses a `cast_failure` and
 outputs run separately after the agent; this diagnosis cannot prevent a pull
 request that is materialized concurrently.
 
-Pinned gh-aw v0.91.5 makes `report_incomplete` fail the conclusion step.
+Pinned gh-aw v1.0.1 makes `report_incomplete` fail the conclusion step.
 Automatic failure, failed-job, detection, no-op tracking issues and generic
 activation/completion comments are disabled in the dispatcher and router:
 conclusion runs independently of safe-output authorization and completion
