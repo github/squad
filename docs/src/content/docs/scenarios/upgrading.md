@@ -314,6 +314,7 @@ Paths a plain `squad upgrade` may create or rewrite (the only changes `user-stat
 - `^\.copilot/skills/`
 - `^\.github/workflows/(squad-[\w-]+|sync-squad-labels)\.yml(\.local-backup)?$`
 - `^\.squad/\.first-run$`
+- `^\.squad/bin/squad\.mjs$`
 - `^\.squad/config\.json$`
 - `^\.squad/casting/`
 - `^\.squad/templates/`

@@ -19,6 +19,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -227,6 +228,26 @@ export async function resolveCommittedSquadStateMcpSpec(
   const spec = committedSquadStateMcpSpec(direct, squadDir);
   if (spec.source === 'repo-launcher' && squadDir && options.write !== false) {
     if (writeSquadRepoLauncher(root, squadDir, cliVersion) === 'skipped') return direct;
+    const entry = direct.args[0];
+    if (entry) recordSquadCli(entry, cliVersion);
   }
   return spec;
+}
+
+/**
+ * Record this CLI's entry in `<Squad home>/cli.json`, outside the repository, so the repository
+ * launcher also works on this machine when the CLI is neither on PATH nor in the project (a
+ * source build run by path, for example). Best effort: a failure only skips the record.
+ */
+export function recordSquadCli(entry: string, version: string, env: NodeJS.ProcessEnv = process.env): void {
+  try {
+    const home = env['SQUAD_HOME'] ? path.resolve(env['SQUAD_HOME']) : path.join(os.homedir(), '.squad');
+    const file = path.join(home, 'cli.json');
+    const content = `${JSON.stringify({ entry, version }, null, 2)}\n`;
+    if (existsSync(file) && readFileSync(file, 'utf8') === content) return;
+    mkdirSync(home, { recursive: true });
+    writeFileSync(file, content);
+  } catch {
+    // best effort
+  }
 }

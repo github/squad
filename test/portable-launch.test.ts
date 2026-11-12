@@ -172,6 +172,20 @@ describe('the repository launcher script (#2462)', () => {
     expect(out.stderr).toContain('npm install -g @bradygaster/squad-cli@2.0.0');
   });
 
+  it('falls back to the CLI recorded on this machine, and skips an older one', async () => {
+    const { recordSquadCli } = await import('../packages/squad-cli/src/cli/core/mcp-spec.js');
+    const other = path.join(root, 'other-machine-dir');
+    fakeCli(other, '2.0.2');
+    const home = path.join(root, 'squad-home');
+    const entry = path.join(other, 'node_modules', '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js');
+    recordSquadCli(entry, '2.0.2', { SQUAD_HOME: home });
+    expect(JSON.parse(fs.readFileSync(path.join(home, 'cli.json'), 'utf8'))).toEqual({ entry, version: '2.0.2' });
+    expect(run(['state-mcp'], { SQUAD_HOME: home }).stdout.trim()).toBe('fake 2.0.2 ["state-mcp"]');
+    fs.rmSync(other, { recursive: true });
+    fakeCli(other, '1.0.0');
+    expect(run(['state-mcp'], { SQUAD_HOME: home }).status).toBe(1);
+  });
+
   it('honours SQUAD_CLI', () => {
     const entry = write('elsewhere/cli.js', "console.log('override', process.argv.slice(2).join(' '));\n");
     expect(run(['--version'], { SQUAD_CLI: entry }).stdout.trim()).toBe('override --version');
