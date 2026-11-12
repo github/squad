@@ -238,11 +238,14 @@ function recentEnough(entry, version) {
 
 function onPath(name) {
   const exts = win ? (process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';') : [''];
+  // The repository launcher has no bin directory of its own; only skip one that exists.
+  let self;
+  try { self = canonical(ownBin); } catch { self = undefined; }
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
-    try {
-      if (canonical(dir) === canonical(ownBin)) continue;
-    } catch { continue; }
+    let here;
+    try { here = canonical(dir); } catch { continue; }
+    if (here === self) continue;
     for (const ext of exts) {
       const file = path.join(dir, name + ext);
       try {

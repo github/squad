@@ -76,6 +76,7 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
   - Claude hooks reach the launcher through `$CLAUDE_PROJECT_DIR`. Standalone bundle installs write `squad state-mcp`. A CLI run through `npx` keeps the exact-version `npx` command.
   - `squad doctor` flags machine-specific launch commands and a missing launcher. Run `squad upgrade` once to fix an existing repository.
 - `squad init --client claude` tells you to run `claude --agent squad --mcp-config .mcp.json`, not Copilot. With several hosts it gives one line per host (#2453).
+- `.squad/squad.mjs` finds a `squad` on PATH. It used to skip every PATH entry, so a repository with only a global Squad CLI failed with "no Squad CLI found". Arguments reach the CLI unchanged on Windows (through npm's `.cmd` shims, never cmd.exe) and Linux, and a new CI job runs the launcher tests on both.
 
 ## [2.0.0-preview.4] - 2026-11-09
 
