@@ -145,7 +145,7 @@ export function renderClaudeMember(
   const notes = [...host.rejected];
 
   const routed = routing.filter((r) => r.routeTo === id).map((r) => r.workType);
-  const summary = parsed.identity.purpose ?? (role ? `${name}, ${role}.` : `${name}, Squad team member.`);
+  const summary = parsed.identity.purpose ?? (role ? `${name}, ${role.replace(/[.\s]+$/, '')}.` : `${name}, Squad team member.`);
   const description = oneLine(
     `${summary}${routed.length > 0 ? ` Owns: ${routed.join('; ')}.` : ''} Spawned by the Squad coordinator.`,
   );
