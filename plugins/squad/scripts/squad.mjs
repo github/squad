@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const PKG = '@bradygaster/squad-cli';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const projectStart = () => process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const ownBin = path.join(root, 'bin');
 const win = process.platform === 'win32';
 
@@ -27,7 +28,7 @@ function canonical(file) {
 
 // Hooks must be cheap no-ops outside an opted-in team, before CLI or npx resolution.
 function hooksEnabled() {
-  let project = path.resolve(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  let project = path.resolve(projectStart());
   for (;;) {
     for (const name of ['.squad', '.ai-team']) {
       const local = path.join(project, name);
@@ -149,7 +150,7 @@ function resolveCli() {
   const override = process.env.SQUAD_CLI;
   if (override) return /\.[cm]?js$/.test(override) ? [process.execPath, [override]] : [override, []];
   const version = pluginVersion();
-  const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const project = projectStart();
   const local = path.join(project, 'node_modules', ...PKG.split('/'), 'dist', 'cli-entry.js');
   if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
