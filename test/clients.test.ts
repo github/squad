@@ -247,7 +247,8 @@ describe('coordinator Ralph mode', () => {
 describe('coordinator behavioral-contract parity', () => {
   const sections: Array<[string, RegExp[]]> = [
     ['Response Mode', [/Response Mode Selection/, /\*\*Direct\*\*/, /\*\*Lightweight\*\*/, /\*\*Standard\*\*/, /\*\*Full\*\*/]],
-    ['Scribe', [/Scribe spawn protocol and drop-box/, /decisions\/inbox\//, /orchestration-log\//, /\/log\//, /squad_state_health/]],
+    // Session and orchestration logs are retired, as in the Copilot coordinator and Scribe's charter (#2454).
+    ['Scribe', [/Scribe spawn protocol and drop-box/, /decisions\/inbox\//, /neither Scribe nor you writes session logs or orchestration logs/, /squad_state_health/]],
     ['Reviewer Rejection', [/Reviewer rejection protocol and strict lockout/, /locked out/, /may not self-revise/]],
     ['Rai', [/Rai \(RAI Reviewer\)/, /🟢 Green/, /🟡 Yellow/, /🔴 Red/, /blocks shipping/]],
     ['Fact Checker', [/Fact Checker \(verification and devil's advocate\)/, /✅/, /⚠️/, /❌/, /🔍/, /steelmans/, /pre-mortem/]],

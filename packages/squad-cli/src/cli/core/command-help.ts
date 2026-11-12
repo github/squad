@@ -73,14 +73,16 @@ const COMMAND_HELP: Record<string, HelpPrinter> = {
   client: (version) => {
     header('client', version, 'Manage client host projections');
     console.log(`Usage: squad client list [--json]`);
-    console.log(`       squad client add <list> [--dry-run]\n`);
+    console.log(`       squad client add <list> [--dry-run]`);
+    console.log(`       squad client sync [--dry-run]\n`);
     console.log(`Lists the hosts configured in .squad/config.json (clients[]) and whether their`);
     console.log(`projected files exist. An empty clients[] means only the default GitHub Copilot`);
-    console.log(`host (.github/agents/squad.agent.md + .mcp.json) is projected.\n`);
+    console.log(`host (.github/agents/squad.agent.md + .mcp.json) is projected. sync refreshes the`);
+    console.log(`configured hosts' files, e.g. Claude member subagents after routing.md changes.\n`);
     console.log(`Hosts: copilot, claude, kiro, opencode, cursor, codex, antigravity, or "all".\n`);
     console.log(`Options:`);
     console.log(`  ${BOLD}--json${RESET}                      Emit structured JSON instead of text`);
-    console.log(`  ${BOLD}--dry-run${RESET}                   With add: show what would be projected, write nothing\n`);
+    console.log(`  ${BOLD}--dry-run${RESET}                   With add or sync: show what would be projected, write nothing\n`);
   },
 
   roster: (version) => {

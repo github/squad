@@ -28,6 +28,12 @@ For an existing repo:
 npx squad upgrade --client copilot,claude,cursor
 ```
 
+To refresh the configured hosts' files without a full upgrade, for example after you edit `.squad/routing.md` (Claude Code member subagent descriptions are built from it):
+
+```bash
+npx squad client sync
+```
+
 ## What each adapter generates
 
 | Client (`ClientId`) | Generated files |

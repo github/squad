@@ -122,6 +122,8 @@ describe('state-mcp bridge', () => {
       sdkVersion,
       stateBackend: 'two-layer',
       resolvedTeamDir: TMP,
+      resolvedTeamRoot: TMP,
+      resolvedSquadDir: join(TMP, '.squad'),
       bridgeVersion: version,
       launchMode: 'stdio',
     });

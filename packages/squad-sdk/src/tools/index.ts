@@ -957,7 +957,13 @@ export class ToolRegistry {
           cliVersion: this.cliVersion,
           sdkVersion: SQUAD_STATE_VERSION,
           stateBackend: this.backendName,
+          /**
+           * The team root (the directory that contains `.squad`), despite its name. Kept as is for
+           * `squad-state-health/v1` consumers; prefer `resolvedTeamRoot` / `resolvedSquadDir` (#2455).
+           */
           resolvedTeamDir: resolvedTeamDirectory(this.squadRoot),
+          resolvedTeamRoot: resolvedTeamDirectory(this.squadRoot),
+          resolvedSquadDir: path.resolve(this.squadRoot),
           bridgeVersion: this.runtimeVersion,
           launchMode: this.launchMode,
         };

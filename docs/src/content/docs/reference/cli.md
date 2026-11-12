@@ -84,7 +84,7 @@ prerequisites, all supported methods, and update commands.
 | `squad state-mcp [--experimental-backend]` | Run the `squad_state` stdio MCP server; pass `--experimental-backend` (or `SQUAD_EXPERIMENTAL_BACKEND=1`) to also expose the 11 experimental `squad_backend_*` conversation tools (transcript/event-log only until a harness is registered) | Yes |
 | `squad --version` | Print installed version | No |
 
-`squad health --json` preserves the `squad-health/v1` schema and includes `metadata` fields for `cliVersion`, `sdkVersion`, `stateBackend`, `resolvedTeamDir`, `bridgeVersion`, and `launchMode`. Human-readable output is unchanged.
+`squad health --json` preserves the `squad-health/v1` schema and includes `metadata` fields for `cliVersion`, `sdkVersion`, `stateBackend`, `resolvedTeamRoot` (the directory that contains `.squad`), `resolvedSquadDir` (the squad directory itself), `bridgeVersion`, and `launchMode`. `resolvedTeamDir` is kept for existing consumers and holds the same value as `resolvedTeamRoot`; despite its name, it is not the squad directory. Human-readable output is unchanged.
 
 The `squad_state_health` MCP tool includes the same fields in a JSON `Health metadata` line while retaining its existing state and storage lines.
 

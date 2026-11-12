@@ -181,7 +181,7 @@ async function main(): Promise<void> {
     console.log(`                    --insider (with --self: force the insider channel)`);
     console.log(`                    --force (with --self: allow a downgrade)`);
     console.log(`  ${BOLD}client${RESET}     Manage client host projections (Copilot, Claude, Kiro, …)`);
-    console.log(`             Usage: client list [--json] | client add <list> [--dry-run]`);
+    console.log(`             Usage: client list [--json] | client add <list> | client sync`);
     console.log(`  ${BOLD}roster${RESET}     Explicitly opt optional built-ins into team.md`);
     console.log(`             Usage: roster add|remove <rai|fact-checker|all> [--dry-run]`);
     console.log(`  ${BOLD}update-check${RESET} Report cached CLI update status (for tooling/CI)`);

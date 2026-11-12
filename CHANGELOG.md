@@ -64,6 +64,9 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
 
 - The Claude coordinator names Claude Code's `Agent` subagent tool (formerly `Task`). The Claude Code spec, docs and host feature matrix now match the code, and host-projection regression guards keep them that way (#2440, #2445).
 - Every generated Claude Markdown file states its projection version. Files from earlier projections are still recognised as Squad's and upgraded in place, and rolling back the `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` blocks restores the original bytes exactly (#2450).
+- New `squad client sync` refreshes the configured hosts' files without a full upgrade. Init Mode runs it after writing `routing.md`, so each Claude Code member subagent's description names what the member owns instead of repeating its role (#2456).
+- `squad_state_health` and `squad health --json` add `resolvedTeamRoot` (the directory that contains `.squad`) and `resolvedSquadDir` (the squad directory itself). `resolvedTeamDir` keeps its value, the team root, for existing consumers (#2455).
+- The Claude coordinator no longer asks Scribe for session or orchestration logs, matching Scribe's charter and the Copilot coordinator (#2454).
 - Copilot output, `.github/agents/squad.agent.md` and the projections for other hosts are unchanged.
 
 ## [2.0.0-preview.4] - 2026-11-09
