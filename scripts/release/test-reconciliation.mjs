@@ -44,6 +44,7 @@ export const CATEGORY_RULES = Object.freeze([
   { category: 'env-gated', file: /(claude-agent-sdk|copilot-sdk)-harness\.test\.ts$/, title: /live \(real (Agent|Copilot) SDK\)/, reason: 'SQUAD_REAL_CLI_TESTS=1 not set / execution-harness credentials absent (Anthropic API key or Bedrock/Vertex for Claude; a signed-in Copilot user for Copilot)' },
   { category: 'env-gated', file: /squad-20-host-feature-matrix\.test\.ts$/, reason: 'live host evidence requires the real CLI binaries' },
   { category: 'env-gated', file: /mcp-spec-init\.test\.ts$/, title: /squad\.exe/, reason: 'it.runIf(win32): Windows-only PATH/.exe resolution' },
+  { category: 'env-gated', file: /launcher-argv\.test\.ts$/, title: /\.cmd shim has no JavaScript entry/, reason: 'it.runIf(win32): Windows-only npm .cmd shim handling' },
   {
     category: 'env-gated',
     file: 'test/mcp-root-write.test.ts',
