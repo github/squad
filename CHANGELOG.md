@@ -10,6 +10,62 @@ All notable changes to this project will be documented in this file.
 - `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). Available in `v2.0.0-preview.2` and later previews, not stable `v1.1.0`.
 - `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. Available in `v2.0.0-preview.3` and later previews, not stable `v1.1.0`. Transactional existing-memory backend migration (#2425, #2439) is available in `v2.0.0-preview.4`.
 
+### Claude Code as a first-class host (#2438)
+
+Planned as the headline of `v2.0.0-preview.5`.
+
+Claude Code is the first host after GitHub Copilot where Squad uses the host's own features (subagents, hooks, skills, plugins and the Claude Agent SDK) instead of the shared minimum. Every addition goes through the host projection contract in `squad-client-harness-adapters/v0.2` (§4–§5, §13) and the charter extension rules, and the same `.squad/` team still drives Copilot and the other hosts unchanged. It also ships the SDK's first real `HarnessAdapter`, which makes Claude the non-Copilot host that the two v0.2 profiles (harness-adapters §15.1, backend-decoupling §14.4) need before they can be promoted. Promoting them is still pending.
+
+#### Added
+
+- **Squad plugin for Claude Code** (#2443, #2463). Install it with `claude plugin marketplace add github/squad`, then `claude plugin install squad@squad --scope project`. The plugin is generated from the SDK (`plugins/squad/`, by `scripts/build-claude-plugin.mjs`, with a `--check` gate in tests) and published through `.claude-plugin/marketplace.json`. It carries:
+  - the coordinator, as the `squad:squad` agent
+  - the `squad_state` MCP server. It needs no `.mcp.json` approval and no `--mcp-config`, including in headless `claude -p` runs; a recorded measurement in the host feature matrix backs this.
+  - the coordinator's on-demand skills and Squad's template skills, as `/squad:<skill>`
+  - the slash commands `/squad:ralph`, `/squad:cast`, `/squad:ceremony`, `/squad:status` and `/squad:dashboard`
+  - the advisory governance hooks
+  - a launcher that the slash commands, hooks and MCP server call by path, also on the Bash tool's PATH as `squad`. It runs, in order, `SQUAD_CLI`, the project's `@bradygaster/squad-cli` or a `squad` on PATH, and skips a project or PATH install older than the plugin. With none, it fails with install instructions. It runs the plugin's pinned version through `npx` only when `SQUAD_ALLOW_NPX=1` is set, because that downloads and runs code.
+- **Plugin mode for the Claude projection** (#2443, #2463). `squad init --client claude --claude-plugin` (or `squad upgrade --claude-plugin`) records `"claudePlugin": true` in `.squad/config.json`. Squad then writes only the per-repository files: the member subagents, the `CLAUDE.md` block, and two keys in `.claude/settings.json`:
+  - `agent`, so a plain `claude` starts the coordinator
+  - `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` neither prompts nor duplicates the plugin's tools
+
+  `--no-claude-plugin` switches back to the full projection. The Claude projection is now version 3 (`CLAUDE_PROJECTION_VERSION`).
+- **`squad dashboard` and `/squad:dashboard`** (#2459, #2460, #2463). A live local page shows the coordinator and every member at work: who was dispatched and why, which members run in the background and in parallel, each member's tool calls, summaries and results, hook events, and each prompt of a `--continue` session.
+  - **What it reads.** The Claude Code session transcripts for the current directory, including each member's own subagent transcript. It reads them incrementally, follows the newest session and moves to a new one when it starts. `--session <id>` pins one, and `--stream <file>` reads `claude -p --output-format stream-json` logs instead. Unknown transcript line types are skipped and their content is never shown.
+  - **Local only.** It listens on `127.0.0.1` only (from port 4280; `--port` picks one) and rejects any other `Host` header, which protects against DNS rebinding. It sends a Content Security Policy that allows no inline script and no other origin, and transcript text is always rendered as text, never markup.
+  - **One per directory.** `stop`, `status`, `--detach`, `--open` and `--json` manage it, and running it again shows the instance already running. Its state lives in `~/.squad/dashboards/` (or under `SQUAD_HOME`), so `/squad:dashboard` inside Claude Code and `squad dashboard` in a terminal find the same instance.
+  - **Safe from the plugin.** `/squad:dashboard` may run only `squad dashboard`, and never passes your words to the shell.
+  - **No new dependencies.** It needs only Node.js. It replaces the prototype that was used during the end-to-end test.
+- **Member subagents** (#2450). Each team member, built-ins included, is projected from its charter as its own subagent in `.claude/agents/<member>.md`.
+  - Model, reasoning effort and the new `X-squad-host-claude` charter extension (`Tools`, `Isolation`) map onto the subagent's frontmatter.
+  - The coordinator routes to named members and selects a model per spawn through Claude Code's `Agent` tool, using `run_in_background` and `isolation: "worktree"`.
+  - `squad cast` refreshes member files, and the files of removed members are deleted.
+  - A user-authored file at a member path is never overwritten; it is reported as `skipped`.
+- **Native skills and a smaller coordinator** (#2450). Squad's template skills are projected into `.claude/skills/`, except where a team skill of the same name exists. Init Mode, Ralph mode, ceremonies, GitHub Issues mode and PRD mode now load on demand from generated `squad-coordinator-*` skills instead of sitting in the always-loaded prompt.
+- **Advisory governance hooks** (#2450). They're opt-in, with `"claudeHooks": "advisory"`. They:
+  - give the coordinator session context
+  - warn a locked-out member who edits work under review
+  - add a handoff summary after each member finishes
+  - remind the coordinator to run Scribe
+
+  They never block a tool call. New commands: `squad lockout` records reviewer lockouts in `.squad/governance/lockouts.json`, and `squad hook claude <Event>` runs the hooks.
+- **Claude Code runner for `squad watch --execute`** (#2450). `--agent-preset claude` (or `watch.agentPreset: "claude"`) runs each round as `claude -p … --agent squad --output-format stream-json`.
+  - It uses a private, `squad_state`-only MCP config, never the repository's `.mcp.json`.
+  - It checks for the coordinator and the `claude` CLI before starting, and treats an error result as a failed round.
+  - `watch.claudeFlags` is limited to model, permission-mode, effort and turn-limit flags.
+- **First real execution harnesses** (#2441, #2451), experimental, in `@bradygaster/squad-sdk/backend`:
+  - `ClaudeAgentSdkHarness` runs conversation turns on the Claude Agent SDK. Broker approvals go through `canUseTool`: each is bound to a hash, they arrive one at a time, and a deny ends the turn. `@anthropic-ai/claude-agent-sdk` is an optional peer dependency.
+  - `CopilotSdkHarness` does the same on `@github/copilot-sdk`.
+  - Both share an approval queue and a turn lifecycle, and their state survives restarts. Approval records hold a redacted summary, never the tool input.
+  - `squad state-mcp --experimental-backend` registers the Claude harness only when its SDK is installed. `SQUAD_BACKEND_HARNESSES` selects the harnesses or turns them off.
+- New docs: [Squad for Claude Code (plugin)](docs/src/content/docs/features/claude-code-plugin.md). The README, CLI reference, multi-client scenario and adapter spec link to it.
+
+#### Changed
+
+- The Claude coordinator names Claude Code's `Agent` subagent tool (formerly `Task`). The Claude Code spec, docs and host feature matrix now match the code, and host-projection regression guards keep them that way (#2440, #2445).
+- Every generated Claude Markdown file states its projection version. Files from earlier projections are still recognised as Squad's and upgraded in place, and rolling back the `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` blocks restores the original bytes exactly (#2450).
+- Copilot output, `.github/agents/squad.agent.md` and the projections for other hosts are unchanged.
+
 ## [2.0.0-preview.4] - 2026-11-09
 
 Fourth Squad 2.0 preview. This release completes the repository migration to `github/squad` across published npm and NuGet package metadata, runtime links, templates, documentation, and `gh-aw` workflow package identity, adds transactional governed-memory backend migration with source-branch casting ownership, and includes memory lock coordination and Copilot SDK runtime compatibility fixes. npm continues to use `insider` as the canonical dist-tag with `preview` as a compatibility alias; `latest` remains on 1.1.0.

@@ -30,6 +30,7 @@ import {
 } from '../packages/squad-sdk/src/client/index.js';
 import {
   persistClients,
+  readClaudePluginFlag,
   readClientFlag,
   readConfiguredClients,
   syncClients,
@@ -529,6 +530,33 @@ describe('CLI --client handling', () => {
       const bare = await syncClients(root, sq, { version: '0.0.0' });
       expect(bare.clients).toEqual(['claude', 'kiro']);
       expect(readJson('.mcp.json').mcpServers.squad_state.args.at(-1)).toBe('state-mcp');
+    } finally {
+      if (prev !== undefined) process.env['SQUAD_STANDALONE_HOME'] = prev;
+    }
+  });
+
+  it('reads --claude-plugin and --no-claude-plugin', () => {
+    expect(readClaudePluginFlag(['init'])).toBeUndefined();
+    expect(readClaudePluginFlag(['init', '--claude-plugin'])).toBe(true);
+    expect(readClaudePluginFlag(['upgrade', '--no-claude-plugin'])).toBe(false);
+  });
+
+  it('syncClients with claudePlugin adds claude, persists the mode, and switches back', async () => {
+    const sq = path.join(root, '.squad');
+    fs.mkdirSync(sq);
+    fs.writeFileSync(path.join(sq, 'config.json'), '{\n  "keep": 1\n}\n');
+    fs.writeFileSync(path.join(sq, 'team.md'), '| Name | Role |\n|---|---|\n| Data | Expert |\n');
+    const prev = process.env['SQUAD_STANDALONE_HOME'];
+    delete process.env['SQUAD_STANDALONE_HOME'];
+    try {
+      const on = await syncClients(root, sq, { claudePlugin: true, version: '0.0.0' });
+      expect(on.clients).toEqual(['claude']);
+      expect(readJson('.squad/config.json')).toMatchObject({ keep: 1, claudePlugin: true });
+      expect(exists('.claude/agents/squad.md')).toBe(false);
+      expect(readJson('.claude/settings.json').agent).toBe('squad:squad');
+      await syncClients(root, sq, { claudePlugin: false, version: '0.0.0' });
+      expect(readJson('.squad/config.json').claudePlugin).toBeUndefined();
+      expect(exists('.claude/agents/squad.md')).toBe(true);
     } finally {
       if (prev !== undefined) process.env['SQUAD_STANDALONE_HOME'] = prev;
     }

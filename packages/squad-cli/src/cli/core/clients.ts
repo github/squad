@@ -114,6 +114,36 @@ export interface SyncClientsOptions {
   warn?: (message: string) => void;
   /** Only compute the client set; write nothing and persist nothing. */
   dryRun?: boolean;
+  /**
+   * `--claude-plugin` / `--no-claude-plugin`: record `claudePlugin` in `.squad/config.json` before
+   * projecting, which switches the Claude projection to (or from) plugin mode.
+   */
+  claudePlugin?: boolean;
+}
+
+/** `--claude-plugin` → true, `--no-claude-plugin` → false, neither → undefined. */
+export function readClaudePluginFlag(args: readonly string[]): boolean | undefined {
+  if (args.includes('--no-claude-plugin')) return false;
+  if (args.includes('--claude-plugin')) return true;
+  return undefined;
+}
+
+/** Set or clear `claudePlugin` in `.squad/config.json`, keeping every other key. */
+export function persistClaudePlugin(squadDir: string, on: boolean): void {
+  const file = resolveInsideRoot(squadDir, 'config.json');
+  let cfg: Record<string, unknown> = {};
+  if (fs.existsSync(file)) {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`Refusing to overwrite ${file}: root must be a JSON object`);
+    }
+    cfg = parsed as Record<string, unknown>;
+  }
+  if (on) cfg['claudePlugin'] = true;
+  else if ('claudePlugin' in cfg) delete cfg['claudePlugin'];
+  else return;
+  fs.mkdirSync(squadDir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -128,7 +158,10 @@ export async function syncClients(
   squadDir: string,
   options: SyncClientsOptions = {},
 ): Promise<{ clients: ClientId[]; results: ApplyResult[] }> {
-  const requested = options.clients;
+  const requested =
+    options.claudePlugin !== undefined && !(options.clients ?? []).includes('claude')
+      ? [...(options.clients ?? []), 'claude' as ClientId]
+      : options.clients;
   const configured = readConfiguredClients(squadDir);
   const unknownClients = readUnknownConfiguredClients(squadDir);
   if (unknownClients.length > 0) {
@@ -148,6 +181,7 @@ export async function syncClients(
     resolveInsideRoot(destAbs, path.relative(destAbs, squadAbs) || '.');
   }
   resolveInsideRoot(squadAbs, 'config.json');
+  if (options.claudePlugin !== undefined) persistClaudePlugin(squadDir, options.claudePlugin);
 
   const version = options.version ?? getPackageVersion();
   const spec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(version));

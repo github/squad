@@ -74,6 +74,7 @@ prerequisites, all supported methods, and update commands.
 | `squad import <file> --force` | Replace existing squad (archives the old one) | No |
 | `squad aspire` | Launch Aspire dashboard for observability | No |
 | `squad aspire --docker` | Force Docker mode for Aspire | No |
+| `squad dashboard` | Live local page of the team's Claude Code sessions on 127.0.0.1 (`stop`, `status`, `--detach`, `--open`, `--session <id>`, `--stream <file>`); see [Claude Code plugin](../features/claude-code-plugin.md#team-dashboard) | No |
 | `squad upstream add\|remove\|list\|sync` | Manage upstream Squad sources | Yes |
 | `copilot --agent squad` | Launch interactive shell explicitly | No |
 | `squad nap` | Context hygiene (compress, prune, archive .squad/ state) | Yes |

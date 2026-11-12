@@ -135,6 +135,8 @@ export function renderClaudeMember(
   generatedNote: string,
   /** Reasoning effort from `.squad/config.json`, which outranks the charter (exec-prefs §3). */
   configEffort?: string,
+  /** `squad_state` tool-name prefix: `mcp__squad_state__` (project `.mcp.json`) or the plugin's. */
+  mcpPrefix = 'mcp__squad_state__',
 ): string {
   const parsed = parseCharterMarkdown(charter);
   const host = parseClaudeHostSettings(charter);
@@ -183,7 +185,7 @@ export function renderClaudeMember(
     `If the spawn prompt gives a TEAM ROOT, resolve these paths under it instead. ` +
     `Your charter is authoritative: follow its responsibilities and boundaries, and the task in the spawn prompt.\n\n` +
     `Squad dispatches specialists only from the coordinator: do not spawn subagents of your own. ` +
-    `Read and write shared team state through the \`squad_state\` MCP tools (\`mcp__squad_state__*\`) when they are available.\n`
+    `Read and write shared team state through the \`squad_state\` MCP tools (\`${mcpPrefix}*\`) when they are available.\n`
   );
 }
 
@@ -191,7 +193,12 @@ export function renderClaudeMember(
  * Project one managed subagent per member charter, plus `obsolete` entries for generated member
  * files whose charter is gone. Existing user-authored files (no `ownedMarker`) are never overwritten.
  */
-export function projectClaudeMembers(ctx: ClientContext, generatedNote: string, ownedMarker: string): ProjectionFile[] {
+export function projectClaudeMembers(
+  ctx: ClientContext,
+  generatedNote: string,
+  ownedMarker: string,
+  mcpPrefix?: string,
+): ProjectionFile[] {
   const squadDir = ctx.squadDir ?? '.squad';
   const squadAbs = path.resolve(ctx.root, squadDir);
   const agentsAbs = path.join(squadAbs, 'agents');
@@ -211,7 +218,7 @@ export function projectClaudeMembers(ctx: ClientContext, generatedNote: string, 
       kind: 'managed',
       path: `${CLAUDE_AGENTS_DIR}/${id}.md`,
       ownedMarker,
-      content: renderClaudeMember(id, charter, routing, squadDir, generatedNote, effortConfig(id)),
+      content: renderClaudeMember(id, charter, routing, squadDir, generatedNote, effortConfig(id), mcpPrefix),
     });
   }
 

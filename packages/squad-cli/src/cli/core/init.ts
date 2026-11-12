@@ -183,6 +183,8 @@ export interface RunInitOptions {
   mcpFrontmatter?: boolean;
   /** Client hosts to project (copilot, claude, kiro, opencode, cursor, codex, antigravity) */
   clients?: ClientId[];
+  /** `--claude-plugin` (true) / `--no-claude-plugin` (false): Claude projection plugin mode. */
+  claudePlugin?: boolean;
   /** If false, skip writing "chat.newSession.defaultMode": "Squad" to .vscode/settings.json (default: true) */
   includeVscodeDefault?: boolean;
 }
@@ -503,9 +505,13 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
     // best-effort: .mcp.json write failure does not block init
   }
 
-  if (options.clients && options.clients.length > 0) {
+  if ((options.clients && options.clients.length > 0) || options.claudePlugin !== undefined) {
     try {
-      const synced = await applyClientProjectionsForInit(dest, squadDir, { clients: options.clients, version });
+      const synced = await applyClientProjectionsForInit(dest, squadDir, {
+        clients: options.clients,
+        version,
+        claudePlugin: options.claudePlugin,
+      });
       reportClientResults(synced.results, (m) => console.log(m.startsWith('⚠') ? `${YELLOW}${m}${RESET}` : `${GREEN}${m}${RESET}`));
     } catch (err) {
       console.warn(`${YELLOW}⚠ Could not project client files: ${err instanceof Error ? err.message : err}${RESET}`);
@@ -594,6 +600,9 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
   if (!isInitNoColor()) await sleep(80);
   console.log();
   console.log(`${GREEN}${BOLD}Squad initialized.${RESET} Run ${CYAN}${BOLD}copilot --agent squad${RESET} and tell it what you're building.`);
+  if (options.claudePlugin) {
+    console.log(`Claude Code: run ${CYAN}${BOLD}claude${RESET}; the Squad plugin's coordinator starts by default in this repository.`);
+  }
   console.log();
   console.log(`${DIM}Tip: for non-interactive scripts that need squad_state tools, add to package.json:${RESET}`);
   console.log(`${DIM}  "squad:copilot": "copilot --agent squad --additional-mcp-config @.mcp.json"${RESET}`);

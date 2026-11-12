@@ -44,6 +44,8 @@ Every host gets one coordinator file. Team members are not projected as separate
 
 ## Claude Code walkthrough
 
+> To use the Squad plugin for Claude Code instead (no `.mcp.json` approval, no `--mcp-config`), see [Squad for Claude Code (plugin)](../features/claude-code-plugin.md).
+
 1. Run `npx squad init --client claude`.
 2. Open `.claude/agents/squad.md` to inspect the coordinator prompt.
 3. Confirm `.mcp.json` contains `squad_state` and `.gitignore` contains the managed `.claude/worktrees/` block.

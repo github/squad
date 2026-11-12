@@ -11,7 +11,8 @@ import { upsertTomlTable } from './apply.js';
 import { buildCoordinatorInstructions, dispatchStrategy } from './coordinator.js';
 import { projectClaudeMembers } from './claude-members.js';
 import { projectClaudeSkills } from './claude-skills.js';
-import { projectClaudeHooks } from './claude-hooks.js';
+import { projectClaudeHooks, readClaudePluginSettingsOwnership } from './claude-hooks.js';
+import { CLAUDE_MARKETPLACE_NAME, CLAUDE_PLUGIN_AGENT, CLAUDE_PLUGIN_MCP_PREFIX, CLAUDE_PLUGIN_NAME, readClaudePluginMode } from './claude-plugin.js';
 import type { HostProjection, ClientContext, ClientId, ProjectionFile } from './types.js';
 import { CLIENT_IDS } from './types.js';
 
@@ -24,9 +25,11 @@ const GENERATED_NOTE = `<!-- ${GENERATED_NOTE_TEXT} -->`;
 /**
  * Claude Code projection version (harness-adapters §5). v1: coordinator, `.mcp.json`, `CLAUDE.md`
  * block, `.gitignore` lines. v2: adds member subagents, skills and the opt-in `settings.json` hooks.
+ * v3: adds plugin mode (`"claudePlugin": true`), where the Squad Claude Code plugin carries the
+ * coordinator, skills, hooks and MCP server, and the projection keeps only per-repository files.
  * Bump once per change to the set or shape of projected files.
  */
-export const CLAUDE_PROJECTION_VERSION = 2;
+export const CLAUDE_PROJECTION_VERSION = 3;
 /** Claude files carry the version; the shared note text stays a substring so v1 files still match as Squad-owned. */
 const CLAUDE_GENERATED_NOTE = `<!-- ${GENERATED_NOTE_TEXT} Claude projection v${CLAUDE_PROJECTION_VERSION}. -->`;
 
@@ -75,7 +78,7 @@ function yamlString(s: string): string {
   return JSON.stringify(s);
 }
 
-function mcpJson(ctx: ClientContext, withTools: boolean): ProjectionFile {
+function mcpJson(ctx: ClientContext, withTools: boolean): Extract<ProjectionFile, { kind: 'json' }> {
   return {
     kind: 'json',
     path: '.mcp.json',
@@ -99,40 +102,61 @@ const copilot: HostProjection = {
   project: (ctx) => [mcpJson(ctx, true)],
 };
 
+const CLAUDE_COORDINATOR_PATH = '.claude/agents/squad.md';
+
 const claude: HostProjection = {
   id: 'claude',
   capabilities: CAPABILITIES.claude,
   label: 'Claude Code',
   dispatch: dispatchStrategy('claude'),
-  project: (ctx) => [
-    {
-      kind: 'managed',
-      path: '.claude/agents/squad.md',
-      content:
-        // No `tools` allowlist: like the Copilot coordinator (`tools: ["*"]`), the Claude coordinator
-        // inherits every session tool, so MCP servers the user adds next to squad_state stay callable.
-        // An allowlist naming only mcp__squad_state hid them, and this managed file reverts hand edits.
-        frontmatter([
-          ['name', 'squad'],
-          ['description', yamlString(DESCRIPTION)],
-        ]) +
-        `${CLAUDE_GENERATED_NOTE}\n\n${buildCoordinatorInstructions('claude', ctx.squadDir, ctx.root)}`,
-    },
-    mcpJson(ctx, false),
-    {
-      kind: 'block',
-      path: 'CLAUDE.md',
-      content: `## Squad\n\nThis project uses Squad. Run \`claude --agent squad --mcp-config .mcp.json\` (interactive Claude Code does not load project-scoped \`.mcp.json\` servers until approved, so pass the config explicitly; or delegate to the \`squad\` subagent) to work with the team defined in \`${ctx.squadDir ?? '.squad'}/team.md\`. Shared state is served by the \`squad_state\` MCP server in \`.mcp.json\`.`,
-    },
-    // Claude Code creates embedded git worktrees here for isolated subagents.
-    { kind: 'lines', path: '.gitignore', id: 'claude', lines: ['.claude/worktrees/'] },
-    // One subagent per member charter; user-authored files at the same path are never overwritten.
-    ...projectClaudeMembers(ctx, CLAUDE_GENERATED_NOTE, GENERATED_NOTE_TEXT),
-    // Template skills plus the coordinator's on-demand sections, as native Claude Code skills.
-    ...projectClaudeSkills(ctx, CLAUDE_GENERATED_NOTE, GENERATED_NOTE_TEXT),
-    // Opt-in advisory governance hooks (`claudeHooks` in config.json), merged beside user hooks.
-    ...projectClaudeHooks(ctx),
-  ],
+  project: (ctx) => {
+    const squadDir = ctx.squadDir ?? '.squad';
+    // Plugin mode (v3): the Squad plugin carries the coordinator, skills, hooks and MCP server.
+    const plugin = readClaudePluginMode(path.resolve(ctx.root, squadDir));
+    const coordinator = path.join(ctx.root, CLAUDE_COORDINATOR_PATH);
+    const ownsProjectMcp = plugin && (
+      readClaudePluginSettingsOwnership(ctx.root)?.projectMcp ||
+      (fs.existsSync(coordinator) && fs.readFileSync(coordinator, 'utf8').includes(GENERATED_NOTE_TEXT))
+    );
+    return [
+      plugin
+        ? { kind: 'obsolete', path: CLAUDE_COORDINATOR_PATH, ownedMarker: GENERATED_NOTE_TEXT }
+        : {
+            kind: 'managed',
+            path: CLAUDE_COORDINATOR_PATH,
+            content:
+              // No `tools` allowlist: like the Copilot coordinator (`tools: ["*"]`), the Claude coordinator
+              // inherits every session tool, so MCP servers the user adds next to squad_state stay callable.
+              // An allowlist naming only mcp__squad_state hid them, and this managed file reverts hand edits.
+              frontmatter([
+                ['name', 'squad'],
+                ['description', yamlString(DESCRIPTION)],
+              ]) +
+              `${CLAUDE_GENERATED_NOTE}\n\n${buildCoordinatorInstructions('claude', ctx.squadDir, ctx.root)}`,
+          },
+      // Plugin mode leaves `.mcp.json` alone: the Copilot bootstrap owns its squad_state entry, and
+      // `.claude/settings.json` turns that entry off for Claude Code.
+      ...(plugin
+        ? ownsProjectMcp ? [{ ...mcpJson(ctx, false), update: (existing: Json) => existing }] : []
+        : [mcpJson(ctx, false)]),
+      {
+        kind: 'block',
+        path: 'CLAUDE.md',
+        content: plugin
+          ? `## Squad\n\nThis project uses Squad through the Squad Claude Code plugin. Install it once (\`claude plugin marketplace add github/squad\`, then \`claude plugin install ${CLAUDE_PLUGIN_NAME}@${CLAUDE_MARKETPLACE_NAME}\`) and run \`claude\`: \`.claude/settings.json\` starts the \`${CLAUDE_PLUGIN_AGENT}\` coordinator to work with the team defined in \`${squadDir}/team.md\`. Shared state is served by the plugin's \`squad_state\` MCP server.`
+          : `## Squad\n\nThis project uses Squad. Run \`claude --agent squad --mcp-config .mcp.json\` (interactive Claude Code does not load project-scoped \`.mcp.json\` servers until approved, so pass the config explicitly; or delegate to the \`squad\` subagent) to work with the team defined in \`${squadDir}/team.md\`. Shared state is served by the \`squad_state\` MCP server in \`.mcp.json\`.`,
+      },
+      // Claude Code creates embedded git worktrees here for isolated subagents.
+      { kind: 'lines', path: '.gitignore', id: 'claude', lines: ['.claude/worktrees/'] },
+      // One subagent per member charter; user-authored files at the same path are never overwritten.
+      ...projectClaudeMembers(ctx, CLAUDE_GENERATED_NOTE, GENERATED_NOTE_TEXT, plugin ? CLAUDE_PLUGIN_MCP_PREFIX : undefined),
+      // Template skills plus the coordinator's on-demand sections, as native Claude Code skills.
+      ...projectClaudeSkills(ctx, CLAUDE_GENERATED_NOTE, GENERATED_NOTE_TEXT, { plugin }),
+      // Opt-in advisory governance hooks (`claudeHooks` in config.json), merged beside user hooks;
+      // in plugin mode, the plugin's `agent` and `disabledMcpjsonServers` keys instead.
+      ...projectClaudeHooks(ctx, { plugin }),
+    ];
+  },
 };
 
 const kiro: HostProjection = {

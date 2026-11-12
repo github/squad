@@ -266,6 +266,26 @@ describe('Claude hook runtime (advisory)', () => {
     expect(runClaudeHook('SubagentStart', { agent_type: 'squad' }, env)!.hookSpecificOutput!.hookEventName).toBe('SubagentStart');
   });
 
+  it('the plugin coordinator squad:squad gets the same context as the project squad agent', () => {
+    const plugin = { ...env, source: 'plugin' as const };
+    const ctx = runClaudeHook('SessionStart', { agent_type: 'squad:squad', source: 'startup' }, plugin)!.hookSpecificOutput!.additionalContext;
+    expect(ctx).toContain('Roster:');
+    expect(runClaudeHook('SubagentStart', { agent_type: 'squad:squad' }, plugin)!.hookSpecificOutput!.hookEventName).toBe('SubagentStart');
+    expect(edit('dallas', 'src/auth/login.ts')).not.toBeNull();
+  });
+
+  it('plugin hooks defer when the project settings already run the Squad handlers', () => {
+    const settings = path.join(env.root, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'squad', args: ['hook', 'claude', 'SessionStart'] }] }] } }));
+    try {
+      expect(runClaudeHook('SessionStart', { agent_type: 'squad:squad' }, { ...env, source: 'plugin' })).toBeNull();
+      expect(runClaudeHook('SessionStart', { agent_type: 'squad' }, { ...env, source: 'project' })).not.toBeNull();
+    } finally {
+      fs.rmSync(settings);
+    }
+  });
+
   it('SessionStart reports a missing team instead of injecting context', () => {
     fs.rmSync(path.join(squad(), 'team.md'));
     expect(runClaudeHook('SessionStart', { agent_type: 'squad' }, env)).toEqual({ systemMessage: expect.stringMatching(/no team found/) });

@@ -1,5 +1,6 @@
 /**
- * `squad hook claude <Event>`: the Claude Code hook entry point (#2438 Phase 3).
+ * `squad hook claude <Event> [--plugin]`: the Claude Code hook entry point (#2438 Phase 3). The Squad
+ * Claude Code plugin passes `--plugin` (Phase 5).
  *
  * Reads the hook event JSON on stdin and prints advisory JSON output. It never blocks: any error
  * prints nothing and exits 0, so a broken hook cannot stop a session.
@@ -29,7 +30,7 @@ async function readStdin(): Promise<string> {
 }
 
 export async function runHookCommand(args: string[]): Promise<number> {
-  const [host, event] = args;
+  const [host, event, ...rest] = args;
   if (host !== 'claude' || !event || !(CLAUDE_HOOK_EVENTS as readonly string[]).includes(event)) {
     process.stderr.write(`Usage: squad hook claude <${CLAUDE_HOOK_EVENTS.join('|')}>\n`);
     return 0;
@@ -45,6 +46,7 @@ export async function runHookCommand(args: string[]): Promise<number> {
       teamAbs: state.paths.teamSquadDir,
       projectAbs: state.paths.projectDir,
       version: getPackageVersion(),
+      source: rest.includes('--plugin') ? 'plugin' : 'project',
     });
     if (out) process.stdout.write(`${JSON.stringify(out)}\n`);
   } catch (err) {
