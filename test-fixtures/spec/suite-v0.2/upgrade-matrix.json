@@ -86,7 +86,7 @@
       },
       "artifacts": {
         "release": {
-          "repository": "bradygaster/squad",
+          "repository": "github/squad",
           "tag": "v1.0.1",
           "assets": {
             "squad-darwin-arm64.tar.gz": {
@@ -127,7 +127,7 @@
       },
       "artifacts": {
         "release": {
-          "repository": "bradygaster/squad",
+          "repository": "github/squad",
           "tag": "v1.1.0",
           "assets": {
             "squad-darwin-arm64.tar.gz": {
