@@ -36,6 +36,6 @@ exports[`host projection regression guards (#2438) > guard 1: the Copilot projec
   ".github/workflows/squad-triage.yml": "54f8a35713f9cd88bef9ee54b03da8f7d9cbd0bbdcbb03c73cb0dd37fd9bd1f2",
   ".github/workflows/sync-squad-labels.yml": "105f9f0b1e004833154c6511c84b7f70c465e69e1e8f3da8676ec1255396c34d",
   ".gitignore": "37aa6c4e49c873d2603b79e173ba46e216b18c596057964aac1cd6e62ff4e89f",
-  ".mcp.json": "bfdf4acbf0b686e8cf8450c5416b3983ceda7016718e6b1e5a551d2576d1eb80",
+  ".mcp.json": "fc7033ca67bd82d6c4aab068c6afd7b2cad9533517417dea213dbd5641b986a7",
 }
 `;

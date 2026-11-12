@@ -21,7 +21,7 @@ import {
 } from '@bradygaster/squad-sdk/client';
 import { readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
 import { detectSquadDir } from '../core/detect-squad-dir.js';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec } from '../core/mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from '../core/mcp-spec.js';
 import { getPackageVersion } from '../core/version.js';
 import { BOLD, DIM, GREEN, RESET, YELLOW } from '../core/output.js';
 
@@ -55,7 +55,9 @@ export async function listClients(dest: string): Promise<ClientListResult> {
   const unknown = readUnknownConfiguredClients(squadDir);
   const effective: ClientId[] = configured.length > 0 ? configured : ['copilot'];
 
-  const spec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(getPackageVersion()));
+  const spec = projectSquadStateMcpSpec(
+    await resolveCommittedSquadStateMcpSpec(getPackageVersion(), dest, squadDir, { write: false }),
+  );
   const ctx = {
     root: dest,
     mcp: { command: spec.command, args: spec.args },

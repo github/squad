@@ -14,7 +14,7 @@ import { getPackageVersion, stampVersion } from './version.js';
 import { initSquad as sdkInitSquad, cleanupOrphanInitPrompt, clearResolveSquadCache, type InitOptions } from '@bradygaster/squad-sdk';
 import { installGitHooks } from '../commands/install-hooks.js';
 import { liftInitMutableStateOntoOrphan } from '../commands/migrate-backend.js';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec } from './mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
 import { describeMcpSpec, ensureUserOwnedTemplates, recordShippedFilesAfterInit } from './upgrade.js';
 import { syncCopilotInstructionsFile } from './managed-file.js';
 import { getTemplatesDir } from './templates.js';
@@ -23,7 +23,8 @@ import {
   reconcileSquadStateUserConfig,
   tombstoneStaleSquadStateInProjectMcp,
 } from './mcp-root.js';
-import { applyClientProjectionsForInit, reportClientResults, type ClientId } from './clients.js';
+import { applyClientProjectionsForInit, readConfiguredClients, reportClientResults, type ClientId } from './clients.js';
+import { getHostProjection, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
 import {
   readTeamMd,
   writeTeamMd,
@@ -187,6 +188,41 @@ export interface RunInitOptions {
   claudePlugin?: boolean;
   /** If false, skip writing "chat.newSession.defaultMode": "Squad" to .vscode/settings.json (default: true) */
   includeVscodeDefault?: boolean;
+}
+
+/** A next-step line; `on`/`off` wrap the command (colour codes in the terminal, empty in tests). */
+type Styled = (on: string, off: string) => string;
+
+/**
+ * What `squad init` tells the user to run next, for the hosts they chose (#2453).
+ * No `--client` means Copilot, the default host. With one host the line is
+ * bare; with several, each line is prefixed with the host's name.
+ */
+export function initNextSteps(
+  clients: readonly ClientId[] | undefined,
+  claudePlugin?: boolean,
+): { lines: Styled[]; tips: string[] } {
+  const chosen: ClientId[] = clients && clients.length > 0 ? [...new Set(clients)] : ['copilot'];
+  if (claudePlugin && !chosen.includes('claude')) chosen.push('claude');
+  const steps: { host: string; text: Styled }[] = [];
+  const tips: string[] = [];
+  for (const id of chosen) {
+    const host = getHostProjection(id).label;
+    if (id === 'copilot') {
+      steps.push({ host, text: (on, off) => `Run ${on}copilot --agent squad${off} and tell it what you're building.` });
+      tips.push('"squad:copilot": "copilot --agent squad --additional-mcp-config @.mcp.json"');
+    } else if (id === 'claude' && claudePlugin) {
+      steps.push({ host, text: (on, off) => `Run ${on}claude${off}; the Squad plugin's coordinator starts by default in this repository.` });
+      tips.push('"squad:claude": "claude -p --agent squad:squad"');
+    } else if (id === 'claude') {
+      steps.push({ host, text: (on, off) => `Run ${on}claude --agent squad --mcp-config .mcp.json${off} and tell it what you're building.` });
+      tips.push('"squad:claude": "claude -p --agent squad --mcp-config .mcp.json"');
+    } else {
+      steps.push({ host, text: () => `Open ${host} in this repository and ask for the squad agent.` });
+    }
+  }
+  if (steps.length === 1) return { lines: [steps[0]!.text], tips };
+  return { lines: steps.map(s => (on: string, off: string) => `${s.host}: ${s.text(on, off)}`), tips };
 }
 
 /**
@@ -452,7 +488,7 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
         // stale project-level entry left by the SDK init writer in
         // `.copilot/mcp-config.json`. No HOME modifications.
         try {
-          const mcpSpec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(getPackageVersion()));
+          const mcpSpec = projectSquadStateMcpSpec(await resolveCommittedSquadStateMcpSpec(getPackageVersion(), dest, squadDir));
           const rootResult = ensureSquadStateMcpInRoot(dest, getPackageVersion(), mcpSpec);
           if (rootResult.written) {
             success(`installed squad_state MCP server to .mcp.json (${describeMcpSpec(mcpSpec)}) — Copilot CLI will auto-load on next invocation`);
@@ -480,7 +516,7 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
   // for vanilla `squad init` (no --state-backend flag) so the squad_state
   // MCP entry is reachable regardless of init path. No HOME modifications.
   try {
-    const mcpSpec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(version));
+    const mcpSpec = projectSquadStateMcpSpec(await resolveCommittedSquadStateMcpSpec(version, dest, squadDir));
     const rootResult = ensureSquadStateMcpInRoot(dest, version, mcpSpec);
     if (rootResult.written) {
       success(`installed squad_state MCP server to .mcp.json (${describeMcpSpec(mcpSpec)}) — Copilot CLI will auto-load on next invocation`);
@@ -599,14 +635,23 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
 
   if (!isInitNoColor()) await sleep(80);
   console.log();
-  console.log(`${GREEN}${BOLD}Squad initialized.${RESET} Run ${CYAN}${BOLD}copilot --agent squad${RESET} and tell it what you're building.`);
-  if (options.claudePlugin) {
-    console.log(`Claude Code: run ${CYAN}${BOLD}claude${RESET}; the Squad plugin's coordinator starts by default in this repository.`);
+  // What this repository is now set up for: the flags, else what .squad/config.json already records
+  // (re-running `squad init` keeps an earlier --client and plugin mode).
+  const effectiveClients = options.clients && options.clients.length > 0 ? options.clients : readConfiguredClients(squadDir);
+  const next = initNextSteps(effectiveClients, options.claudePlugin ?? readClaudePluginMode(squadDir));
+  const steps = next.lines.map(line => line(CYAN + BOLD, RESET));
+  if (steps.length === 1) {
+    console.log(`${GREEN}${BOLD}Squad initialized.${RESET} ${steps[0]}`);
+  } else {
+    console.log(`${GREEN}${BOLD}Squad initialized.${RESET} Next, in the host you want to use:`);
+    for (const step of steps) console.log(`  ${step}`);
   }
   console.log();
-  console.log(`${DIM}Tip: for non-interactive scripts that need squad_state tools, add to package.json:${RESET}`);
-  console.log(`${DIM}  "squad:copilot": "copilot --agent squad --additional-mcp-config @.mcp.json"${RESET}`);
-  console.log();
+  if (next.tips.length > 0) {
+    console.log(`${DIM}Tip: for non-interactive scripts that need squad_state tools, add to package.json:${RESET}`);
+    for (const tip of next.tips) console.log(`${DIM}  ${tip}${RESET}`);
+    console.log();
+  }
 
   if (squadInfo.isLegacy) {
     showDeprecationWarning();

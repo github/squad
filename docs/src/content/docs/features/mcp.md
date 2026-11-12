@@ -31,6 +31,8 @@ Where you add a server depends on your host:
 
 Copilot CLI doesn't read a `.copilot/mcp-config.json` inside the project (`squad init` writes a sample one there), so a server added to it never loads. Hosts added with `squad init --client` have their own MCP config (Claude Code shares `.mcp.json`), and Squad adds `squad_state` to it for you.
 
+The `squad_state` entry Squad writes works on every clone of the repository. If you installed the Squad CLI (globally, in the project, or from a source build), the entry runs `node .squad/squad.mjs state-mcp`. That small launcher, which Squad writes and you commit, finds a Squad CLI on whichever machine runs it: `SQUAD_CLI` if set, then the project's `node_modules`, then `squad` on PATH. It skips a CLI older than the one that wrote it. If none is found, it prints how to install one; set `SQUAD_ALLOW_NPX=1` to let it run the exact version with `npx` instead. Claude Code hooks use the same launcher. A standalone bundle install writes `squad state-mcp`, and a CLI run through `npx` writes the exact-version `npx` command. `squad doctor` warns when a committed entry points at a path on one machine.
+
 This guide covers Copilot CLI and VS Code. Pick the one that matches your workflow.
 
 ---

@@ -4405,9 +4405,10 @@
             "validated-test:test/harness-contract.test.ts::*",
             "validated-test:test/claude-agent-sdk-harness.test.ts::*",
             "validated-test:test/claude-agent-sdk-harness.test.ts::routes a real tool call through broker approval and honours a deny",
-            "validated-manual:lab:claude-agent-sdk-harness@2026-11-10"
+            "validated-manual:lab:claude-agent-sdk-harness@2026-11-10",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::runs G1–G9 on claude-agent-sdk: approve after reconnect, then cancel"
           ],
-          "notes": "Live (2026-11-10): one turn through the broker, and a write command approved-or-denied through the broker (denied: not run). Claude Code runs some read-only commands without asking, so those never reach the broker."
+          "notes": "Live (2026-11-10): a plain turn and a write denied through the broker (not run). The original golden-trace smoke run approved a real tool call after reconnect, but did not prove replay continuity or prompt harness cancellation. The strengthened trace (exact command and full hashed Bash input validation, explicit 120-second foreground tool timeout, cursor suffix and replay checks, 10-second cancellation deadline) awaits a new credentialed live run and is not yet promotion evidence. Deterministic negatives reject short-timeout/abort-ignoring transport, background execution and implicit timeouts before approval. Claude Code runs some read-only commands without asking, so those never reach the broker."
         },
         "kiro": {
           "capability": "supported",
@@ -5021,6 +5022,16 @@
       "outcome": "pass",
       "observedTools": [],
       "notes": "After review round 4 (event correlation to the turn's own user.message, durable state): one turn through LocalSquadBackend completed (5.7 s), and the same with a harness-only Copilot configDirectory in an empty temp dir (3.2 s): sign-in still works there, so state-mcp's isolated config directory is safe."
+    },
+    {
+      "host": "claude",
+      "scenario": "claude-agent-sdk-golden-trace",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash"
+      ],
+      "notes": "Historical smoke run of the original golden-trace test on the real claude-agent-sdk harness (Agent SDK 0.3.317, Anthropic API key), 8.1 s: a real Bash `touch` approval was approved after reconnect and the file was created; the broker recorded cancellation and the fixture's backend events appeared in order. Review found that the assertions did not prove replay continuity, cursor filtering or interruption of an executing sleep. This pass is not evidence for the strengthened trace; a new credentialed live run is pending."
     },
     {
       "host": "claude",

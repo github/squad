@@ -518,7 +518,19 @@ message.accepted(runId, seq)
 `client.*` entries are client-side steps that produce no backend event. The
 trace is executed end to end against the file-backed local backend and the
 durable-http client in `test/squad-20-all-scenarios.e2e.test.ts`, with the
-same canonical history on both.
+same canonical history on both. A live variant uses the real `claude-agent-sdk` harness
+(`test/claude-agent-sdk-harness.test.ts`, behind `SQUAD_REAL_CLI_TESTS=1` and an
+Anthropic API key): it checks exact event replay and cursor suffixes, approves
+only the exact command after test-owned interception verifies the full hashed
+Bash input (`run_in_background: false`, explicit `timeout: 120000`), then requires
+cancellation to settle the harness within 10 seconds of its start signal, well
+below its 60-second sleep and 120-second tool timeout. Deterministic negative
+cases reject short timeouts (including an abort-ignoring transport), background
+execution and implicit timeout defaults before approval.
+The original smoke run passed on 2026-11-10, but did not prove replay continuity
+or prompt harness cancellation. The strengthened live trace awaits a new
+credentialed run; the earlier smoke result is not promotion evidence for those
+invariants.
 
 This trace captures the core invariants of the split: stable `runId`
 cancellation, monotonic `seq` ordering, durable approval versioning, resumable

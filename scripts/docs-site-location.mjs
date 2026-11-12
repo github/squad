@@ -128,11 +128,6 @@ export const HISTORICAL_REPO_LINKS = [
     links: PERMALINK,
   },
   {
-    path: 'docs/src/content/docs/scenarios/upgrading.md',
-    reason: 'The generated upgrade matrix records the CI runs and GitHub Releases behind its results (rendered from test-fixtures/spec/suite-v0.2/upgrade-matrix.json).',
-    section: { from: /^<!-- UPGRADE-MATRIX:START -->/, to: /^<!-- UPGRADE-MATRIX:END -->/ },
-  },
-  {
     path: 'docs/_internal/launch/migration-announcement.md',
     reason: 'Launch announcement from when Squad first went public.',
   },

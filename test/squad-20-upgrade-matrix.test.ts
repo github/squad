@@ -206,7 +206,8 @@ describe('upgrade-matrix.json integrity', () => {
       } else if (p.source === 'github-release') {
         expect('release' in p.artifacts, `${p.version}: release producer needs artifacts.release`).toBe(true);
         const rel = (p.artifacts as { release: { repository: string; tag: string; assets: Record<string, ReleaseAsset> } }).release;
-        expect(rel.repository).toBe('bradygaster/squad');
+        // The repository moved from bradygaster/squad to github/squad; release asset ids are unchanged.
+        expect(rel.repository).toBe('github/squad');
         expect(rel.tag).toBe(`v${p.version}`);
         for (const name of ['squad-linux-x64.tar.gz', 'squad-linux-arm64.tar.gz', 'squad-darwin-x64.tar.gz', 'squad-darwin-arm64.tar.gz', 'squad-win32-x64.zip', 'squad-win32-arm64.zip']) {
           const a = rel.assets[name];
