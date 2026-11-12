@@ -20,6 +20,18 @@ It's not a chatbot wearing hats. Each team member runs in its own context, reads
 
 > **Responsible AI stance** — Squad is built to amplify a human operator with GitHub Copilot, not to remove humans from the loop. Use it to delegate faster, review better, and keep governance close to the code.
 
+### See it in Claude Code
+
+![Squad's team dashboard following a Claude Code session: the coordinator sends Dallas (Node.js engineer) to build a CLI and Parker (tester) to write tests at the same time, then Jordan (lead) reviews and Scribe records the decisions](docs/src/assets/images/squad-claude-dashboard.gif)
+
+A real run, sped up 12×: a fresh repository, `squad init --client claude`, then two prompts to `claude --agent squad`. "Cast a small team" ran `squad cast` for a lead, an engineer and a tester in 50 seconds. "Team, build the MVP" sent the engineer and the tester out in parallel, then the lead reviewed. The result was a commit with 22 passing `node --test` tests, about $2.60 of model time for both prompts. The page is `squad dashboard`, which reads Claude Code's own session files and needs no setup.
+
+```bash
+squad init --client claude
+claude --agent squad --mcp-config .mcp.json   # "Cast a team for this repo", then give it work
+squad dashboard --open                        # watch the team in your browser
+```
+
 ---
 
 ## Quick Start
