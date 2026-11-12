@@ -1,8 +1,11 @@
 /**
  * `squad init` tells the user to run the host they chose, not always Copilot (#2453).
  */
-import { describe, it, expect } from 'vitest';
-import { initNextSteps } from '../packages/squad-cli/src/cli/core/init.js';
+import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { initNextSteps, runInit } from '../packages/squad-cli/src/cli/core/init.js';
 
 const plain = (clients: Parameters<typeof initNextSteps>[0], plugin?: boolean) => {
   const next = initNextSteps(clients, plugin);
@@ -51,4 +54,27 @@ describe('initNextSteps (#2453)', () => {
       "Run <claude --agent squad --mcp-config .mcp.json> and tell it what you're building.",
     );
   });
+
+  it('re-running init without flags follows what .squad/config.json records (Copilot review)', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-init-next-'));
+    const prev = { ni: process.env['SQUAD_NONINTERACTIVE'], nc: process.env['NO_COLOR'] };
+    process.env['SQUAD_NONINTERACTIVE'] = '1';
+    process.env['NO_COLOR'] = '1';
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await runInit(root, { clients: ['claude'], claudePlugin: true, includeWorkflows: false, includeVscodeDefault: false });
+      log.mockClear();
+      await runInit(root, { includeWorkflows: false, includeVscodeDefault: false });
+      const out = log.mock.calls.map(c => String(c[0])).join('\n');
+      expect(out).toContain("the Squad plugin's coordinator starts by default");
+      expect(out).not.toContain('--mcp-config .mcp.json and tell it');
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+      if (prev.ni === undefined) delete process.env['SQUAD_NONINTERACTIVE']; else process.env['SQUAD_NONINTERACTIVE'] = prev.ni;
+      if (prev.nc === undefined) delete process.env['NO_COLOR']; else process.env['NO_COLOR'] = prev.nc;
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

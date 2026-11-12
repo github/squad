@@ -757,11 +757,15 @@ export function checkPortableSquadLaunch(cwd: string): DoctorCheck | undefined {
   const name = 'portable squad_state launch';
   const launches = committedSquadLaunches(cwd);
   if (launches.length === 0) return undefined;
-  const fix = "Run 'squad upgrade' to switch to the repository launcher (.squad/bin/squad.mjs), then commit the result.";
-  const absolute = launches.filter(l => path.isAbsolute(l.command) || l.args.some(a => /cli-entry\.js$/.test(a) && path.isAbsolute(a)));
+  const fix = "Run 'squad upgrade' to switch to the repository launcher (.squad/squad.mjs), then commit the result.";
+  // A committed file may come from any OS: recognise Windows and POSIX absolute paths everywhere.
+  const isAbs = (p: string) => path.posix.isAbsolute(p) || path.win32.isAbsolute(p);
+  const absolute = launches.filter(l => isAbs(l.command) || l.args.some(a => /cli-entry\.js$/.test(a) && isAbs(a)));
   if (absolute.length > 0) {
     const files = [...new Set(absolute.map(l => l.file))].join(', ');
-    const missing = absolute.some(l => !lstatExists(l.command) || l.args.some(a => path.isAbsolute(a) && !lstatExists(a)));
+    // Only an absolute command is a file to check; a bare `node` is found on PATH.
+    const missing = absolute.some(l => (isAbs(l.command) && !lstatExists(l.command)) ||
+      l.args.some(a => isAbs(a) && !lstatExists(a)));
     return {
       name,
       status: missing ? 'fail' : 'warn',
@@ -772,7 +776,7 @@ export function checkPortableSquadLaunch(cwd: string): DoctorCheck | undefined {
   }
   for (const l of launches) {
     const script = l.command === 'node' ? l.args[0] : /^node "\$CLAUDE_PROJECT_DIR\/([^"]+)"/.exec(l.command)?.[1];
-    if (script && /\/bin\/squad\.mjs$/.test(script) && !lstatExists(path.join(cwd, script))) {
+    if (script && /(?:^|\/)squad\.mjs$/.test(script) && !isAbs(script) && !lstatExists(path.join(cwd, script))) {
       return { name, status: 'fail', message: `${l.file} runs ${script}, which is missing. ${fix}` };
     }
   }

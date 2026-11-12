@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  resolveInsideRoot,
   SQUAD_REPO_LAUNCHER_MARKER,
   SQUAD_REPO_LAUNCHER_PATH,
   squadRepoLauncher,
@@ -33,7 +34,7 @@ export interface SquadStateMcpSpec {
   args: string[];
   /**
    * `standalone`, `local-entry`: paths on this machine. `pinned`: exact-version npx.
-   * `repo-launcher`: `node <squad dir>/bin/squad.mjs`, committed with the repository.
+   * `repo-launcher`: `node <squad dir>/squad.mjs`, committed with the repository.
    * `path`: a bare `squad` from PATH (standalone bundle installs, which may have no Node).
    */
   source: 'standalone' | 'local-entry' | 'pinned' | 'repo-launcher' | 'path';
@@ -158,8 +159,10 @@ export function isMachineSpecificMcpSpec(spec: SquadStateMcpSpec): boolean {
 /**
  * The portable form of `direct` for files a repository commits (#2462).
  *
- * - `local-entry` becomes `node <squadDir>/bin/squad.mjs state-mcp`, the repository launcher
- *   ({@link writeSquadRepoLauncher}), which finds a Squad CLI on whatever machine runs it.
+ * - `local-entry` becomes `node <squadDir>/squad.mjs state-mcp`, the repository launcher
+ *   ({@link writeSquadRepoLauncher}), which finds a Squad CLI on whatever machine runs it. A CLI
+ *   running from a package runner's temporary cache (`npx`, `pnpm dlx`, `yarn dlx`) is gone once
+ *   that command exits, so it keeps the exact-version `npx` form instead.
  * - `standalone` becomes a bare `squad state-mcp`: standalone installs put `squad` on PATH and may
  *   have no Node to run the launcher.
  * - `pinned` (exact-version npx) is already portable and is kept.
@@ -168,6 +171,9 @@ export function isMachineSpecificMcpSpec(spec: SquadStateMcpSpec): boolean {
  * directory outside the repository has no portable form; `direct` is returned.
  */
 export function committedSquadStateMcpSpec(direct: SquadStateMcpSpec, squadDir: string | null): SquadStateMcpSpec {
+  if (direct.source === 'local-entry' && direct.fallback && isTransientCliEntry(direct.args[0] ?? '')) {
+    return { command: direct.fallback.command, args: [...direct.fallback.args], source: 'pinned' };
+  }
   if (direct.source === 'local-entry' && squadDir) {
     return {
       command: 'node',
@@ -182,6 +188,15 @@ export function committedSquadStateMcpSpec(direct: SquadStateMcpSpec, squadDir: 
   return direct;
 }
 
+/**
+ * True for an entry inside a package runner's temporary install: npm's `_npx` cache, pnpm's
+ * `dlx` cache, or yarn's `dlx-` / `xfs-` temporary directories.
+ */
+export function isTransientCliEntry(entry: string): boolean {
+  const parts = entry.split(/[\\/]+/);
+  return parts.includes('_npx') || parts.includes('dlx') || parts.some(p => /^(?:dlx|xfs)-[\w-]+$/.test(p));
+}
+
 /** The squad directory relative to `root` (POSIX), or null when it is outside `root`. */
 export function squadDirInRoot(root: string, squadDirAbs: string): string | null {
   const rel = path.relative(path.resolve(root), path.resolve(squadDirAbs));
@@ -190,15 +205,22 @@ export function squadDirInRoot(root: string, squadDirAbs: string): string | null
 }
 
 /**
- * Write (or refresh) `<squadDir>/bin/squad.mjs`. A file there without Squad's marker is the
- * user's and is left alone.
+ * Write (or refresh) `<squadDir>/squad.mjs`. A file there without Squad's marker is the user's
+ * and is left alone. The path must stay inside `root` once symlinks are followed (a linked squad
+ * directory or a dangling link at the launcher path is refused), so this never writes outside the
+ * workspace.
  */
 export function writeSquadRepoLauncher(
   root: string,
   squadDir: string,
   version: string,
 ): 'created' | 'updated' | 'unchanged' | 'skipped' {
-  const file = path.join(root, ...squadDir.split('/'), ...SQUAD_REPO_LAUNCHER_PATH.split('/'));
+  let file: string;
+  try {
+    file = resolveInsideRoot(root, `${squadDir}/${SQUAD_REPO_LAUNCHER_PATH}`);
+  } catch {
+    return 'skipped';
+  }
   const content = squadRepoLauncher(version, squadDir);
   if (existsSync(file)) {
     const existing = readFileSync(file, 'utf8');
@@ -229,7 +251,7 @@ export async function resolveCommittedSquadStateMcpSpec(
   if (spec.source === 'repo-launcher' && squadDir && options.write !== false) {
     if (writeSquadRepoLauncher(root, squadDir, cliVersion) === 'skipped') return direct;
     const entry = direct.args[0];
-    if (entry) recordSquadCli(entry, cliVersion);
+    if (entry && !isTransientCliEntry(entry)) recordSquadCli(entry, cliVersion);
   }
   return spec;
 }

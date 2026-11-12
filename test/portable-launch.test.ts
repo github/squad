@@ -18,6 +18,7 @@ import {
 } from '@bradygaster/squad-sdk/client';
 import {
   committedSquadStateMcpSpec,
+  isTransientCliEntry,
   resolveCommittedSquadStateMcpSpec,
   squadDirInRoot,
   writeSquadRepoLauncher,
@@ -32,7 +33,7 @@ const localEntry: SquadStateMcpSpec = {
   source: 'local-entry',
   fallback,
 };
-const repoLauncher = { command: 'node', args: ['.squad/bin/squad.mjs', 'state-mcp'] };
+const repoLauncher = { command: 'node', args: ['.squad/squad.mjs', 'state-mcp'] };
 
 let root: string;
 beforeEach(() => {
@@ -69,8 +70,10 @@ describe('committed spec (#2462)', () => {
 
   it('writes the launcher, refreshes its own and leaves a user file alone', () => {
     expect(writeSquadRepoLauncher(root, '.squad', '9.9.9')).toBe('created');
-    const file = path.join(root, '.squad', 'bin', 'squad.mjs');
+    const file = path.join(root, '.squad', 'squad.mjs');
     expect(fs.readFileSync(file, 'utf8')).toContain(SQUAD_REPO_LAUNCHER_MARKER);
+    // Outside any bin/ directory, which repositories often ignore (Copilot review).
+    expect(path.relative(root, file).split(path.sep)).not.toContain('bin');
     expect(writeSquadRepoLauncher(root, '.squad', '9.9.9')).toBe('unchanged');
     expect(writeSquadRepoLauncher(root, '.squad', '9.9.10')).toBe('updated');
     fs.writeFileSync(file, '// mine\n');
@@ -78,8 +81,41 @@ describe('committed spec (#2462)', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe('// mine\n');
   });
 
+  it('never writes through a symlink that leaves the workspace (Copilot review)', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-outside-'));
+    try {
+      // The squad directory itself links outside the workspace.
+      fs.symlinkSync(outside, path.join(root, '.squad'), 'dir');
+      expect(writeSquadRepoLauncher(root, '.squad', '9.9.9')).toBe('skipped');
+      expect(fs.readdirSync(outside)).toEqual([]);
+      fs.rmSync(path.join(root, '.squad'));
+      // A dangling link at the launcher path, pointing outside.
+      fs.mkdirSync(path.join(root, '.squad'));
+      fs.symlinkSync(path.join(outside, 'planted.mjs'), path.join(root, '.squad', 'squad.mjs'));
+      expect(writeSquadRepoLauncher(root, '.squad', '9.9.9')).toBe('skipped');
+      expect(fs.existsSync(path.join(outside, 'planted.mjs'))).toBe(false);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps exact-version npx for a CLI running from a package runner cache (Copilot review)', () => {
+    for (const entry of [
+      '/home/u/.npm/_npx/0a1b2c/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
+      'C:\\Users\\u\\AppData\\Local\\npm-cache\\_npx\\0a1b\\node_modules\\@bradygaster\\squad-cli\\dist\\cli-entry.js',
+      '/home/u/.cache/pnpm/dlx/abc/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
+      '/tmp/xfs-1a2b3c/dlx-5555/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
+    ]) {
+      expect(isTransientCliEntry(entry), entry).toBe(true);
+      expect(committedSquadStateMcpSpec({ ...localEntry, args: [entry, 'state-mcp'] }, '.squad'))
+        .toEqual({ command: 'npx', args: fallback.args, source: 'pinned' });
+    }
+    expect(isTransientCliEntry('/usr/local/lib/node_modules/@bradygaster/squad-cli/dist/cli-entry.js')).toBe(false);
+    expect(isTransientCliEntry('/home/u/src/dlxtools/squad/dist/cli-entry.js')).toBe(false);
+  });
+
   it('keeps the machine-specific spec when the launcher path is user-owned', async () => {
-    write('.squad/bin/squad.mjs', '// mine\n');
+    write('.squad/squad.mjs', '// mine\n');
     const spec = await resolveCommittedSquadStateMcpSpec('9.9.9', root, path.join(root, '.squad'), {
       standaloneCheck: () => null,
       localEntryCheck: () => '/home/someone/squad/dist/cli-entry.js',
@@ -101,12 +137,12 @@ describe('committed spec (#2462)', () => {
 describe('Claude hooks through the repository launcher (#2462)', () => {
   it('runs the launcher from $CLAUDE_PROJECT_DIR as a shell command', () => {
     expect(claudeHookLaunch(repoLauncher, 'Stop')).toEqual({
-      command: 'node "$CLAUDE_PROJECT_DIR/.squad/bin/squad.mjs" hook claude Stop',
+      command: 'node "$CLAUDE_PROJECT_DIR/.squad/squad.mjs" hook claude Stop',
       args: [],
     });
     // Anything else keeps the argv form.
-    expect(claudeHookLaunch({ command: 'node', args: ['/abs/.squad/bin/squad.mjs', 'state-mcp'] }, 'Stop')!.args)
-      .toEqual(['/abs/.squad/bin/squad.mjs', 'hook', 'claude', 'Stop']);
+    expect(claudeHookLaunch({ command: 'node', args: ['/abs/.squad/squad.mjs', 'state-mcp'] }, 'Stop')!.args)
+      .toEqual(['/abs/.squad/squad.mjs', 'hook', 'claude', 'Stop']);
     expect(claudeHookLaunch({ command: 'node', args: ['../x/bin/squad.mjs', 'state-mcp'] }, 'Stop')!.args.length).toBe(4);
   });
 
@@ -124,13 +160,13 @@ describe('Claude hooks through the repository launcher (#2462)', () => {
     expect(text).toContain('echo user');
     const handlers = (merged['hooks'] as Record<string, { hooks: Record<string, unknown>[] }[]>)['Stop']!.flatMap(g => g.hooks);
     const squad = handlers.filter(isSquadHookHandler);
-    expect(squad).toEqual([{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/bin/squad.mjs" hook claude Stop', timeout: 15 }]);
+    expect(squad).toEqual([{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/squad.mjs" hook claude Stop', timeout: 15 }]);
     expect(stripClaudeHooks(merged)).toEqual({ hooks: { Stop: [{ hooks: [user] }] } });
   });
 
   it('does not take a look-alike user command for Squad\'s', () => {
-    expect(isSquadHookHandler({ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/bin/squad.mjs" hook claude Stop; rm -rf x' })).toBe(false);
-    expect(isSquadHookHandler({ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/bin/squad.mjs" hook claude Nope' })).toBe(false);
+    expect(isSquadHookHandler({ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/squad.mjs" hook claude Stop; rm -rf x' })).toBe(false);
+    expect(isSquadHookHandler({ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/squad.mjs" hook claude Nope' })).toBe(false);
     expect(isSquadHookHandler({ type: 'command', command: 'squad hook claude Stop' })).toBe(false);
   });
 });
@@ -145,7 +181,7 @@ describe('the repository launcher script (#2462)', () => {
   }
 
   function run(args: string[], env: Record<string, string> = {}, cwd = os.tmpdir()) {
-    return spawnSync(process.execPath, [path.join(root, '.squad', 'bin', 'squad.mjs'), ...args], {
+    return spawnSync(process.execPath, [path.join(root, '.squad', 'squad.mjs'), ...args], {
       cwd,
       encoding: 'utf8',
       // PATH without a real squad, so the result depends only on the repository.
@@ -154,7 +190,7 @@ describe('the repository launcher script (#2462)', () => {
   }
 
   beforeEach(() => {
-    write('.squad/bin/squad.mjs', squadRepoLauncher('2.0.0', '.squad'));
+    write('.squad/squad.mjs', squadRepoLauncher('2.0.0', '.squad'));
   });
 
   it('runs the repository\'s own install from any working directory', () => {
@@ -217,13 +253,21 @@ describe('squad doctor: portable launch commands (#2462)', () => {
     expect(checkPortableSquadLaunch(root)).toMatchObject({ status: 'warn' });
   });
 
+  it('recognises Windows paths on any OS, and finds a bare node on PATH (Copilot review)', () => {
+    write('.mcp.json', mcp('C:\\Program Files\\nodejs\\node.exe', ['C:\\Users\\u\\squad\\dist\\cli-entry.js', 'state-mcp']));
+    expect(checkPortableSquadLaunch(root)).toMatchObject({ status: process.platform === 'win32' ? expect.any(String) : 'fail' });
+    const entry = write('install/dist/cli-entry.js', '');
+    write('.mcp.json', mcp('node', [entry, 'state-mcp']));
+    expect(checkPortableSquadLaunch(root)).toMatchObject({ status: 'warn' });
+  });
+
   it('checks Claude hooks too, and that the launcher exists', () => {
-    write('.mcp.json', mcp('node', ['.squad/bin/squad.mjs', 'state-mcp']));
+    write('.mcp.json', mcp('node', ['.squad/squad.mjs', 'state-mcp']));
     write('.claude/settings.json', JSON.stringify({
-      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/bin/squad.mjs" hook claude Stop' }] }] },
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.squad/squad.mjs" hook claude Stop' }] }] },
     }));
     expect(checkPortableSquadLaunch(root)).toMatchObject({ status: 'fail', message: expect.stringContaining('missing') });
-    write('.squad/bin/squad.mjs', squadRepoLauncher('2.0.0', '.squad'));
+    write('.squad/squad.mjs', squadRepoLauncher('2.0.0', '.squad'));
     expect(checkPortableSquadLaunch(root)).toMatchObject({ status: 'pass', message: '2 committed launch command(s) are portable' });
     write('.claude/settings.json', JSON.stringify({
       hooks: { Stop: [{ hooks: [{ type: 'command', command: '/nowhere/node', args: ['/nowhere/cli-entry.js', 'hook', 'claude', 'Stop'] }] }] },

@@ -206,7 +206,7 @@
     "^\\.copilot/skills/",
     "^\\.github/workflows/(squad-[\\w-]+|sync-squad-labels)\\.yml(\\.local-backup)?$",
     "^\\.squad/\\.first-run$",
-    "^\\.squad/bin/squad\\.mjs$",
+    "^\\.squad/squad\\.mjs$",
     "^\\.squad/config\\.json$",
     "^\\.squad/casting/",
     "^\\.squad/templates/",

@@ -68,8 +68,8 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
 
 #### Fixed
 
-- **Committed files no longer contain paths from your machine** (#2462). With the Squad CLI installed, `squad init` and `squad upgrade` used to write `node /your/path/cli-entry.js state-mcp` into `.mcp.json`, the other hosts' MCP configs and every Claude Code hook, so a clone on any other machine failed. They now write `node .squad/bin/squad.mjs state-mcp`.
-  - `.squad/bin/squad.mjs` is a launcher Squad commits. It finds a Squad CLI on each machine: `SQUAD_CLI`, the project's `node_modules`, then `squad` on PATH. It skips a CLI older than the one that wrote it, and uses `npx` only with `SQUAD_ALLOW_NPX=1`. It shares its code with the plugin's launcher.
+- **Committed files no longer contain paths from your machine** (#2462). With the Squad CLI installed, `squad init` and `squad upgrade` used to write `node /your/path/cli-entry.js state-mcp` into `.mcp.json`, the other hosts' MCP configs and every Claude Code hook, so a clone on any other machine failed. They now write `node .squad/squad.mjs state-mcp`.
+  - `.squad/squad.mjs` is a launcher Squad commits. It finds a Squad CLI on each machine: `SQUAD_CLI`, the project's `node_modules`, then `squad` on PATH. It skips a CLI older than the one that wrote it, and uses `npx` only with `SQUAD_ALLOW_NPX=1`. It shares its code with the plugin's launcher.
   - Claude hooks reach the launcher through `$CLAUDE_PROJECT_DIR`. Standalone bundle installs write `squad state-mcp`. A CLI run through `npx` keeps the exact-version `npx` command.
   - `squad doctor` flags machine-specific launch commands and a missing launcher. Run `squad upgrade` once to fix an existing repository.
 - `squad init --client claude` tells you to run `claude --agent squad --mcp-config .mcp.json`, not Copilot. With several hosts it gives one line per host (#2453).

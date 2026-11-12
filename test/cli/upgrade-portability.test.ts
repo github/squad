@@ -65,7 +65,7 @@ describe('upgrade portability and destination newlines', () => {
       // becomes `squad` from PATH, an installed CLI becomes the repository launcher.
       expect(config.mcpServers.squad_state.command).toBe(mode === 'packaged' ? 'squad' : 'node');
       expect(config.mcpServers.squad_state.args).toEqual(mode === 'packaged'
-        ? ['state-mcp'] : ['.squad/bin/squad.mjs', 'state-mcp']);
+        ? ['state-mcp'] : ['.squad/squad.mjs', 'state-mcp']);
       expect(config.mcpServers.squad_state['x-squad']).toEqual({
         managed: true,
         version,
@@ -75,7 +75,7 @@ describe('upgrade portability and destination newlines', () => {
       });
       expect(raw).not.toContain(root);
       expect(raw).not.toContain(process.execPath);
-      expect(existsSync(path.join(root, '.squad', 'bin', 'squad.mjs'))).toBe(mode === 'npm');
+      expect(existsSync(path.join(root, '.squad', 'squad.mjs'))).toBe(mode === 'npm');
       expect(raw).not.toMatch(/(?<!\r)\n/);
     }
   });

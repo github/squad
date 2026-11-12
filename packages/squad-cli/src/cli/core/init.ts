@@ -23,8 +23,8 @@ import {
   reconcileSquadStateUserConfig,
   tombstoneStaleSquadStateInProjectMcp,
 } from './mcp-root.js';
-import { applyClientProjectionsForInit, reportClientResults, type ClientId } from './clients.js';
-import { getHostProjection } from '@bradygaster/squad-sdk/client';
+import { applyClientProjectionsForInit, readConfiguredClients, reportClientResults, type ClientId } from './clients.js';
+import { getHostProjection, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
 import {
   readTeamMd,
   writeTeamMd,
@@ -635,7 +635,10 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
 
   if (!isInitNoColor()) await sleep(80);
   console.log();
-  const next = initNextSteps(options.clients, options.claudePlugin);
+  // What this repository is now set up for: the flags, else what .squad/config.json already records
+  // (re-running `squad init` keeps an earlier --client and plugin mode).
+  const effectiveClients = options.clients && options.clients.length > 0 ? options.clients : readConfiguredClients(squadDir);
+  const next = initNextSteps(effectiveClients, options.claudePlugin ?? readClaudePluginMode(squadDir));
   const steps = next.lines.map(line => line(CYAN + BOLD, RESET));
   if (steps.length === 1) {
     console.log(`${GREEN}${BOLD}Squad initialized.${RESET} ${steps[0]}`);
