@@ -54,6 +54,13 @@ describe('renderClaudeMember: charter → Claude subagent frontmatter', () => {
     expect(fm).toMatchObject({ name: 'dallas', model: 'sonnet', effort: 'high' });
   });
 
+  it('does not double the period after a role that ends in one', () => {
+    const md = renderClaudeMember('dallas', charter().replace('# Dallas — Backend Dev', '# Dallas — Backend Dev. Writes APIs.'), [], '.squad', NOTE);
+    const description = JSON.parse(frontmatter(md).description!);
+    expect(description).toContain('Writes APIs.');
+    expect(description).not.toContain('..');
+  });
+
   it('omits model and effort for auto (charter §6: auto is never a literal override)', () => {
     const md = renderClaudeMember('dallas', charter(), [], '.squad', NOTE);
     const fm = frontmatter(md);

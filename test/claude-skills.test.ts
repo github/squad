@@ -33,6 +33,17 @@ describe('Claude coordinator slimming', () => {
     expect(claude).toMatch(/never delegate the loop itself/);
   });
 
+  it('carries the casting commands inline, so a coordinator that skips the skill still uses the CLI', () => {
+    // Seen live: the model ignored "load the skill", hand-wrote charters and fought Claude Code's
+    // write protection on .claude/agents/ instead of running squad cast and squad client sync.
+    expect(claude).toContain('squad cast --name <Name> --role "<Role>"');
+    expect(claude).toContain('node .squad/squad.mjs cast');
+    expect(claude).toContain('squad client sync');
+    expect(claude).toMatch(/NEVER write or edit files under `\.claude\/` yourself/);
+    // Other hosts keep the full item; the inline summary is Claude-only.
+    expect(buildCoordinatorInstructions('kiro')).not.toContain('NEVER write or edit files under `.claude/` yourself');
+  });
+
   it('moves every item verbatim: the skill bodies match the full digest other hosts load', () => {
     const kiro = buildCoordinatorInstructions('kiro');
     for (const k of claudeCoordinatorSkills()) {

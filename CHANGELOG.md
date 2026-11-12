@@ -67,6 +67,8 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
 - New `squad client sync` refreshes the configured hosts' files without a full upgrade. Init Mode runs it after writing `routing.md`, so each Claude Code member subagent's description names what the member owns instead of repeating its role (#2456).
 - `squad_state_health` and `squad health --json` add `resolvedTeamRoot` (the directory that contains `.squad`) and `resolvedSquadDir` (the squad directory itself). `resolvedTeamDir` keeps its value, the team root, for existing consumers (#2455).
 - The Claude coordinator no longer asks Scribe for session or orchestration logs, matching Scribe's charter and the Copilot coordinator (#2454).
+- The Claude coordinator's Init Mode step names the casting commands itself (`squad cast` for each member, then `squad client sync`) and says never to write under `.claude/` directly. In a live run the coordinator skipped the init-mode skill and hand-wrote files Claude Code blocks, so member subagents were never created.
+- `squad dashboard` shows a headless `claude -p` session as finished when it ends. Without Stop hooks, those sessions never write the records the page used, so it said "Prompt 1 running" forever.
 - Copilot output, `.github/agents/squad.agent.md` and the projections for other hosts are unchanged, apart from the portable `squad_state` launch command below, which every host gets.
 
 #### Fixed

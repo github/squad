@@ -422,6 +422,15 @@ export class ClaudeTranscriptSource implements DashboardSource {
       }
       return this.skip(`attachment:${at}`);
     }
+    // Written when the Claude Code process exits. Headless (`claude -p`) sessions without Stop hooks
+    // write neither turn_duration nor stop_hook_summary, so this is their only end-of-turn marker.
+    if (type === 'cost-state') {
+      if (!this.idle && this.turn > 0) {
+        this.idle = true;
+        out.push({ t, lane: 'coordinator', kind: 'idle', text: `prompt ${this.turn} waiting for input`, extra: { run: this.turn } });
+      }
+      return;
+    }
     if (type === 'system') {
       const sub = str(m['subtype']);
       if (sub === 'stop_hook_summary' || sub === 'turn_duration') {
