@@ -429,7 +429,7 @@ needs every row — pick the scenarios relevant to your modification.
 |---|----------|----------------|----------|
 | 1 | Basic init + task | Templates applied, agent spawned, work produced | — |
 | 2 | Cross-branch persistence | State survives `git checkout` (if state-backend) | — |
-| 3 | Scribe behavior | Scribe commits to correct target | — |
+| 3 | Scribe behavior | Scribe merges the decisions inbox into `decisions.md` through the state tools and commits nothing | — |
 | 4 | PR cleanliness | Feature branch PR has no leaked state files | — |
 | 5 | Migration path | Existing squad picks up new template behavior | — |
 | 6 | Edge case: empty repo | Init works in repo with single commit | — |

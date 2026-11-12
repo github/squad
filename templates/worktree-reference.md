@@ -38,11 +38,11 @@ Squad and all spawned agents may be running inside a **git worktree** rather tha
 - `.squad/` files are **branch-local**. Each worktree works independently — no locking, no shared-state races.
 - When branches merge into main, `.squad/` state merges with them. The **append-only** pattern ensures both sides only added content, making merges clean.
 - A `merge=union` driver in `.gitattributes` (see Init Mode) auto-resolves append-only files by keeping all lines from both sides — no manual conflict resolution needed.
-- The Scribe commits `.squad/` changes to the worktree's branch. State flows to other branches through normal git merge / PR workflow.
+- `.squad/` changes are committed to the worktree's branch along with the work (Scribe does not commit; on non-local backends the runtime state tools persist mutable state). State flows to other branches through normal git merge / PR workflow.
 
 **Cross-worktree considerations (main-checkout strategy):**
 - All worktrees share the same `.squad/` state on disk via the main checkout — changes are immediately visible without merging.
-- **Not safe for concurrent sessions.** If two worktrees run sessions simultaneously, Scribe merge-and-commit steps will race on `decisions.md` and git index. Use only when a single session is active at a time.
+- **Not safe for concurrent sessions.** If two worktrees run sessions simultaneously, their decision merges and commits will race on `decisions.md` and the git index. Use only when a single session is active at a time.
 - Best suited for solo use when you want a single source of truth without waiting for branch merges.
 
 ### Worktree Lifecycle Management
