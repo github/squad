@@ -84,6 +84,20 @@ describe('Claude transcript source', () => {
     expect(JSON.stringify(events)).not.toContain('system-reminder');
   });
 
+  it('ends a headless session without Stop hooks at its cost-state record', () => {
+    // `claude -p` with no Stop hooks writes neither stop_hook_summary nor turn_duration; the process
+    // writes cost-state when it exits. Without it the page said "Prompt 1 running" forever.
+    const dir = path.join(tmp, 'projects', '-work-demo');
+    fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });
+    const file = path.join(dir, `${SESSION}.jsonl`);
+    const noHooks = fs.readFileSync(file, 'utf8').split('\n').filter((l) => !l.includes('"stop_hook_summary"')).join('\n');
+    fs.writeFileSync(file, noHooks);
+    expect(new ClaudeTranscriptSource(file).poll().filter((e) => e.kind === 'idle')).toEqual([]);
+    fs.writeFileSync(file, `${noHooks.trimEnd()}\n{"type":"cost-state","sessionId":"${SESSION}"}\n`);
+    const events = new ClaudeTranscriptSource(file).poll();
+    expect(events.at(-1)).toMatchObject({ lane: 'coordinator', kind: 'idle', extra: { run: 2 } });
+  });
+
   it('reads appends incrementally, including member files created later', () => {
     const dir = path.join(tmp, 'projects', '-work-demo');
     fs.cpSync(path.dirname(SESSION_FILE), dir, { recursive: true });
