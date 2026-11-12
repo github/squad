@@ -61,17 +61,21 @@ describe('upgrade portability and destination newlines', () => {
       };
       expect(config.mcpServers.custom).toEqual(custom);
       expect(config.mcpServers.squad_state.env).toEqual({ EXTRA: 'keep' });
-      expect(config.mcpServers.squad_state.command).toBe(mode === 'packaged'
-        ? path.join(root, 'example-bundle', portableCommand) : process.execPath);
+      // Committed files carry no path into this machine's install (#2462): a standalone bundle
+      // becomes `squad` from PATH, an installed CLI becomes the repository launcher.
+      expect(config.mcpServers.squad_state.command).toBe(mode === 'packaged' ? 'squad' : 'node');
       expect(config.mcpServers.squad_state.args).toEqual(mode === 'packaged'
-        ? ['state-mcp'] : [path.resolve('packages/squad-cli/dist/cli-entry.js'), 'state-mcp']);
+        ? ['state-mcp'] : ['.squad/squad.mjs', 'state-mcp']);
       expect(config.mcpServers.squad_state['x-squad']).toEqual({
         managed: true,
         version,
-        machineSpecific: true,
-        source: mode === 'packaged' ? 'standalone' : 'local-entry',
+        machineSpecific: false,
+        source: mode === 'packaged' ? 'path' : 'repo-launcher',
         fallback,
       });
+      expect(raw).not.toContain(root);
+      expect(raw).not.toContain(process.execPath);
+      expect(existsSync(path.join(root, '.squad', 'squad.mjs'))).toBe(mode === 'npm');
       expect(raw).not.toMatch(/(?<!\r)\n/);
     }
   });

@@ -27,7 +27,7 @@ import {
   type ApplyResult,
   type ClientId,
 } from '@bradygaster/squad-sdk/client';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec } from './mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
 import { getPackageVersion } from './version.js';
 
 export { CLIENT_IDS, parseClients, type ClientId };
@@ -184,7 +184,7 @@ export async function syncClients(
   if (options.claudePlugin !== undefined) persistClaudePlugin(squadDir, options.claudePlugin);
 
   const version = options.version ?? getPackageVersion();
-  const spec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(version));
+  const spec = projectSquadStateMcpSpec(await resolveCommittedSquadStateMcpSpec(version, dest, squadDir));
   const ctx = {
     root: dest,
     mcp: { command: spec.command, args: spec.args },

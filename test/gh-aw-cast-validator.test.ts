@@ -691,6 +691,53 @@ describe('GH-AW Cast final-tree validator', () => {
     expect(result.status, result.stderr).toBe(0);
   });
 
+  it('accepts the fresh-Cast history.json example shipped in the squad-cast playbook', async () => {
+    const extractExample = (source: string): string => {
+      const match = source.match(
+        /<!-- SQUAD:CAST-HISTORY-EXAMPLE:BEGIN -->\r?\n\s*```json\r?\n([\s\S]*?)\r?\n\s*```\r?\n\s*<!-- SQUAD:CAST-HISTORY-EXAMPLE:END -->/,
+      );
+      if (!match) throw new Error('squad-cast playbook history.json example markers are missing');
+      return match[1].split(/\r?\n/).map(line => line.trim()).join('\n');
+    };
+    const example = extractExample(readFileSync(workflowPath, 'utf8'));
+    expect(extractExample(readFileSync(join(process.cwd(), 'workflows', 'package', 'squad.md'), 'utf8'))).toBe(example);
+
+    const history = JSON.parse(example) as {
+      universe_usage_history: Array<{ universe: string; used_at: string }>;
+      assignment_cast_snapshots: Record<string, { created_at: string; universe: string; agents: string[] }>;
+    };
+    expect(Object.keys(history.assignment_cast_snapshots)).toEqual(['cast-revision-1']);
+    const snapshot = history.assignment_cast_snapshots['cast-revision-1'];
+    expect(snapshot.agents).toEqual(active.map(({ id }) => id));
+    expect(history.universe_usage_history).toEqual([{ universe: snapshot.universe, used_at: snapshot.created_at }]);
+
+    const fixture = createFixture();
+    write(fixture.root, '.squad/casting/registry.json', JSON.stringify({
+      schema: 'squad-agent-provenance/v1',
+      schema_version: 1,
+      revision: 1,
+      generated_at: snapshot.created_at,
+      agents: Object.fromEntries(active.map(({ id, name, role }) => [
+        id,
+        {
+          display_name: name,
+          persistent_name: name,
+          role,
+          status: 'active',
+          universe: snapshot.universe,
+          created_at: '2026-09-20T00:00:00.000Z',
+          updated_at: snapshot.created_at,
+        },
+      ])),
+    }));
+    write(fixture.root, '.squad/casting/history.json', example);
+    const registryFile = join(fixture.root, '.squad', 'casting', 'registry.json');
+
+    await expect(validateCastingPairFiles(registryFile)).resolves.toMatchObject({ revision: 1 });
+    const result = validateWorkflowResource(fixture.root, fixture.payload);
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it.each([
     {
       name: 'revision-2 registry with unrelated empty history',

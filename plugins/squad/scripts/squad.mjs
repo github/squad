@@ -5,18 +5,21 @@
 //   1. SQUAD_CLI (a command, or a .js entry run with this Node)
 //   2. the project's own install: node_modules/@bradygaster/squad-cli
 //   3. a `squad` on PATH (never this plugin's own bin/)
-//   4. npx -y @bradygaster/squad-cli@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
+//   4. the CLI that last ran `squad init` or `squad upgrade` on this machine (~/.squad/cli.json)
+//   5. npx -y @bradygaster/squad-cli@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
 //      code, so it is opt-in. Without it, the launcher fails with install instructions.
-// 2 and 3 are skipped when their version is older than this plugin's: an older CLI lacks commands the
+// 2, 3 and 4 are skipped when their version is older than this plugin's: an older CLI lacks commands the
 // plugin calls (`dashboard`, `hook --plugin`). The version is read from package.json, BUNDLE-INFO.json
 // (standalone bundles), or an embedded node_modules. A CLI whose version cannot be read is used as found.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PKG = '@bradygaster/squad-cli';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const projectStart = () => process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const ownBin = path.join(root, 'bin');
 const win = process.platform === 'win32';
 
@@ -27,7 +30,7 @@ function canonical(file) {
 
 // Hooks must be cheap no-ops outside an opted-in team, before CLI or npx resolution.
 function hooksEnabled() {
-  let project = path.resolve(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  let project = path.resolve(projectStart());
   for (;;) {
     for (const name of ['.squad', '.ai-team']) {
       const local = path.join(project, name);
@@ -145,19 +148,33 @@ function onPath(name) {
   return undefined;
 }
 
+/** The CLI entry `squad init` / `squad upgrade` last recorded on this machine (`<Squad home>/cli.json`). */
+function recordedCli() {
+  try {
+    const home = process.env.SQUAD_HOME ? path.resolve(process.env.SQUAD_HOME) : path.join(os.homedir(), '.squad');
+    const entry = JSON.parse(fs.readFileSync(path.join(home, 'cli.json'), 'utf8')).entry;
+    if (typeof entry === 'string' && path.isAbsolute(entry) && /.[cm]?js$/.test(entry) && fs.existsSync(entry)) return entry;
+  } catch {
+    // no record
+  }
+  return undefined;
+}
+
 function resolveCli() {
   const override = process.env.SQUAD_CLI;
   if (override) return /\.[cm]?js$/.test(override) ? [process.execPath, [override]] : [override, []];
   const version = pluginVersion();
-  const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const project = projectStart();
   const local = path.join(project, 'node_modules', ...PKG.split('/'), 'dist', 'cli-entry.js');
   if (fs.existsSync(local) && recentEnough(local, version)) return [process.execPath, [local]];
   const global = onPath('squad');
   if (global && recentEnough(global, version)) return [global, []];
+  const recorded = recordedCli();
+  if (recorded && recentEnough(recorded, version)) return [process.execPath, [recorded]];
   const want = version ? `${PKG}@${version}` : PKG;
   if (/^(1|true|yes)$/i.test(process.env.SQUAD_ALLOW_NPX || '')) return [win ? 'npx.cmd' : 'npx', ['-y', want]];
   throw new Error(
-    `no Squad CLI${version ? ` ${version} or newer` : ''} found (looked at SQUAD_CLI, this project's node_modules and PATH). ` +
+    `no Squad CLI${version ? ` ${version} or newer` : ''} found (looked at SQUAD_CLI, this project's node_modules, PATH and the CLI recorded in ~/.squad/cli.json). ` +
       `Install it with: npm install -g ${want}. Or set SQUAD_ALLOW_NPX=1 to let the plugin download and run it with npx.`,
   );
 }

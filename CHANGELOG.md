@@ -64,7 +64,15 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
 
 - The Claude coordinator names Claude Code's `Agent` subagent tool (formerly `Task`). The Claude Code spec, docs and host feature matrix now match the code, and host-projection regression guards keep them that way (#2440, #2445).
 - Every generated Claude Markdown file states its projection version. Files from earlier projections are still recognised as Squad's and upgraded in place, and rolling back the `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` blocks restores the original bytes exactly (#2450).
-- Copilot output, `.github/agents/squad.agent.md` and the projections for other hosts are unchanged.
+- Copilot output, `.github/agents/squad.agent.md` and the projections for other hosts are unchanged, apart from the portable `squad_state` launch command below, which every host gets.
+
+#### Fixed
+
+- **Committed files no longer contain paths from your machine** (#2462). With the Squad CLI installed, `squad init` and `squad upgrade` used to write `node /your/path/cli-entry.js state-mcp` into `.mcp.json`, the other hosts' MCP configs and every Claude Code hook, so a clone on any other machine failed. They now write `node .squad/squad.mjs state-mcp`.
+  - `.squad/squad.mjs` is a launcher Squad commits. It finds a Squad CLI on each machine: `SQUAD_CLI`, the project's `node_modules`, then `squad` on PATH. It skips a CLI older than the one that wrote it, and uses `npx` only with `SQUAD_ALLOW_NPX=1`. It shares its code with the plugin's launcher.
+  - Claude hooks reach the launcher through `$CLAUDE_PROJECT_DIR`. Standalone bundle installs write `squad state-mcp`. A CLI run through `npx` keeps the exact-version `npx` command.
+  - `squad doctor` flags machine-specific launch commands and a missing launcher. Run `squad upgrade` once to fix an existing repository.
+- `squad init --client claude` tells you to run `claude --agent squad --mcp-config .mcp.json`, not Copilot. With several hosts it gives one line per host (#2453).
 
 ## [2.0.0-preview.4] - 2026-11-09
 

@@ -94,19 +94,42 @@ export function readClaudeHooksMode(squadAbs: string): ClaudeHooksMode {
 /**
  * The hook launch command: the MCP launcher with its trailing `state-mcp` replaced.
  *
- * No command allowlist on purpose. `mcp` is resolved by the running CLI from its own install
- * (standalone launcher, `node <abs>/cli-entry.js`, or `npx` with the exact package version), never
- * from repository content, and the same command is already projected into `.mcp.json` as the
- * `squad_state` server. Hooks therefore add no new executable.
+ * No command allowlist on purpose. `mcp` is resolved by the running CLI (a bare `squad`, `npx` with
+ * the exact package version, or the repository launcher `node <squad dir>/squad.mjs` that Squad
+ * writes), and the same command is already projected into `.mcp.json` as the `squad_state` server.
+ * Hooks therefore add no new executable.
+ *
+ * The repository launcher becomes a shell command through `$CLAUDE_PROJECT_DIR`, as Claude Code
+ * documents for project hooks, so it works whatever the session's working directory is (#2462).
+ * Its `args` is empty and the handler is written without one.
  */
 export function claudeHookLaunch(mcp: McpLaunchSpec, event: ClaudeHookEvent): McpLaunchSpec | null {
   if (mcp.args[mcp.args.length - 1] !== 'state-mcp') return null;
+  const launcher = repoLauncherPath(mcp);
+  if (launcher) return { command: `node "$CLAUDE_PROJECT_DIR/${launcher}" hook claude ${event}`, args: [] };
   return { command: mcp.command, args: [...mcp.args.slice(0, -1), 'hook', 'claude', event] };
 }
 
-/** A handler Squad wrote: a command hook whose arguments end in `hook claude <Event>`. */
+/** `<squad dir>/squad.mjs` when `mcp` is the repository launcher, else null. */
+function repoLauncherPath(mcp: McpLaunchSpec): string | null {
+  const [script, sub] = mcp.args;
+  if (mcp.command !== 'node' || mcp.args.length !== 2 || sub !== 'state-mcp' || !script) return null;
+  return /^(?:[\w.-]+\/)+squad\.mjs$/.test(script) && !script.split('/').includes('..') ? script : null;
+}
+
+const REPO_LAUNCHER_HOOK = /^node "\$CLAUDE_PROJECT_DIR\/(?:[\w.-]+\/)+squad\.mjs" hook claude ([A-Za-z]+)$/;
+
+/**
+ * A handler Squad wrote: a command hook whose arguments end in `hook claude <Event>`, or the
+ * repository-launcher shell command `node "$CLAUDE_PROJECT_DIR/<squad dir>/squad.mjs" hook claude <Event>`.
+ */
 export function isSquadHookHandler(h: unknown): boolean {
-  if (!isObject(h) || h['type'] !== 'command' || !Array.isArray(h['args'])) return false;
+  if (!isObject(h) || h['type'] !== 'command') return false;
+  if (!('args' in h) && typeof h['command'] === 'string') {
+    const m = REPO_LAUNCHER_HOOK.exec(h['command']);
+    return !!m && (CLAUDE_HOOK_EVENTS as readonly unknown[]).includes(m[1]);
+  }
+  if (!Array.isArray(h['args'])) return false;
   const a = h['args'] as unknown[];
   return (
     a.length >= 3 &&
@@ -164,7 +187,9 @@ export function mergeClaudeHooks(settings: Json, mcp: McpLaunchSpec | null): Jso
     if (!launch) return stripped;
     const groups = hooks[event] ?? [];
     if (!Array.isArray(groups)) throw new Error(`Refusing to overwrite "hooks.${event}" in .claude/settings.json: expected an array`);
-    const handler = { type: 'command', command: launch.command, args: launch.args, timeout: HOOK_TIMEOUT_SECONDS };
+    const handler = launch.args.length === 0
+      ? { type: 'command', command: launch.command, timeout: HOOK_TIMEOUT_SECONDS }
+      : { type: 'command', command: launch.command, args: launch.args, timeout: HOOK_TIMEOUT_SECONDS };
     const matcher = MATCHERS[event];
     hooks[event] = [...groups, matcher ? { matcher, hooks: [handler] } : { hooks: [handler] }];
   }

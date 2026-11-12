@@ -33,7 +33,7 @@ import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { FSStorageProvider } from '@bradygaster/squad-sdk';
-import { projectSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
+import { isMachineSpecificMcpSpec, projectSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
 import { writeManagedText, writeManagedTextAtomic } from './managed-file.js';
 
 const storage = new FSStorageProvider();
@@ -121,7 +121,7 @@ export function ensureSquadStateMcpInRoot(
     'x-squad': {
       managed: true,
       version: _cliVersion,
-      machineSpecific: projectSpec.source !== 'pinned',
+      machineSpecific: isMachineSpecificMcpSpec(projectSpec),
       source: projectSpec.source,
       ...(projectSpec.fallback ? { fallback: projectSpec.fallback } : {}),
     },

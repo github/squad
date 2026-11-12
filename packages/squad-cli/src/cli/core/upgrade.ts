@@ -25,7 +25,7 @@ import { TEMPLATE_MANIFEST, getTemplatesDir } from './templates.js';
 import { runMigrations } from './migrations.js';
 import { scrubEmails } from './email-scrub.js';
 import { getPackageVersion, stampVersion, readInstalledVersion } from './version.js';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
 import { copyManagedFile, syncCopilotInstructionsFile, writeManagedText } from './managed-file.js';
 export { resolveSquadStateMcpSpec } from './mcp-spec.js';
 import {
@@ -1231,7 +1231,9 @@ async function runEnsureChecks(
   // git root looking for .mcp.json) and tombstone any stale project-level
   // entry left by older Squad versions in `.copilot/mcp-config.json`.
   // No HOME modifications.
-  const pinnedSpec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(getPackageVersion()));
+  const pinnedSpec = projectSquadStateMcpSpec(
+    await resolveCommittedSquadStateMcpSpec(getPackageVersion(), dest, detectSquadDir(dest).path),
+  );
   try {
     const rootResult = ensureSquadStateMcpInRoot(dest, getPackageVersion(), pinnedSpec);
     if (rootResult.written) {
@@ -1272,6 +1274,12 @@ export function describeMcpSpec(spec: SquadStateMcpSpec): string {
   }
   if (spec.source === 'local-entry') {
     return `${spec.command} ${spec.args[0]} (machine-specific installed CLI; exact-version fallback recorded)`;
+  }
+  if (spec.source === 'repo-launcher') {
+    return `node ${spec.args[0]} (repository launcher: finds the Squad CLI on each machine)`;
+  }
+  if (spec.source === 'path') {
+    return 'squad from PATH';
   }
   const pkg = spec.args[1] ?? '<unknown>';
   return pkg;

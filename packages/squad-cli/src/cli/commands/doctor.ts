@@ -716,6 +716,82 @@ export async function checkSquadStateBridge(cwd: string): Promise<DoctorCheck> {
         }
 }
 
+// ── portable launch commands (#2462) ─────────────────────────────────
+
+/** Squad's launch commands in files the repository commits: `.mcp.json` and Claude hooks. */
+function committedSquadLaunches(cwd: string): { file: string; command: string; args: string[] }[] {
+  const found: { file: string; command: string; args: string[] }[] = [];
+  const read = (rel: string): unknown => {
+    try {
+      return JSON.parse(readFileSync(path.join(cwd, rel), 'utf8'));
+    } catch {
+      return undefined;
+    }
+  };
+  const mcp = read('.mcp.json') as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> } | undefined;
+  const entry = mcp?.mcpServers?.['squad_state'];
+  if (entry && typeof entry.command === 'string') {
+    found.push({ file: '.mcp.json', command: entry.command, args: Array.isArray(entry.args) ? entry.args.map(String) : [] });
+  }
+  const settings = read('.claude/settings.json') as { hooks?: Record<string, unknown> } | undefined;
+  for (const groups of Object.values(settings?.hooks ?? {})) {
+    if (!Array.isArray(groups)) continue;
+    for (const group of groups as { hooks?: unknown }[]) {
+      for (const h of Array.isArray(group?.hooks) ? (group.hooks as Record<string, unknown>[]) : []) {
+        const args = Array.isArray(h?.['args']) ? (h['args'] as unknown[]).map(String) : [];
+        if (typeof h?.['command'] !== 'string') continue;
+        const squadHook = args.slice(-3, -1).join(' ') === 'hook claude' || / hook claude [A-Za-z]+$/.test(h['command'] as string);
+        if (squadHook) found.push({ file: '.claude/settings.json', command: h['command'] as string, args });
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Committed launch commands must work on every clone: no absolute paths into one machine's
+ * install, and the repository launcher they name must exist. Returns undefined when the
+ * repository commits no Squad launch command.
+ */
+export function checkPortableSquadLaunch(cwd: string): DoctorCheck | undefined {
+  const name = 'portable squad_state launch';
+  const launches = committedSquadLaunches(cwd);
+  if (launches.length === 0) return undefined;
+  const fix = "Run 'squad upgrade' to switch to the repository launcher (.squad/squad.mjs), then commit the result.";
+  // A committed file may come from any OS: recognise Windows and POSIX absolute paths everywhere.
+  const isAbs = (p: string) => path.posix.isAbsolute(p) || path.win32.isAbsolute(p);
+  const absolute = launches.filter(l => isAbs(l.command) || l.args.some(a => /cli-entry\.js$/.test(a) && isAbs(a)));
+  if (absolute.length > 0) {
+    const files = [...new Set(absolute.map(l => l.file))].join(', ');
+    // Only an absolute command is a file to check; a bare `node` is found on PATH.
+    const missing = absolute.some(l => (isAbs(l.command) && !lstatExists(l.command)) ||
+      l.args.some(a => isAbs(a) && !lstatExists(a)));
+    return {
+      name,
+      status: missing ? 'fail' : 'warn',
+      message: missing
+        ? `${files} start Squad from a path that does not exist on this machine (written on another machine?), so squad_state and the Claude hooks fail. ${fix}`
+        : `${files} start Squad from an absolute path on this machine, which fails on every other clone. ${fix}`,
+    };
+  }
+  for (const l of launches) {
+    const script = l.command === 'node' ? l.args[0] : /^node "\$CLAUDE_PROJECT_DIR\/([^"]+)"/.exec(l.command)?.[1];
+    if (script && /(?:^|\/)squad\.mjs$/.test(script) && !isAbs(script) && !lstatExists(path.join(cwd, script))) {
+      return { name, status: 'fail', message: `${l.file} runs ${script}, which is missing. ${fix}` };
+    }
+  }
+  return { name, status: 'pass', message: `${launches.length} committed launch command(s) are portable` };
+}
+
+function lstatExists(file: string): boolean {
+  try {
+    lstatSync(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── git sync hooks check ─────────────────────────────────────────────
 
 const SQUAD_SYNC_HOOK_MARKER = '# --- squad-sync-hook ---';
@@ -1159,6 +1235,8 @@ export async function runDoctor(cwd?: string): Promise<DoctorCheck[]> {
     if (upstreamCheck) checks.push(upstreamCheck);
 
     checks.push(await checkSquadStateBridge(resolvedCwd));
+    const portableLaunch = checkPortableSquadLaunch(resolvedCwd);
+    if (portableLaunch) checks.push(portableLaunch);
 
     // Hook presence check (only for two-layer / orphan backends)
     const hookCheck = checkGitSyncHooks(resolvedCwd, squadDir);

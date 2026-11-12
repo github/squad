@@ -233,7 +233,8 @@ describe('init.ts uses resolveSquadStateMcpSpec (asymmetry fix)', () => {
       'init.ts',
     );
     const src = readFileSync(initPath, 'utf-8');
-    expect(src).toMatch(/resolveSquadStateMcpSpec/);
+    // The committed-file resolver wraps resolveSquadStateMcpSpec (#2462).
+    expect(src).toMatch(/resolve(Committed)?SquadStateMcpSpec/);
     expect(src).toMatch(/from ['"]\.\/mcp-spec\.js['"]/);
   });
 
