@@ -90,7 +90,7 @@ function parsed(out: ReturnType<typeof run>): string[] {
 }
 
 describe('the launcher passes argv through unchanged', () => {
-  it('to a global squad on PATH', () => {
+  it('to a squad CLI installed on PATH', () => {
     if (win) {
       cmdShim('squad');
       const pkg = path.join(bin, 'node_modules', ...PKG);
