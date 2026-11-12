@@ -328,7 +328,7 @@ describe('Claude projection v3: plugin mode install', () => {
       fs.chmodSync(abs('fallback/npx'), 0o755);
       const result = spawnSync(process.execPath, [launcher, 'status'], {
         cwd: root, encoding: 'utf8', timeout: 3000,
-        env: { PATH: `${abs('linked-bin')}:${abs('fallback')}:/usr/bin:/bin`, CLAUDE_PROJECT_DIR: root, SQUAD_ALLOW_NPX: '1' },
+        env: { PATH: `${abs('linked-bin')}:${abs('fallback')}:/usr/bin:/bin`, CLAUDE_PROJECT_DIR: root, SQUAD_ALLOW_NPX: '1', SQUAD_HOME: abs('no-squad-home') },
       });
       expect(result.status, result.stderr).toBe(0);
       expect(result.stdout).toBe('fallback');
@@ -345,7 +345,7 @@ describe('Claude projection v3: plugin mode install', () => {
       write('global/node_modules/@bradygaster/squad-cli/dist/cli-entry.js', 'console.log(JSON.stringify(process.argv.slice(2)))');
       const args = ['two words', 'literal&token', 'literal"quote'];
       const run = () => spawnSync(process.execPath, [abs('scripts/squad.mjs'), ...args], {
-        cwd: root, encoding: 'utf8', env: { PATH: abs('global'), PATHEXT: '.CMD', CLAUDE_PROJECT_DIR: abs('project'), SQUAD_ALLOW_NPX: '1' },
+        cwd: root, encoding: 'utf8', env: { PATH: abs('global'), PATHEXT: '.CMD', CLAUDE_PROJECT_DIR: abs('project'), SQUAD_ALLOW_NPX: '1', SQUAD_HOME: abs('no-squad-home') },
       });
       const global = run();
       expect(global.status, global.stderr).toBe(0);

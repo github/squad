@@ -178,11 +178,13 @@ describe('Claude plugin: contents', () => {
 
 describe('Claude plugin: launcher', () => {
   const launcher = path.join(PLUGIN, 'scripts', 'squad.mjs');
+  const NO_SQUAD_HOME = path.join(os.tmpdir(), 'squad-plugin-test-no-home');
 
   function run(env: Record<string, string>, cwd: string) {
     return spawnSync(process.execPath, [launcher, 'one', 'two words'], {
       cwd,
-      env: { PATH: process.env.PATH ?? '', ...env },
+      // An empty Squad home: the CLI recorded on the developer's machine must not be found.
+      env: { PATH: process.env.PATH ?? '', SQUAD_HOME: NO_SQUAD_HOME, ...env },
       encoding: 'utf8',
     });
   }
