@@ -100,13 +100,22 @@ Input for the decision, not the decision itself.
 ### Evidence: the pointer is not followed
 
 The "Why it matters now" concern is that a non-Copilot coordinator may read
-80 KB of Copilot-shaped text on demand. In 43 recorded Claude Code sessions on
-Squad repositories (lab runs for #2438 and #2463, the end-to-end test, and a
-fresh `squad init --client claude` repository cast and built through
-`claude -p --agent squad` on 2026-11-12), no session read
-`.github/agents/squad.agent.md`. None did through Read, Bash or Grep. The
-coordinators worked from their digest, skills and `.squad/` files. The cost
-that option B removes is mostly theoretical today.
+80 KB of Copilot-shaped text on demand. Local Claude Code transcripts for Squad
+test repositories (2026-11-10 to 2026-11-12, Claude Code 2.1.317–2.1.318) were
+checked for any Read, Bash, Grep or Glob call on
+`.github/agents/squad.agent.md`. None of the 43 sessions (223 tool calls)
+touched it. Most of those sessions are short probes. Seven did real team
+work: the end-to-end test and a fresh `squad init --client claude` repository
+cast and built through `claude -p --agent squad`. Those seven made 177 tool
+calls, 32 member spawns and 96 `squad_state` or `.squad/` accesses. In both
+repositories the 82–83 KB Copilot file was present and the digest pointed at
+it. The coordinators worked from their digest, skills and `squad_state`.
+
+This is a strong signal, not proof: seven sessions, one model family, one
+Claude Code version, and a longer session (a ceremony, Ralph mode) could still
+follow the pointer. The method, a table and the script are on
+[#2469](https://github.com/github/squad/issues/2469#issuecomment-6831645352).
+Still, the cost that option B removes is mostly theoretical today.
 
 ### What B gains
 
