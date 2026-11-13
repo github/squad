@@ -176,6 +176,17 @@ no risk. B is worth revisiting if a single source starts to matter: for
 example, if Copilot's file needs host-specific content, or remote teams need
 the coordinator served through `squad_state`. Neither choice gates a release.
 
+### Team direction (2026-11-12)
+
+Maintainer discussion favored C for 2.0 and B only as a bounded, opt-in
+experiment ([summary](https://github.com/github/squad/issues/2469)). It also
+noted that the session evidence shows which files were read, not that the
+coordinator behaves correctly, so C must be shown with behavioral scenarios run
+with the Copilot file absent. C is tracked in
+[#2487](https://github.com/github/squad/issues/2487) and the B spike in
+[#2488](https://github.com/github/squad/issues/2488). This records the
+discussion; it does not accept this ADR.
+
 ## Decision
 
 Not yet made. Implementation, if approved, is a separate PR with its own
