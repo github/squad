@@ -69,6 +69,6 @@ scripts/release/manifest.schema.json text eol=lf
 plugins/** text eol=lf
 .claude-plugin/** text eol=lf
 # Images are binary, including inside plugins/** above (the plugin icon): never convert line endings.
-*.png binary
-*.jpg binary
-*.gif binary
+*.png binary -eol
+*.jpg binary -eol
+*.gif binary -eol
