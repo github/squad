@@ -227,10 +227,11 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 
 `squad init --client claude` and `squad upgrade --client claude` add these rules to `permissions.allow` in `.claude/settings.json`, so the coordinator can cast a team and use its state without a permission prompt for each call:
 
-- `mcp__squad_state`: every tool of Squad's `squad_state` MCP server (in plugin mode, the plugin's `mcp__plugin_squad_squad_state` instead)
-- `Bash(squad cast:*)`, `Bash(squad client sync:*)` and `Bash(squad lockout:*)`, plus the same three through the repository launcher, `node .squad/squad.mjs …`
+- each `squad_state` tool the coordinator uses, by name: `mcp__squad_state__squad_decide`, `…__squad_state_read`, `…_write`, `…_append`, `…_delete`, `…_list`, `…_create_if_absent`, `…_health` and `…_upstreams` (in plugin mode, the same tools under `mcp__plugin_squad_squad_state__`). Not the whole server: the experimental backend tools, such as approving a harness request, and the `memory.*` tools still ask.
+- `Bash(squad cast:*)`, `Bash(squad client sync:*)`, and the reviewer-lockout steps `squad lockout reject`, `assign`, `submit`, `approve` and `status`. Not `squad lockout override`, which readmits a rejected author on a human's authority and always asks.
+- The same commands through the repository launcher, `node .squad/squad.mjs …`, only while `.mcp.json` runs Squad's own launcher from a folder inside the repository. A `squad.mjs` Squad didn't write is never pre-approved.
 
-Nothing else is allowed: no edits, no other commands, no other MCP servers. Your own rules stay first and are never changed, and removing Claude Code from the team removes only Squad's rules. Claude Code applies a project's allow rules only once you've trusted the folder (the trust prompt on your first interactive `claude` run there); until then, and in headless runs in an untrusted folder, it ignores them and says so. To turn the allowlist off, set `"claudePermissions": "off"` in `.squad/config.json` and run `squad upgrade --client claude`.
+Nothing else is allowed: no edits, no other commands, no other MCP servers. `squad cast` refuses to write through a symbolic link, so a pre-approved cast can't be pointed at a file outside the team folder. Your own rules stay first and are never changed. Squad records the rules it added in `.claude/.squad-permissions.json` (commit it with `settings.json`), and removing Claude Code from the team, or turning the allowlist off, removes only those: a rule you had already written stays. Claude Code applies a project's allow rules only once you've trusted the folder (the trust prompt on your first interactive `claude` run there); until then, and in headless runs in an untrusted folder, it ignores them and says so. To turn the allowlist off, set `"claudePermissions": "off"` in `.squad/config.json` and run `squad upgrade --client claude`.
 
 ### Governance hooks
 

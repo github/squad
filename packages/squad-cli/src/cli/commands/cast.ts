@@ -5,6 +5,7 @@
  * @module cli/commands/cast
  */
 
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   FSStorageProvider,
@@ -26,6 +27,48 @@ import { BOLD, RESET, info, success } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';
 
 const storage = new FSStorageProvider();
+
+/**
+ * The first symlink on the way from `root` down to `target` (`root` itself may be a link: a linked
+ * team or external state directory), or null. `squad cast` can run without an approval prompt in
+ * Claude Code, so it must not follow a planted link out of the team directory.
+ */
+export function symlinkUnder(root: string, target: string): string | null {
+  const rel = path.relative(root, target);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  let cur = root;
+  for (const part of rel.split(path.sep)) {
+    cur = path.join(cur, part);
+    try {
+      if (fs.lstatSync(cur).isSymbolicLink()) return cur;
+    } catch {
+      return null; // Does not exist yet: nothing below it can be a link either.
+    }
+  }
+  return null;
+}
+
+/** Refuse to cast when a file `squad cast` writes is reached through a symlink. */
+function assertCastTargetsConfined(squadDir: string, teamRoot: string, agentDir: string): void {
+  const castingDir = path.join(squadDir, 'casting');
+  let castingEntries: string[] = [];
+  try {
+    castingEntries = fs.readdirSync(castingDir).map((f) => path.join(castingDir, f));
+  } catch {
+    // No casting directory yet.
+  }
+  const targets: Array<[string, string]> = [
+    ...[agentDir, path.join(agentDir, 'charter.md'), path.join(agentDir, 'history.md'),
+      path.join(squadDir, 'team.md'), path.join(squadDir, 'routing.md'), castingDir, ...castingEntries]
+      .map((t): [string, string] => [squadDir, t]),
+    [teamRoot, path.join(teamRoot, 'squad.config.ts')],
+    [teamRoot, path.join(teamRoot, '.github', 'agents', 'squad.agent.md')],
+  ];
+  for (const [root, target] of targets) {
+    const link = symlinkUnder(root, target);
+    if (link) fatal(`Refusing to cast: ${link} is a symbolic link. squad cast only writes real files inside the team directory.`);
+  }
+}
 
 export interface CastAddOptions {
   name: string;
@@ -328,6 +371,8 @@ export async function runCastAdd(cwd: string, options: CastAddOptions): Promise<
   const agentDir = path.join(squadDir, 'agents', slug);
   const charterPath = path.join(agentDir, 'charter.md');
   const historyPath = path.join(agentDir, 'history.md');
+
+  assertCastTargetsConfined(squadDir, teamRoot, agentDir);
 
   if (storage.existsSync(charterPath) && !options.force) {
     fatal(`Agent "${rawName}" already exists at ${charterPath} (use --force to overwrite)`);

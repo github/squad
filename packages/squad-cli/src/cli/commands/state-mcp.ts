@@ -31,7 +31,7 @@ const SERVER_INFO = {
   version: getPackageVersion(),
 };
 
-const MCP_TOOL_ALIASES: Record<string, string> = {
+export const MCP_TOOL_ALIASES: Record<string, string> = {
   squad_decide: 'squad_decide',
   squad_state_read: 'squad_state_read',
   squad_state_write: 'squad_state_write',

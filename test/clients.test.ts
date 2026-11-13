@@ -263,7 +263,7 @@ describe('coordinator behavioral-contract parity', () => {
     ['Tool naming + dirs', [/Tool names are host-prefixed/, /squad_state_squad_state_read/, /EISDIR/, /for a directory/]],
     ['Explicit fallback', [/Unknown or missing member/, /never silently swap owners/, /Built-in members/]],
     ['Ralph', [/Ralph mode/, /squad:<member>/, /board clear/]],
-    ['Init Mode guards', [/NEVER with glob\/grep\/search tools/, /Auto-confirm \(default\)/, /npx squad cast --name/, /NEVER hand-write or edit anything under/, /checksummed pair/, /\.squad\/scratch\//, /never write outside the workspace/, /STOP and report the roster/]],
+    ['Init Mode guards', [/NEVER with glob\/grep\/search tools/, /Auto-confirm \(default\)/, /`squad cast --name/, /NEVER hand-write or edit anything under/, /checksummed pair/, /\.squad\/scratch\//, /never write outside the workspace/, /STOP and report the roster/]],
   ];
   for (const id of CLIENT_IDS) {
     it(`${id} prompt carries the full coordinator contract`, () => {

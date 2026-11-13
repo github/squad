@@ -81,9 +81,9 @@ describe('Claude projection v3: plugin mode install', () => {
     expect(readJson('.claude/settings.json')).toEqual({
       agent: CLAUDE_PLUGIN_AGENT,
       disabledMcpjsonServers: ['squad_state'],
-      permissions: { allow: claudePermissionRules('.squad', true) },
+      permissions: { allow: claudePermissionRules(null, true) },
     });
-    expect(readJson('.claude/settings.json').permissions.allow[0]).toBe(CLAUDE_PLUGIN_MCP_PREFIX.replace(/__$/, ''));
+    expect(readJson('.claude/settings.json').permissions.allow[0]).toBe(`${CLAUDE_PLUGIN_MCP_PREFIX}squad_decide`);
 
     const dallas = readText('.claude/agents/dallas.md');
     expect(dallas).toContain('Claude projection v3.');
@@ -124,7 +124,7 @@ describe('Claude projection v3: plugin mode install', () => {
     expect(readJson('.claude/settings.json')).toEqual({
       model: 'opus',
       disabledMcpjsonServers: ['github', 'squad_state'],
-      permissions: { allow: ['Bash(npm test:*)', ...claudePermissionRules('.squad', true)] },
+      permissions: { allow: ['Bash(npm test:*)', ...claudePermissionRules(null, true)] },
       agent: CLAUDE_PLUGIN_AGENT,
     });
     expect(readText('.mcp.json')).toBe(Buffer.from(before['.mcp.json']!, 'base64').toString());
@@ -148,17 +148,20 @@ describe('Claude projection v3: plugin mode install', () => {
     it('keeps user-disabled MCP and restores a replaced project coordinator across mode switches', () => {
       const original = { agent: 'squad', disabledMcpjsonServers: ['squad_state', 'github'] };
       write('.claude/settings.json', JSON.stringify(original));
-      const projected = { ...original, permissions: { allow: claudePermissionRules('.squad', false) } };
+      const projected = { ...original, permissions: { allow: claudePermissionRules(null, false) } };
       installClients(['claude'], { root, mcp: MCP });
       expect(readJson('.claude/settings.json')).toEqual(projected);
       setConfig({ claudePlugin: true });
       installClients(['claude'], { root, mcp: MCP });
       installClients(['claude'], { root, mcp: MCP });
       expect(readJson('.claude/settings.json').agent).toBe(CLAUDE_PLUGIN_AGENT);
-      expect(readJson('.claude/settings.json').permissions.allow).toEqual(claudePermissionRules('.squad', true));
+      expect([...readJson('.claude/settings.json').permissions.allow].sort()).toEqual(claudePermissionRules(null, true).sort());
       setConfig({ claudePlugin: false });
       installClients(['claude'], { root, mcp: MCP });
-      expect(readJson('.claude/settings.json')).toEqual(projected);
+      // Switching back swaps the plugin's tool rules for the project server's, appended after the rest.
+      const back = readJson('.claude/settings.json');
+      expect({ ...back, permissions: { allow: [...back.permissions.allow].sort() } })
+        .toEqual({ ...projected, permissions: { allow: [...projected.permissions.allow].sort() } });
     });
 
     it('removes former Claude MCP ownership while still in plugin mode, but honors kept clients', () => {
