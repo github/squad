@@ -68,3 +68,7 @@ scripts/release/manifest.schema.json text eol=lf
 # no extension. Pin LF so Windows checkouts neither break it nor drift (#2443).
 plugins/** text eol=lf
 .claude-plugin/** text eol=lf
+# Images are binary, including inside plugins/** above (the plugin icon): never convert line endings.
+*.png binary
+*.jpg binary
+*.gif binary

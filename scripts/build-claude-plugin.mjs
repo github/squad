@@ -25,7 +25,7 @@ if (!fs.existsSync(SDK)) {
   console.error(`build-claude-plugin: ${path.relative(ROOT, SDK)} is missing; run \`npm run build\` first.`);
   process.exit(1);
 }
-const { buildClaudePlugin, buildClaudeMarketplace, CLAUDE_PLUGIN_SOURCE_DIR } = await import(pathToFileURL(SDK).href);
+const { buildClaudePlugin, buildClaudeMarketplace, CLAUDE_PLUGIN_SOURCE_DIR, CLAUDE_PLUGIN_STATIC_FILES } = await import(pathToFileURL(SDK).href);
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -56,13 +56,19 @@ function listTree(dir, rel = '') {
 }
 
 const wanted = new Map(files.map((f) => [f.path, f]));
+// Binary files shipped as they are (the icon): copied from the repository, compared byte for byte.
+const statics = Object.entries(CLAUDE_PLUGIN_STATIC_FILES).map(([rel, src]) => ({ rel, bytes: fs.readFileSync(path.join(ROOT, src)) }));
 const stale = [];
-for (const rel of listTree(pluginDir)) if (!wanted.has(rel)) stale.push(rel);
+for (const rel of listTree(pluginDir)) if (!wanted.has(rel) && !(rel in CLAUDE_PLUGIN_STATIC_FILES)) stale.push(rel);
 const changed = [];
 for (const f of files) {
   const abs = path.join(pluginDir, f.path);
   const current = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : undefined;
   if (current !== f.content) changed.push(f.path);
+}
+for (const { rel, bytes } of statics) {
+  const abs = path.join(pluginDir, rel);
+  if (!fs.existsSync(abs) || !fs.readFileSync(abs).equals(bytes)) changed.push(rel);
 }
 const marketplaceStale = !fs.existsSync(marketplacePath) || fs.readFileSync(marketplacePath, 'utf8') !== marketplace;
 
@@ -70,7 +76,7 @@ if (check) {
   const problems = [...changed.map((p) => `changed: ${p}`), ...stale.map((p) => `extra: ${p}`)];
   if (marketplaceStale) problems.push('changed: .claude-plugin/marketplace.json');
   // Marketplace installs clone the repository: a generated file git ignores never reaches users.
-  const ignored = spawnSync('git', ['check-ignore', '--no-index', '--', ...files.map((f) => path.join(CLAUDE_PLUGIN_SOURCE_DIR, f.path))], {
+  const ignored = spawnSync('git', ['check-ignore', '--no-index', '--', ...[...files.map((f) => f.path), ...statics.map((x) => x.rel)].map((p) => path.join(CLAUDE_PLUGIN_SOURCE_DIR, p))], {
     cwd: ROOT,
     encoding: 'utf8',
   });
@@ -90,8 +96,13 @@ for (const f of files) {
   fs.writeFileSync(abs, f.content, 'utf8');
   if (f.executable) fs.chmodSync(abs, 0o755);
 }
+for (const { rel, bytes } of statics) {
+  const abs = path.join(pluginDir, rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, bytes);
+}
 fs.mkdirSync(path.dirname(marketplacePath), { recursive: true });
 fs.writeFileSync(marketplacePath, marketplace, 'utf8');
 console.log(
-  `build-claude-plugin: wrote ${files.length} files to ${CLAUDE_PLUGIN_SOURCE_DIR} (${changed.length} changed, ${stale.length} removed), version ${version}.`,
+  `build-claude-plugin: wrote ${files.length + statics.length} files to ${CLAUDE_PLUGIN_SOURCE_DIR} (${changed.length} changed, ${stale.length} removed), version ${version}.`,
 );

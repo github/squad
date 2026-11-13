@@ -27,6 +27,15 @@ export const CLAUDE_PLUGIN_AGENT = `${CLAUDE_PLUGIN_NAME}:squad`;
 export const CLAUDE_PLUGIN_MCP_PREFIX = `mcp__plugin_${CLAUDE_PLUGIN_NAME}_squad_state__`;
 /** Where the generated plugin lives in the Squad repository; the marketplace points here. */
 export const CLAUDE_PLUGIN_SOURCE_DIR = 'plugins/squad';
+
+/**
+ * Binary files the plugin ships as they are, keyed by their path in the plugin, valued by their
+ * source in the repository. `scripts/build-claude-plugin.mjs` copies them; they are not generated.
+ * The icon (512 px square PNG) is the one `claude plugin validate` looks for at `.claude-plugin/icon.png`.
+ */
+export const CLAUDE_PLUGIN_STATIC_FILES: Readonly<Record<string, string>> = {
+  '.claude-plugin/icon.png': 'docs/src/assets/images/squad-plugin-icon.png',
+};
 /** Marketplace name: users install `squad@squad`. */
 export const CLAUDE_MARKETPLACE_NAME = 'squad';
 

@@ -19,6 +19,7 @@ import {
   buildClaudeMarketplace,
   claudePluginCoordinatorInstructions,
   CLAUDE_PLUGIN_SOURCE_DIR,
+  CLAUDE_PLUGIN_STATIC_FILES,
   CLAUDE_PLUGIN_MCP_PREFIX,
   CLAUDE_HOOK_EVENTS,
 } from '../packages/squad-sdk/src/client/adapters/index.js';
@@ -52,8 +53,23 @@ const read = (rel: string) => fs.readFileSync(path.join(PLUGIN, rel), 'utf8').re
 describe('Claude plugin: committed tree matches the SDK', () => {
   const files = build();
 
-  it('has exactly the generated files', () => {
-    expect(listTree(PLUGIN)).toEqual(files.map((f) => f.path).sort());
+  it('has exactly the generated files, plus the static ones', () => {
+    expect(listTree(PLUGIN)).toEqual([...files.map((f) => f.path), ...Object.keys(CLAUDE_PLUGIN_STATIC_FILES)].sort());
+  });
+
+  it('ships the icon the plugin directory wants: a square PNG of 512 to 2048 px under 2 MB, copied byte for byte', () => {
+    for (const [rel, src] of Object.entries(CLAUDE_PLUGIN_STATIC_FILES)) {
+      const bytes = fs.readFileSync(path.join(PLUGIN, rel));
+      expect(bytes.equals(fs.readFileSync(path.join(ROOT, src))), `${rel}: run node scripts/build-claude-plugin.mjs`).toBe(true);
+    }
+    const icon = fs.readFileSync(path.join(PLUGIN, '.claude-plugin', 'icon.png'));
+    expect(icon.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    const width = icon.readUInt32BE(16);
+    const height = icon.readUInt32BE(20);
+    expect(width).toBe(height);
+    expect(width).toBeGreaterThanOrEqual(512);
+    expect(width).toBeLessThanOrEqual(2048);
+    expect(icon.length).toBeLessThan(2 * 1024 * 1024);
   });
 
   it('every file is byte-identical to the generated content', () => {
@@ -71,7 +87,7 @@ describe('Claude plugin: committed tree matches the SDK', () => {
         return [path.posix.relative(CLAUDE_PLUGIN_SOURCE_DIR, file!), meta!.split(' ')[0]] as const;
       }),
     );
-    expect(files.map((f) => f.path).filter((p) => !modes.has(p))).toEqual([]);
+    expect([...files.map((f) => f.path), ...Object.keys(CLAUDE_PLUGIN_STATIC_FILES)].filter((p) => !modes.has(p))).toEqual([]);
     expect(modes.get('bin/squad')).toBe('100755');
   });
 
