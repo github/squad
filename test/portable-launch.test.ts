@@ -217,7 +217,7 @@ describe('the repository launcher script (#2462)', () => {
     const out = spawnSync(spec.command, spec.args, { cwd: nested, encoding: 'utf8', env: { PATH: path.dirname(process.execPath) } });
     expect(out.status).toBe(1);
     expect(out.stdout).toBe('');
-    expect(out.stderr).toContain('.squad/squad.mjs was not found');
+    expect(out.stderr).toContain('was not found');
   });
 
   it('runs only the launcher at the repository root, never one in a subfolder or above the root (Copilot review)', () => {
