@@ -18,7 +18,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { FSStorageProvider } from './storage/fs-storage-provider.js';
-import { resolveStateBackend, StateBackendStorageAdapter, type StateBackend, type StateBackendType } from './state-backend.js';
+import { configuredStateBackend, resolveStateBackend, StateBackendStorageAdapter, type StateBackend, type StateBackendType } from './state-backend.js';
 import type { StorageProvider } from './storage/storage-provider.js';
 
 const storage = new FSStorageProvider();
@@ -928,7 +928,11 @@ export interface SquadStateContext {
   paths: ResolvedSquadPaths;
   /** The active state backend (local, git-notes, or orphan) */
   backend: StateBackend;
-  /** The repo root directory (for git-native backends) */
+  /**
+   * The project's repo root directory (worktree-aware). For a linked team on a
+   * git backend, the state branch lives in the team repo instead; the backend
+   * is already bound to it, so callers keep using this for project paths.
+   */
   repoRoot: string;
   /** StorageProvider backed by the active state backend — pass to SDK modules */
   storage: StorageProvider;
@@ -961,18 +965,102 @@ export function resolveSquadState(startDir?: string, cliOverride?: StateBackendT
     repoRoot = path.resolve(paths.projectDir, '..');
   }
 
+  // A linked team owns its state (#2320): a git backend keeps it on the team
+  // repo's state branch, not the project's. Fail closed when that repo cannot
+  // be established exactly, instead of falling back to 'local' or to whatever
+  // repository happens to contain the team dir. Only the backend moves:
+  // repoRoot stays the project's repository, where hooks and agent turns work.
+  let stateRepoRoot = repoRoot;
+  if (paths.mode === 'remote') {
+    const { type } = configuredStateBackend(paths.projectDir, cliOverride);
+    if (type === 'orphan' || type === 'two-layer') {
+      stateRepoRoot = linkedTeamRepoRoot(paths, type);
+    }
+  }
+
   // Resolve the backend from config + CLI override
-  const backend = resolveStateBackend(paths.projectDir, repoRoot, cliOverride);
+  const backend = resolveStateBackend(paths.projectDir, stateRepoRoot, cliOverride);
 
   // For local backend, use FSStorageProvider directly (more capable).
   // For git-notes/orphan, bridge via StateBackendStorageAdapter.
-  // rootDir is paths.teamSquadDir (matches the squadRoot every local-backend
+  // Both are rooted at paths.teamSquadDir (matches the squadRoot every
   // caller — e.g. ToolRegistry in state-mcp.ts — builds its paths against),
   // so the traversal guard actually validates instead of no-op'ing on an
   // unset rootDir and letting a bad upstream path resolve silently.
   const stateStorage: StorageProvider = backend.name === 'local'
     ? new FSStorageProvider(paths.teamSquadDir)
-    : new StateBackendStorageAdapter(backend, paths.projectDir);
+    : new StateBackendStorageAdapter(backend, paths.teamSquadDir);
 
   return { paths, backend, repoRoot, storage: stateStorage };
+}
+
+/**
+ * The repository a linked team's git state backend writes to (#2320).
+ *
+ * The team repo is the directory that holds the team's squad dir: `teamRoot` itself when
+ * it contains `.squad/` (what `squad link` writes), the parent when `teamRoot` names the
+ * `.squad/` dir, or `teamRoot` when the squad files sit at its root. Its git top level must
+ * be exactly that directory (a linked worktree's root counts). Containing it is not enough:
+ * a team dir with no repository of its own that sits inside another one, whether reached
+ * through `..`, an absolute `teamRoot` or a symlink/junction, is refused, and so is a team
+ * `.squad` that is a link out of the team dir. Paths are compared canonically (realpath,
+ * so links, 8.3 names and drive-letter/case differences on Windows don't matter).
+ */
+function linkedTeamRepoRoot(paths: ResolvedSquadPaths, type: StateBackendType): string {
+  const prefix = `The linked team at ${paths.teamDir} uses the '${type}' state backend, which keeps state on a branch of the team repo`;
+  const fix = `or set "stateBackend" to "local" in ${path.join(paths.projectDir, 'config.json')}.`;
+  const teamDir = canonicalDir(paths.teamDir);
+  const squadDir = canonicalDir(paths.teamSquadDir);
+  if (teamDir === null || squadDir === null || !storage.existsSync(teamDir) || !storage.isDirectorySync(teamDir)) {
+    throw new Error(`${prefix}, but the team root does not exist or cannot be resolved. Check "teamRoot", ${fix}`);
+  }
+
+  // The team repo, and the squad dir it should contain. A link may move the team as a whole
+  // (teamRoot itself), but must not take the squad dir out of the team repo.
+  let teamRepo: string;
+  let expectedParent: string | null;
+  if (paths.teamSquadDir !== paths.teamDir) {
+    teamRepo = teamDir; // teamRoot is the team repo, with the squad dir nested in it
+    expectedParent = path.dirname(squadDir);
+  } else if (isSquadDirName(path.basename(paths.teamDir)) || isSquadDirName(path.basename(teamDir))) {
+    expectedParent = canonicalDir(path.dirname(paths.teamDir)); // teamRoot names the squad dir itself
+    teamRepo = path.dirname(teamDir);
+  } else {
+    teamRepo = teamDir; // squad files at the root of teamRoot
+    expectedParent = teamDir;
+  }
+  if (expectedParent === null || !samePath(expectedParent, teamRepo)) {
+    throw new Error(`${prefix}, but the team's squad dir resolves to ${squadDir}, outside the team repo it was configured in. ` +
+      `Squad will not write the team's state into another location. Replace the link with a real directory, ${fix}`);
+  }
+
+  const topLevel = gitTopLevel(teamRepo);
+  if (topLevel === null) {
+    throw new Error(`${prefix}, but the team root is not in a git repository. Initialize git in the team repo, ${fix}`);
+  }
+  const canonicalTop = canonicalDir(topLevel);
+  if (canonicalTop === null || !samePath(canonicalTop, teamRepo)) {
+    throw new Error(`${prefix}, but the team repo ${teamRepo} is not the root of a git repository: it is inside the ` +
+      `repository at ${canonicalTop ?? topLevel}. Squad will not write the team's state into another repository. ` +
+      `Initialize git in the team repo, ${fix}`);
+  }
+  return topLevel; // git's own spelling, as the backend receives for an unlinked project
+}
+
+/** `.squad` or `.ai-team`; case-insensitive on Windows, where `C:\team\.SQUAD` names the same directory. */
+function isSquadDirName(name: string): boolean {
+  const n = process.platform === 'win32' ? name.toLowerCase() : name;
+  return n === '.squad' || n === '.ai-team';
+}
+
+/** `git rev-parse --show-toplevel` from `dir`, or null when it is not in a repository. */
+function gitTopLevel(dir: string): string | null {
+  if (!storage.existsSync(dir) || !storage.isDirectorySync(dir)) return null;
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim() || null;
+  } catch {
+    return null;
+  }
 }
