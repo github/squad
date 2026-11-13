@@ -14,15 +14,19 @@ export const SQUAD_REPO_LAUNCHER_PATH = 'squad.mjs';
  * Hosts start MCP servers in the folder the session started in. Claude Code finds the root
  * `.mcp.json` from a subfolder (a package in a monorepo) and starts the server there, and
  * `${CLAUDE_PROJECT_DIR}` is not expanded in `.mcp.json`, so a relative script path fails with
- * "Cannot find module". This walks up from that folder, stopping at the repository root (the first
- * folder with `.git`), and runs the launcher it finds with the arguments after the script path.
+ * "Cannot find module". This finds the repository root first (the nearest folder, from the
+ * working directory up, that has `.git`) and runs only the launcher at `<root>/<squad dir>/squad.mjs`,
+ * with the arguments after the script path. A launcher in a subfolder (a package's own `.squad/`)
+ * or above the root is never run. With no `.git` anywhere, the root is the working directory itself:
+ * nothing is searched. It fails closed when the launcher is missing or the path leaves the root.
  * Single quotes only, so Windows argument quoting never has to escape it.
  */
 export const SQUAD_REPO_LAUNCHER_BOOTSTRAP =
-  "const p=require('path'),f=require('fs'),s=process.argv[1];" +
-  'for(let d=process.cwd();;d=p.dirname(d)){const c=p.join(d,s);' +
-  "if(f.existsSync(c)){process.argv[1]=c;import(require('url').pathToFileURL(c).href).catch(e=>{console.error(e);process.exit(1)});break}" +
-  "if(p.dirname(d)===d||f.existsSync(p.join(d,'.git'))){console.error('squad: '+s+' was not found in '+process.cwd()+' or a parent folder up to the repository root. Run squad upgrade at the repository root.');process.exit(1)}}";
+  "const p=require('path'),f=require('fs'),s=process.argv[1];let r=process.cwd();" +
+  "for(let d=r;;d=p.dirname(d)){if(f.existsSync(p.join(d,'.git'))){r=d;break}if(p.dirname(d)===d)break}" +
+  "const c=p.join(r,s);" +
+  "if(p.isAbsolute(s)||s.split(/[\\\\/]/).includes('..')||!f.existsSync(c)){console.error('squad: '+c+' was not found. Run squad upgrade at the repository root.');process.exit(1)}" +
+  "process.argv[1]=c;import(require('url').pathToFileURL(c).href).catch(e=>{console.error(e);process.exit(1)});";
 
 /** The committed MCP arguments that run the repository launcher with `rest`, from any subfolder. */
 export function squadRepoLauncherArgs(squadDir: string, ...rest: string[]): string[] {

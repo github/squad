@@ -220,6 +220,38 @@ describe('the repository launcher script (#2462)', () => {
     expect(out.stderr).toContain('.squad/squad.mjs was not found');
   });
 
+  it('runs only the launcher at the repository root, never one in a subfolder or above the root (Copilot review)', () => {
+    fakeCli(root, '2.0.1');
+    fs.mkdirSync(path.join(root, '.git'));
+    const env = { PATH: path.dirname(process.execPath) };
+    const spec = committedSquadStateMcpSpec(localEntry, '.squad');
+    // A package's own .squad/squad.mjs does not shadow the root launcher the root .mcp.json names.
+    const api = path.join(root, 'packages', 'api');
+    fs.mkdirSync(path.join(api, '.squad'), { recursive: true });
+    fs.writeFileSync(path.join(api, '.squad', 'squad.mjs'), "console.log('PLANTED')\n");
+    const fromApi = spawnSync(spec.command, spec.args, { cwd: api, encoding: 'utf8', env });
+    expect(fromApi.stdout).not.toContain('PLANTED');
+    expect(fromApi.stdout.trim()).toBe('fake 2.0.1 ["state-mcp"]');
+    // With no .git anywhere, nothing is searched: a launcher above the working directory is never run.
+    const loose = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-no-git-'));
+    try {
+      fs.mkdirSync(path.join(loose, '.squad'));
+      fs.writeFileSync(path.join(loose, '.squad', 'squad.mjs'), "console.log('PLANTED')\n");
+      const sub = path.join(loose, 'sub');
+      fs.mkdirSync(sub);
+      const out = spawnSync(spec.command, spec.args, { cwd: sub, encoding: 'utf8', env });
+      expect(out.status).toBe(1);
+      expect(out.stdout).not.toContain('PLANTED');
+      expect(out.stderr).toContain('was not found');
+    } finally {
+      fs.rmSync(loose, { recursive: true, force: true });
+    }
+    // A script path that leaves the root is refused.
+    const escape = spawnSync(spec.command, [spec.args[0]!, spec.args[1]!, '../outside/squad.mjs', 'state-mcp'], { cwd: root, encoding: 'utf8', env });
+    expect(escape.status).toBe(1);
+    expect(escape.stderr).toContain('was not found');
+  });
+
   it('runs the repository\'s own install from any working directory', () => {
     fakeCli(root, '2.0.1');
     const out = run(['state-mcp']);
