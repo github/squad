@@ -93,6 +93,100 @@ under `.squad-templates/` in the workspace.
 3. If B: is the Copilot file still written for workspaces where Copilot is not
    in `clients[]`?
 
+## Analysis (2026-11-12)
+
+Input for the decision, not the decision itself.
+
+### Evidence: the pointer is not followed
+
+The "Why it matters now" concern is that a non-Copilot coordinator may read
+80 KB of Copilot-shaped text on demand. Local Claude Code transcripts for Squad
+test repositories (2026-11-10 to 2026-11-12, Claude Code 2.1.317–2.1.318) were
+checked for any Read, Bash, Grep or Glob call on
+`.github/agents/squad.agent.md`. None of the 43 sessions (223 tool calls)
+touched it. Most of those sessions are short probes. Seven did real team
+work: the end-to-end test and a fresh `squad init --client claude` repository
+cast and built through `claude -p --agent squad`. Those seven made 177 tool
+calls, 32 member spawns and 96 `squad_state` or `.squad/` accesses. In both
+repositories the 82–83 KB Copilot file was present and the digest pointed at
+it. The coordinators worked from their digest, skills and `squad_state`.
+
+This is a strong signal, not proof: seven sessions, one model family, one
+Claude Code version, and a longer session (a ceremony, Ralph mode) could still
+follow the pointer. The method, a table and the script are on
+[#2469](https://github.com/github/squad/issues/2469#issuecomment-6831645352).
+Still, the cost that option B removes is mostly theoretical today.
+
+### What B gains
+
+- One host-neutral source with every host as a projection of it. This matches
+  how the other six hosts already work and how harness-adapters §4–§5
+  describes projection.
+- No host's digest names a Copilot path as its authority.
+- If the neutral file lives under `.squad/`, `squad_state_read` can serve it,
+  and it follows `teamRoot` in remote mode.
+- Not writing `.github/agents/squad.agent.md` for repositories without Copilot
+  (open question 3, and #2458) is sometimes counted as a gain of B. It does
+  not depend on moving the canonical file, and can be decided on its own.
+
+### What B risks
+
+- **Copilot users carry the risk.** The workspace file is not a plain template
+  copy. It carries a version stamp; `squad cast` writes the team-capabilities
+  block into it (#1608), which outer coordinators read; and `squad upgrade`
+  backs up local customizations to `.local-backup` (#1052), so users do edit
+  it. A generated Copilot file must reproduce all of this and stay
+  byte-identical (the Copilot snapshot in
+  `test/host-projection-regression-guards.test.ts`).
+- **Customizations.** Edits to a generated file are overwritten on the next
+  refresh. Users with a customized file need a migration path and a clear
+  message.
+- **Placement.** In a monorepo, `squad init` writes the Copilot file at the git
+  root while `.squad/` can sit in a subfolder, and remote mode moves the team
+  root. A neutral file and the Copilot file it generates are not always
+  side by side.
+- **Churn.** It is a projection-version change for all seven hosts, so every
+  repository gets a diff on its next `squad upgrade`. Rollback must stay
+  byte-preserving (§13), and the upgrade matrix needs re-recording on Linux and
+  Windows.
+- **Drift.** Users who keep editing the generated Copilot file create a second
+  copy that diverges from the neutral source.
+
+### Scope
+
+- **Option B:** about 2–3 days. The canonical path appears in about 20 source
+  files (init, upgrade, cast, team capabilities, the legacy fallback, help text
+  and the adapter contract) and 44 test files. The work: the neutral file and a
+  generator that keeps Copilot output byte-identical (stamp and capabilities
+  block included); the upgrade migration and rollback, with customized files;
+  monorepo and remote placement; a projection version bump for every host; a
+  regenerated Claude plugin and a re-recorded upgrade matrix; spec and docs.
+- **Option C:** about half a day. Rewrite the "Authoritative specification"
+  paragraph in `coreCoordinatorProtocol` (`coordinator.ts`) so each digest is
+  self-sufficient (Claude already serves on-demand sections as skills), update
+  the digest parity tests, and regenerate. No migration, and no change to
+  Copilot output.
+- **Not writing the Copilot file without Copilot** (separate from both):
+  small, but a behavior change that needs its own decision.
+
+### Recommendation
+
+Choose C now and defer B. C removes the dependency on a Copilot path at almost
+no risk. B is worth revisiting if a single source starts to matter: for
+example, if Copilot's file needs host-specific content, or remote teams need
+the coordinator served through `squad_state`. Neither choice gates a release.
+
+### Team direction (2026-11-12)
+
+Maintainer discussion favored C for 2.0 and B only as a bounded, opt-in
+experiment ([summary](https://github.com/github/squad/issues/2469)). It also
+noted that the session evidence shows which files were read, not that the
+coordinator behaves correctly, so C must be shown with behavioral scenarios run
+with the Copilot file absent. C is tracked in
+[#2487](https://github.com/github/squad/issues/2487) and the B spike in
+[#2488](https://github.com/github/squad/issues/2488). This records the
+discussion; it does not accept this ADR.
+
 ## Decision
 
 Not yet made. Implementation, if approved, is a separate PR with its own
