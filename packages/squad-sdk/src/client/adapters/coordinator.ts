@@ -1,11 +1,11 @@
 /**
  * Host-agnostic coordinator protocol plus per-client dispatch sections.
  *
- * Canonical source of truth: `.github/agents/squad.agent.md` (rendered from
- * `.squad-templates/squad.agent.md`). This module derives and synchronizes the
- * compact host-agnostic digest (staying within Antigravity's 24 KB limit) and
- * instructs every projected host agent to read `.github/agents/squad.agent.md`
- * as the authoritative coordinator specification when present.
+ * Shared source: `.squad-templates/squad.agent.md`, which also renders GitHub
+ * Copilot's `.github/agents/squad.agent.md`. This module derives the compact
+ * host-agnostic digest (within Antigravity's 24 KB limit) that every other host
+ * gets. Each digest is self-sufficient: it never depends on, or tells the model
+ * to read, Copilot's file in the workspace (ADR-003 option C, #2487).
  *
  * @module client/adapters/coordinator
  */
@@ -97,15 +97,15 @@ export function resolveCanonicalCoordinatorSource(repoRoot?: string): CanonicalC
   };
 }
 
-export function coreCoordinatorProtocol(squadDir = '.squad', repoRoot?: string): string {
+export function coreCoordinatorProtocol(squadDir = '.squad', _repoRoot?: string): string {
   const S = squadDir;
-  const canonical = resolveCanonicalCoordinatorSource(repoRoot);
-  const versionNote = canonical.version ? ` (version \`${canonical.version}\`)` : '';
+  // The digest is the same in every workspace: it is never derived from Copilot's file (#2487).
+  const covered = CANONICAL_COORDINATOR_HEADINGS.join(', ');
   return `# Squad Coordinator
 
 You are the Squad coordinator. You route work to a team of specialists and keep shared team state consistent. You do not do specialist work yourself when a team member owns it: you route, decompose, synthesize and communicate.
 
-**Authoritative specification (single source of truth):** \`${CANONICAL_COORDINATOR_AGENT_PATH}\`${versionNote} is the canonical coordinator specification. If \`${CANONICAL_COORDINATOR_AGENT_PATH}\` exists in this workspace, read it as the authoritative coordinator contract; this file provides the synchronized compact digest (covering: ${canonical.headings.join(', ')}) plus this host's **Dispatch adapter** and transport mapping. Detailed references live in \`${S}/templates/*.md\` (read them on demand: \`spawn-reference.md\`, \`ralph-reference.md\`, \`ceremony-reference.md\`, \`casting-reference.md\`, \`issue-lifecycle.md\`, \`prd-intake.md\`, \`after-agent-reference.md\`, \`worktree-reference.md\`, \`model-selection-reference.md\`) and skills under the paths in section 17.
+**This file is your complete coordinator protocol.** Squad generates it for this host from the same shared coordinator source as every other host's coordinator (covering: ${covered}), plus this host's **Dispatch adapter** and transport mapping below. You need no other host's coordinator file: GitHub Copilot's projection of the same protocol, \`${CANONICAL_COORDINATOR_AGENT_PATH}\`, may exist in this workspace, but do not read it for instructions. The team's own decisions and policy live in \`${S}/\` files, read as this protocol directs. Detailed references live in \`${S}/templates/*.md\` (read them on demand: \`spawn-reference.md\`, \`ralph-reference.md\`, \`ceremony-reference.md\`, \`casting-reference.md\`, \`issue-lifecycle.md\`, \`prd-intake.md\`, \`after-agent-reference.md\`, \`worktree-reference.md\`, \`model-selection-reference.md\`) and skills under the paths in section 17.
 
 ## Core protocol (host-agnostic)
 

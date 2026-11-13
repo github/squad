@@ -200,7 +200,7 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
 - `.claude/settings.json` — Squad's governance hooks, only if you opt in (see below). Your other settings and hooks are kept.
 
-`squad init --client claude` also writes the GitHub Copilot files: `.github/agents/squad.agent.md`, `.github/skills/`, `.copilot/mcp-config.json`, the Squad workflows under `.github/workflows/` and `.vscode/settings.json`. This is intended. GitHub Copilot is the base host, and `.github/agents/squad.agent.md` is the canonical coordinator that the other hosts' coordinators are checked against ([ADR-003](https://github.com/github/squad/blob/dev/docs/specification/adr-003-host-neutral-canonical-coordinator.md) proposes a host-neutral source instead). Skip the workflows with `--no-workflows` and the VS Code setting with `--no-vscode-default`.
+`squad init --client claude` also writes the GitHub Copilot files: `.github/agents/squad.agent.md`, `.github/skills/`, `.copilot/mcp-config.json`, the Squad workflows under `.github/workflows/` and `.vscode/settings.json`. This is intended. GitHub Copilot is the base host. The Claude Code coordinator is generated from the same shared source as Copilot's `.github/agents/squad.agent.md` and is complete on its own: it doesn't read Copilot's file ([ADR-003](https://github.com/github/squad/blob/dev/docs/specification/adr-003-host-neutral-canonical-coordinator.md), option C). Skip the workflows with `--no-workflows` and the VS Code setting with `--no-vscode-default`.
 
 ### Starting a session
 

@@ -62,6 +62,7 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
 
 #### Changed
 
+- The coordinators for Claude Code, Kiro, OpenCode, Cursor, Codex and Antigravity are complete on their own (ADR-003 option C, #2487). They no longer point the model at GitHub Copilot's `.github/agents/squad.agent.md` as the authority, and are the same whether that file is absent, stock or customized. Copilot's output is unchanged.
 - The Claude coordinator names Claude Code's `Agent` subagent tool (formerly `Task`). The Claude Code spec, docs and host feature matrix now match the code, and host-projection regression guards keep them that way (#2440, #2445).
 - Every generated Claude Markdown file states its projection version. Files from earlier projections are still recognised as Squad's and upgraded in place, and rolling back the `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` blocks restores the original bytes exactly (#2450).
 - New `squad client sync` refreshes the configured hosts' files without a full upgrade. Init Mode runs it after writing `routing.md`, so each Claude Code member subagent's description names what the member owns instead of repeating its role (#2456).
