@@ -12,7 +12,8 @@ import {
   buildCoordinatorInstructions,
   installClients,
 } from '../packages/squad-sdk/src/client/adapters/index.js';
-import { CANONICAL_COORDINATOR_HEADINGS } from '../packages/squad-sdk/src/client/adapters/coordinator.js';
+import { CANONICAL_COORDINATOR_HEADINGS, COORDINATOR_SQUAD_VERSION } from '../packages/squad-sdk/src/client/adapters/coordinator.js';
+import sdkPkg from '../packages/squad-sdk/package.json' with { type: 'json' };
 
 const COPILOT_FILE = '.github/agents/squad.agent.md';
 const NON_COPILOT = CLIENT_IDS.filter((id) => id !== 'copilot');
@@ -52,6 +53,14 @@ describe('self-sufficient coordinators (ADR-003 option C, #2487)', () => {
     expect(digest.split(COPILOT_FILE).length - 1).toBe(1);
     for (const heading of CANONICAL_COORDINATOR_HEADINGS) expect(digest).toContain(heading);
     expect(Buffer.byteLength(digest, 'utf8')).toBeLessThan(24_000);
+  });
+
+  it.each(NON_COPILOT)('%s: keeps the Squad version stamp the bridge handshake compares against (Copilot review)', (id) => {
+    // Item 16 requires squad_state_health's `squad-state <version>` to match this stamp. It comes from
+    // the SDK package (in lockstep with the CLI that serves the bridge), not from Copilot's file.
+    expect(COORDINATOR_SQUAD_VERSION).toBe(sdkPkg.version);
+    expect(buildCoordinatorInstructions(id, '.squad', root))
+      .toContain(`match this coordinator's stamped Squad version, \`${sdkPkg.version}\``);
   });
 
   it('projects the same bytes whether Copilot\'s file is absent, stock or customized', () => {
