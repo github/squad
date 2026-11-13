@@ -27,7 +27,8 @@ let prevCwd: string;
 const upstreamJson = () => path.join(tmp, '.squad', 'upstream.json');
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-upstream-hardening-'));
+  // Resolved (macOS /var is /private/var): the CLI clones into the resolved path.
+  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'squad-upstream-hardening-')));
   fs.mkdirSync(path.join(tmp, '.squad'), { recursive: true });
   fs.writeFileSync(path.join(tmp, '.squad', 'team.md'), '# t\n');
   prevCwd = process.cwd();
