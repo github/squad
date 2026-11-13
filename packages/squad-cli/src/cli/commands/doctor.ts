@@ -11,7 +11,7 @@
  */
 
 import path from 'node:path';
-import { lstatSync, readFileSync, readdirSync, type Dirent } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync, realpathSync, type Dirent } from 'node:fs';
 import { exec, execFileSync } from 'node:child_process';
 import { FSStorageProvider, resolveStateBackend, type StateBackendType } from '@bradygaster/squad-sdk';
 import { detectHistoricalCastingSchema, readCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
@@ -684,9 +684,12 @@ export async function checkSquadStateBridge(cwd: string): Promise<DoctorCheck> {
             };
           }
           const reportedTeamDir = path.resolve(teamLine);
-          const sameTeamDir = process.platform === 'win32'
-            ? reportedTeamDir.toLowerCase() === expectedTeamDir.toLowerCase()
-            : reportedTeamDir === expectedTeamDir;
+          // The bridge reports its team directory with symlinks resolved (macOS /var is /private/var),
+          // so compare real paths: two spellings of one directory are the same team.
+          const real = (p: string) => { try { return realpathSync(p); } catch { return p; } };
+          const a = real(reportedTeamDir);
+          const b = real(expectedTeamDir);
+          const sameTeamDir = process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
           if (!sameTeamDir) {
             return {
               name,
