@@ -223,6 +223,15 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 | **Hooks** | ✅ Opt-in, advisory | Off by default. See [Governance hooks](#governance-hooks). |
 | **`squad watch --execute`** | ✅ Preset | `squad watch --execute --agent-preset claude` (or `"agentPreset": "claude"` under `watch` in `.squad/config.json`) runs each round as `claude -p … --agent squad` with a `squad_state`-only MCP config written by the `squad` CLI (never the repository's `.mcp.json`, whose other servers keep Claude Code's approval). Execute mode defaults to `--permission-mode bypassPermissions`, the counterpart of Copilot's `--yolo`; override it with `--claude-flags`. Fleet dispatch (`--dispatch-mode fleet`) stays Copilot-only. |
 
+### Permissions for Squad's own tools
+
+`squad init --client claude` and `squad upgrade --client claude` add these rules to `permissions.allow` in `.claude/settings.json`, so the coordinator can cast a team and use its state without a permission prompt for each call:
+
+- `mcp__squad_state`: every tool of Squad's `squad_state` MCP server (in plugin mode, the plugin's `mcp__plugin_squad_squad_state` instead)
+- `Bash(squad cast:*)`, `Bash(squad client sync:*)` and `Bash(squad lockout:*)`, plus the same three through the repository launcher, `node .squad/squad.mjs …`
+
+Nothing else is allowed: no edits, no other commands, no other MCP servers. Your own rules stay first and are never changed, and removing Claude Code from the team removes only Squad's rules. Claude Code applies a project's allow rules only once you've trusted the folder (the trust prompt on your first interactive `claude` run there); until then, and in headless runs in an untrusted folder, it ignores them and says so. To turn the allowlist off, set `"claudePermissions": "off"` in `.squad/config.json` and run `squad upgrade --client claude`.
+
 ### Governance hooks
 
 To turn the hooks on, add `"claudeHooks": "advisory"` to `.squad/config.json` and run `squad upgrade --client claude`. Squad then adds these hooks to `.claude/settings.json`:

@@ -12,7 +12,11 @@ import {
 } from '../packages/squad-sdk/src/client/adapters/index.js';
 import {
   CLAUDE_SETTINGS_PATH,
+  claudePermissionRules,
   isSquadHookHandler,
+  isSquadPermissionRule,
+  mergeClaudePermissions,
+  stripClaudePermissions,
   mergeClaudeHooks,
   runClaudeHook,
   stripClaudeHooks,
@@ -112,7 +116,13 @@ describe('Claude hooks in .claude/settings.json', () => {
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  it('is off by default: no settings file is written', () => {
+  it('hooks are off by default: the settings file holds only the permission allowlist', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    expect(JSON.parse(fs.readFileSync(settingsAbs(), 'utf8'))).toEqual({ permissions: { allow: claudePermissionRules('.squad', false) } });
+  });
+
+  it('with the allowlist and hooks off, no settings file is written', () => {
+    config({ claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
     expect(fs.existsSync(settingsAbs())).toBe(false);
   });
@@ -150,7 +160,7 @@ describe('Claude hooks in .claude/settings.json', () => {
     config({ claudeHooks: 'advisory' });
     installClients(['claude'], { root, mcp: MCP });
     const merged = JSON.parse(fs.readFileSync(settingsAbs(), 'utf8'));
-    expect(merged.permissions).toEqual({ allow: ['Bash(npm test)'] });
+    expect(merged.permissions).toEqual({ allow: ['Bash(npm test)', ...claudePermissionRules('.squad', false)] });
     expect(merged.hooks.PreToolUse[0]).toEqual({ matcher: 'Bash', hooks: [{ type: 'command', command: './.claude/hooks/no-rm.sh' }] });
     expect(merged.hooks.PreToolUse).toHaveLength(2);
     expect(merged.hooks.Stop).toHaveLength(2);
@@ -162,9 +172,9 @@ describe('Claude hooks in .claude/settings.json', () => {
     const user = '{\n  "model": "opus"\n}\n';
     fs.mkdirSync(path.dirname(settingsAbs()), { recursive: true });
     fs.writeFileSync(settingsAbs(), user);
-    config({ claudeHooks: 'advisory' });
+    config({ claudeHooks: 'advisory', claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
-    config({ claudeHooks: 'off' });
+    config({ claudeHooks: 'off', claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
     expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
   });
@@ -188,6 +198,75 @@ describe('Claude hooks in .claude/settings.json', () => {
   it('refuses to clobber a malformed hooks value', () => {
     expect(() => mergeClaudeHooks({ hooks: [] as unknown as Record<string, unknown> }, MCP)).toThrow(/Refusing/);
     expect(() => mergeClaudeHooks({ hooks: { Stop: 'x' } }, MCP)).toThrow(/Refusing/);
+  });
+});
+
+describe('Claude permission allowlist in .claude/settings.json', () => {
+  let root: string;
+  const settingsAbs = () => path.join(root, CLAUDE_SETTINGS_PATH);
+  const config = (cfg: Record<string, unknown>) => fs.writeFileSync(path.join(root, '.squad/config.json'), `${JSON.stringify(cfg, null, 2)}\n`);
+  const allow = () => JSON.parse(fs.readFileSync(settingsAbs(), 'utf8')).permissions?.allow;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-perms-'));
+    fs.mkdirSync(path.join(root, '.squad'), { recursive: true });
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it("allows only Squad's own tools: the squad_state server and three squad subcommands", () => {
+    expect(claudePermissionRules('.squad', false)).toEqual([
+      'mcp__squad_state',
+      'Bash(squad cast:*)',
+      'Bash(squad client sync:*)',
+      'Bash(squad lockout:*)',
+      'Bash(node .squad/squad.mjs cast:*)',
+      'Bash(node .squad/squad.mjs client sync:*)',
+      'Bash(node .squad/squad.mjs lockout:*)',
+    ]);
+    expect(claudePermissionRules('.squad', true)[0]).toBe('mcp__plugin_squad_squad_state');
+    expect(claudePermissionRules('.ai-team', false)).toContain('Bash(node .ai-team/squad.mjs cast:*)');
+    // A squad dir that would widen or escape the rule shape is left out rather than written.
+    expect(claudePermissionRules('/abs/.squad', false).some((r) => r.includes('/abs/'))).toBe(false);
+  });
+
+  it('never recognises a user rule as Squad-owned', () => {
+    for (const rule of ['Bash(squad:*)', 'Bash(squad init:*)', 'mcp__squad_state__squad_state_write', 'Bash(npm test:*)', 'mcp__github', 'Edit']) {
+      expect(isSquadPermissionRule(rule)).toBe(false);
+    }
+    const user = { permissions: { allow: ['Bash(squad:*)'], deny: ['Bash(rm:*)'] } };
+    expect(stripClaudePermissions(user)).toBe(user);
+  });
+
+  it('appends after user rules, is idempotent, and rollback restores the user bytes', () => {
+    const user = `${JSON.stringify({ permissions: { allow: ['Bash(npm test:*)'], deny: ['Bash(rm:*)'] }, model: 'opus' }, null, 2)}\n`;
+    fs.mkdirSync(path.dirname(settingsAbs()), { recursive: true });
+    fs.writeFileSync(settingsAbs(), user);
+    installClients(['claude'], { root, mcp: MCP });
+    expect(allow()).toEqual(['Bash(npm test:*)', ...claudePermissionRules('.squad', false)]);
+    expect(JSON.parse(fs.readFileSync(settingsAbs(), 'utf8')).permissions.deny).toEqual(['Bash(rm:*)']);
+    expect(installClients(['claude'], { root, mcp: MCP }).find((r) => r.path === CLAUDE_SETTINGS_PATH)?.action).toBe('unchanged');
+    uninstallClients(['claude'], { root, mcp: MCP });
+    expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
+  });
+
+  it('"claudePermissions": "off" removes only Squad rules on the next upgrade', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    expect(allow()).toEqual(claudePermissionRules('.squad', false));
+    config({ claudePermissions: 'off' });
+    installClients(['claude'], { root, mcp: MCP });
+    expect(fs.existsSync(settingsAbs())).toBe(false);
+  });
+
+  it('rollback deletes a settings file that held only Squad rules, and prunes .claude', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    uninstallClients(['claude'], { root, mcp: MCP });
+    expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
+  });
+
+  it('refuses to clobber malformed permissions', () => {
+    const rules = claudePermissionRules('.squad', false);
+    expect(() => mergeClaudePermissions({ permissions: [] as unknown as Record<string, unknown> }, rules)).toThrow(/Refusing/);
+    expect(() => mergeClaudePermissions({ permissions: { allow: 'x' } }, rules)).toThrow(/Refusing/);
   });
 });
 

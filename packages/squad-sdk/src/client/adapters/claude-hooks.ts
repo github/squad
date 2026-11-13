@@ -197,18 +197,94 @@ export function mergeClaudeHooks(settings: Json, mcp: McpLaunchSpec | null): Jso
   return { ...stripped, hooks };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Permission allowlist: Squad's own tools, so the coordinator's first run isn't a wall of prompts.
+// ---------------------------------------------------------------------------------------------
+
+export type ClaudePermissionsMode = 'off' | 'squad';
+
+/** `claudePermissions` from `<squadDir>/config.json`. On (`"squad"`) unless it is `"off"`. */
+export function readClaudePermissionsMode(squadAbs: string): ClaudePermissionsMode {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(squadAbs, 'config.json'), 'utf8')) as { claudePermissions?: unknown };
+    return cfg.claudePermissions === 'off' ? 'off' : 'squad';
+  } catch {
+    return 'squad';
+  }
+}
+
+/** The `squad` subcommands the coordinator runs with Bash: casting, subagent sync, reviewer lockouts. */
+const SQUAD_BASH_SUBCOMMANDS = ['cast', 'client sync', 'lockout'] as const;
+/** The plugin's `squad_state` server (`mcp__plugin_<plugin>_squad_state`); see CLAUDE_PLUGIN_MCP_PREFIX. */
+const PLUGIN_SQUAD_STATE_SERVER = 'mcp__plugin_squad_squad_state';
+const SQUAD_PERMISSION_RULE = new RegExp(
+  `^(?:mcp__squad_state|${PLUGIN_SQUAD_STATE_SERVER}|Bash\\((?:squad|node (?:[\\w.-]+/)+squad\\.mjs) (?:${SQUAD_BASH_SUBCOMMANDS.join('|')}):\\*\\))$`,
+);
+
 /**
- * The `.claude/settings.json` entry. Emitted while hooks are on, and while the file exists (so
- * turning hooks off, or rolling Claude back, removes Squad's handlers). Never creates the file
- * just to leave it empty.
+ * The `permissions.allow` rules Squad adds: every tool of its `squad_state` server (a server-wide
+ * `mcp__<server>` rule), and the coordinator's three CLI subcommands, both as `squad …` on PATH and
+ * through the repository launcher. Nothing else: no Edit, no general Bash, no other MCP server.
+ */
+export function claudePermissionRules(squadDir: string, plugin: boolean): string[] {
+  const launcher = `node ${squadDir.replace(/\\/g, '/').replace(/\/+$/, '')}/squad.mjs`;
+  return [
+    plugin ? PLUGIN_SQUAD_STATE_SERVER : 'mcp__squad_state',
+    ...SQUAD_BASH_SUBCOMMANDS.map((c) => `Bash(squad ${c}:*)`),
+    ...SQUAD_BASH_SUBCOMMANDS.map((c) => `Bash(${launcher} ${c}:*)`),
+  ].filter((r) => SQUAD_PERMISSION_RULE.test(r));
+}
+
+export function isSquadPermissionRule(rule: unknown): boolean {
+  return typeof rule === 'string' && SQUAD_PERMISSION_RULE.test(rule);
+}
+
+/** Remove Squad's allow rules (and `allow`/`permissions` they leave empty). Untouched input is returned as is. */
+export function stripClaudePermissions(settings: Json): Json {
+  const perms = settings['permissions'];
+  if (!isObject(perms) || !Array.isArray(perms['allow'])) return settings;
+  const allow = perms['allow'] as unknown[];
+  const kept = allow.filter((r) => !isSquadPermissionRule(r));
+  if (kept.length === allow.length) return settings;
+  const nextPerms: Json = { ...perms };
+  if (kept.length > 0) nextPerms['allow'] = kept;
+  else delete nextPerms['allow'];
+  const out: Json = { ...settings };
+  if (Object.keys(nextPerms).length > 0) out['permissions'] = nextPerms;
+  else delete out['permissions'];
+  return out;
+}
+
+/** Refresh Squad's allow rules: strip the old ones, then append `rules` (none: strip only). User rules keep their order. */
+export function mergeClaudePermissions(settings: Json, rules: readonly string[] | null): Json {
+  const stripped = stripClaudePermissions(settings);
+  if (!rules || rules.length === 0) return stripped;
+  const perms = stripped['permissions'];
+  if (perms !== undefined && !isObject(perms)) {
+    throw new Error('Refusing to overwrite "permissions" in .claude/settings.json: expected a JSON object');
+  }
+  const allow = isObject(perms) ? perms['allow'] : undefined;
+  if (allow !== undefined && !Array.isArray(allow)) {
+    throw new Error('Refusing to overwrite "permissions.allow" in .claude/settings.json: expected an array');
+  }
+  const out: Json = { ...stripped, permissions: { ...(perms ?? {}), allow: [...((allow as unknown[] | undefined) ?? []), ...rules] } };
+  return JSON.stringify(out) === JSON.stringify(settings) ? settings : out;
+}
+
+/**
+ * The `.claude/settings.json` entry: Squad's permission allowlist (on unless `claudePermissions` is
+ * `"off"`), its hooks while they are on, and the plugin keys in plugin mode. Emitted while any of
+ * those is on, and while the file exists (so turning one off, or rolling Claude back, removes
+ * Squad's entries).
  */
 export function projectClaudeHooks(ctx: ClientContext, opts: { plugin?: boolean } = {}): ProjectionFile[] {
   const squadAbs = path.resolve(ctx.root, ctx.squadDir ?? '.squad');
   const plugin = opts.plugin === true;
   // In plugin mode the plugin registers the hooks; the project file only carries the plugin keys.
   const on = !plugin && readClaudeHooksMode(squadAbs) === 'advisory' && claudeHookLaunch(ctx.mcp, 'Stop') !== null;
+  const rules = readClaudePermissionsMode(squadAbs) === 'squad' ? claudePermissionRules(ctx.squadDir ?? '.squad', plugin) : null;
   let ownership = readClaudePluginSettingsOwnership(ctx.root);
-  if (!on && !plugin && !ownership && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
+  if (!on && !rules && !plugin && !ownership && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
   const coordinator = path.join(ctx.root, '.claude/agents/squad.md');
   const projectMcp = fs.existsSync(coordinator) &&
     fs.readFileSync(coordinator, 'utf8').includes('Generated by Squad. Managed file:');
@@ -229,11 +305,14 @@ export function projectClaudeHooks(ctx: ClientContext, opts: { plugin?: boolean 
             projectMcp,
           }
           : ownership;
-        const next = mergeClaudePluginSettings(mergeClaudeHooks(existing, on ? ctx.mcp : null), plugin, nextOwnership);
+        const next = mergeClaudePermissions(
+          mergeClaudePluginSettings(mergeClaudeHooks(existing, on ? ctx.mcp : null), plugin, nextOwnership),
+          rules,
+        );
         ownership = nextOwnership;
         return next;
       },
-      remove: (existing) => mergeClaudePluginSettings(stripClaudeHooks(existing), false, ownership),
+      remove: (existing) => stripClaudePermissions(mergeClaudePluginSettings(stripClaudeHooks(existing), false, ownership)),
     },
     ...(plugin || ownership ? [{
       kind: 'json' as const,
