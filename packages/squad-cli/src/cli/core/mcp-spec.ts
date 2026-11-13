@@ -27,6 +27,7 @@ import {
   SQUAD_REPO_LAUNCHER_MARKER,
   SQUAD_REPO_LAUNCHER_PATH,
   squadRepoLauncher,
+  squadRepoLauncherArgs,
 } from '@bradygaster/squad-sdk/client';
 
 export interface SquadStateMcpSpec {
@@ -159,8 +160,9 @@ export function isMachineSpecificMcpSpec(spec: SquadStateMcpSpec): boolean {
 /**
  * The portable form of `direct` for files a repository commits (#2462).
  *
- * - `local-entry` becomes `node <squadDir>/squad.mjs state-mcp`, the repository launcher
- *   ({@link writeSquadRepoLauncher}), which finds a Squad CLI on whatever machine runs it. A CLI
+ * - `local-entry` becomes `node -e <bootstrap> <squadDir>/squad.mjs state-mcp`, the repository
+ *   launcher ({@link writeSquadRepoLauncher}), which finds a Squad CLI on whatever machine runs it.
+ *   The bootstrap finds the launcher from any subfolder of the repository (`squadRepoLauncherArgs`). A CLI
  *   running from a package runner's temporary cache (`npx`, `pnpm dlx`, `yarn dlx`) is gone once
  *   that command exits, so it keeps the exact-version `npx` form instead.
  * - `standalone` becomes a bare `squad state-mcp`: standalone installs put `squad` on PATH and may
@@ -177,7 +179,7 @@ export function committedSquadStateMcpSpec(direct: SquadStateMcpSpec, squadDir: 
   if (direct.source === 'local-entry' && squadDir) {
     return {
       command: 'node',
-      args: [`${squadDir}/${SQUAD_REPO_LAUNCHER_PATH}`, 'state-mcp'],
+      args: squadRepoLauncherArgs(squadDir, 'state-mcp'),
       source: 'repo-launcher',
       ...(direct.fallback ? { fallback: direct.fallback } : {}),
     };

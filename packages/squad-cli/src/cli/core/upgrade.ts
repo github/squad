@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FSStorageProvider, stripTeamCapabilitiesBlock, syncTeamCapabilities } from '@bradygaster/squad-sdk';
 import { clearResolveSquadCache, isRetiredProfileTeamRoot } from '@bradygaster/squad-sdk/resolution';
+import { squadRepoLauncherScript } from '@bradygaster/squad-sdk/client';
 import {
   backfillCastingRegistryFromTeam,
   detectHistoricalCastingSchema,
@@ -1276,7 +1277,7 @@ export function describeMcpSpec(spec: SquadStateMcpSpec): string {
     return `${spec.command} ${spec.args[0]} (machine-specific installed CLI; exact-version fallback recorded)`;
   }
   if (spec.source === 'repo-launcher') {
-    return `node ${spec.args[0]} (repository launcher: finds the Squad CLI on each machine)`;
+    return `node ${squadRepoLauncherScript(spec.command, spec.args) ?? spec.args[0]} (repository launcher: finds the Squad CLI on each machine)`;
   }
   if (spec.source === 'path') {
     return 'squad from PATH';

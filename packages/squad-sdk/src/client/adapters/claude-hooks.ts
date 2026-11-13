@@ -17,6 +17,7 @@ import { CLAUDE_AGENTS_DIR, readRouting } from './claude-members.js';
 import { effectiveLocked, lockoutsFor, readLockouts, type LockoutRecord } from './lockout.js';
 import type { ClientContext, McpLaunchSpec, ProjectionFile } from './types.js';
 import { readContained } from './safe-path.js';
+import { squadRepoLauncherScript } from './repo-launcher.js';
 
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
 const PLUGIN_SETTINGS_STATE = '.claude/.squad-plugin-settings.json';
@@ -112,8 +113,8 @@ export function claudeHookLaunch(mcp: McpLaunchSpec, event: ClaudeHookEvent): Mc
 
 /** `<squad dir>/squad.mjs` when `mcp` is the repository launcher, else null. */
 function repoLauncherPath(mcp: McpLaunchSpec): string | null {
-  const [script, sub] = mcp.args;
-  if (mcp.command !== 'node' || mcp.args.length !== 2 || sub !== 'state-mcp' || !script) return null;
+  const script = squadRepoLauncherScript(mcp.command, mcp.args);
+  if (!script || mcp.args.indexOf(script) !== mcp.args.length - 2) return null;
   return /^(?:[\w.-]+\/)+squad\.mjs$/.test(script) && !script.split('/').includes('..') ? script : null;
 }
 

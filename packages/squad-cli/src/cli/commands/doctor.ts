@@ -19,6 +19,7 @@ import { resolveSquad, resolveSquadPaths, clearResolveSquadCache } from '@bradyg
 import { fatalNoSquad } from '../core/errors.js';
 import { isMutableStateKey, MUTABLE_STATE_PATHS } from '@bradygaster/squad-sdk/tools';
 import { resolveUpstreams } from '@bradygaster/squad-sdk/upstream';
+import { squadRepoLauncherScript } from '@bradygaster/squad-sdk/client';
 import { effectiveSquadDir } from '../core/effective-squad-dir.js';
 import { getPackageVersion } from '../core/version.js';
 import {
@@ -775,7 +776,7 @@ export function checkPortableSquadLaunch(cwd: string): DoctorCheck | undefined {
     };
   }
   for (const l of launches) {
-    const script = l.command === 'node' ? l.args[0] : /^node "\$CLAUDE_PROJECT_DIR\/([^"]+)"/.exec(l.command)?.[1];
+    const script = l.command === 'node' ? squadRepoLauncherScript(l.command, l.args) : /^node "\$CLAUDE_PROJECT_DIR\/([^"]+)"/.exec(l.command)?.[1];
     if (script && /(?:^|\/)squad\.mjs$/.test(script) && !isAbs(script) && !lstatExists(path.join(cwd, script))) {
       return { name, status: 'fail', message: `${l.file} runs ${script}, which is missing. ${fix}` };
     }
