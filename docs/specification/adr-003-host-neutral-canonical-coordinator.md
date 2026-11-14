@@ -1,14 +1,14 @@
 # ADR 003: Host-Neutral Canonical Coordinator in the Workspace
 
-**Status:** Proposed
+**Status:** Accepted (option C), 2026-11-13
 
 **Tracking:** [#2438](https://github.com/github/squad/issues/2438) (Phase 7)
 
 **Affects:** `squad-client-harness-adapters/v0.2` §4–§5 (projection contract
 and canonical paths) and §13 (upgrade and rollback)
 
-This ADR records a decision to be made. It does not change any code. Merging it
-with status Proposed does not approve it.
+The maintainers chose option C. Option B stays an opt-in experiment
+([#2488](https://github.com/github/squad/issues/2488)) and is not part of 2.0.
 
 ## Context
 
@@ -185,12 +185,28 @@ coordinator behaves correctly, so C must be shown with behavioral scenarios run
 with the Copilot file absent. C is tracked in
 [#2487](https://github.com/github/squad/issues/2487) and the B spike in
 [#2488](https://github.com/github/squad/issues/2488). This records the
-discussion; it does not accept this ADR.
+discussion; the decision is recorded below.
 
 ## Decision
 
-Not yet made. Implementation, if approved, is a separate PR with its own
-projection version bump and CHANGELOG entry.
+**Option C**, agreed by the maintainers on 2026-11-13.
+
+- `.github/agents/squad.agent.md` stays the canonical coordinator, and it is
+  defined only for Copilot. Copilot's output doesn't change.
+- Every other host's digest is complete on its own and never points at
+  Copilot's file. The digest parity tests keep the hosts in step. This shipped
+  in [#2489](https://github.com/github/squad/pull/2489).
+- Behavioral scenarios ran live on Claude Code with Copilot's file deleted, and
+  passed: routing, human sign-off, reviewer rejection, restart continuity,
+  customization precedence, monorepo subfolder, backend outage and the
+  satellite repository. Azure DevOps is deferred. The evidence is in
+  [#2487](https://github.com/github/squad/issues/2487) and the host feature
+  matrix.
+- Option B (a host-neutral canonical file that Copilot's is generated from) is
+  not adopted. It stays a bounded, opt-in spike in
+  [#2488](https://github.com/github/squad/issues/2488). Revisit it if Copilot's
+  file needs host-specific content, or if remote teams need the coordinator
+  served through `squad_state`.
 
 ## Related artifacts
 
