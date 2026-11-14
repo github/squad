@@ -1,6 +1,6 @@
 {
   "name": "@bradygaster/squad-cli",
-  "version": "2.0.0-preview.4",
+  "version": "2.0.0-preview.5",
   "description": "Squad CLI — Command-line interface for the Squad multi-agent runtime",
   "type": "module",
   "bin": {
@@ -179,18 +179,18 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
-    "@bradygaster/squad-sdk": ">=2.0.0-preview.4",
+    "@bradygaster/squad-sdk": ">=2.0.0-preview.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "ink": "^7.1.1",
-    "react": "^19.3.0",
     "jsonc-parser": "^3.3.1",
+    "react": "^19.3.0",
     "vscode-jsonrpc": "^9.0.3"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
-    "typescript": "^6.0.3",
-    "ink-testing-library": "^4.0.0"
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^6.0.3"
   },
   "keywords": [
     "copilot",

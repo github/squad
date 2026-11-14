@@ -10,9 +10,11 @@ All notable changes to this project will be documented in this file.
 - `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). Available in `v2.0.0-preview.2` and later previews, not stable `v1.1.0`.
 - `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. Available in `v2.0.0-preview.3` and later previews, not stable `v1.1.0`. Transactional existing-memory backend migration (#2425, #2439) is available in `v2.0.0-preview.4`.
 
-### Claude Code as a first-class host (#2438)
+## [2.0.0-preview.5] - 2026-11-14
 
-Planned as the headline of `v2.0.0-preview.5`.
+Fifth Squad 2.0 preview. Claude Code becomes a first-class Squad host: a Squad plugin for Claude Code, a member subagent for each team member, native skills, advisory governance hooks, a live team dashboard, and coordinators that are complete on their own without reading Copilot's file (ADR-003 option C). Live scenarios ran on Claude Code with Copilot's coordinator file deleted, and one team was checked with one teammate on Claude Code and another on Copilot. Committed files no longer contain machine-specific paths. Copilot's coordinator is unchanged. npm keeps `insider` as the canonical dist-tag with `preview` as a compatibility alias; `latest` stays on 1.1.0, and Homebrew, WinGet and stable promotion are held.
+
+### Claude Code as a first-class host (#2438)
 
 Claude Code is the first host after GitHub Copilot where Squad uses the host's own features (subagents, hooks, skills, plugins and the Claude Agent SDK) instead of the shared minimum. Every addition goes through the host projection contract in `squad-client-harness-adapters/v0.2` (§4–§5, §13) and the charter extension rules, and the same `.squad/` team still drives Copilot and the other hosts unchanged. It also ships the SDK's first real `HarnessAdapter`, which makes Claude the non-Copilot host that the two v0.2 profiles (harness-adapters §15.1, backend-decoupling §14.4) need before they can be promoted. Promoting them is still pending.
 
