@@ -172,7 +172,8 @@
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::field findings from the live demo: Init Mode, scratch files, casting registry",
             "validated-test:test/cli/init.test.ts::*",
-            "validated-manual:lab:init-mode@2026-10-22"
+            "validated-manual:lab:init-mode@2026-10-22",
+            "validated-manual:lab:no-copilot-first-run-trusted@2026-11-13"
           ],
           "notes": "Live: cast 4 members via `squad cast --name` (registry pair valid); ignored the requested descriptive universe and used Apollo 13 names."
         },
@@ -268,7 +269,8 @@
           "mechanism": "Digest §2–3: route by `routing.md`, exactly one owner, explicit deliverables/exclusions.",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
-            "validated-manual:lab:smoke-roster@2026-10-22"
+            "validated-manual:lab:smoke-roster@2026-10-22",
+            "validated-manual:lab:no-copilot-routing@2026-11-12"
           ]
         },
         "kiro": {
@@ -713,7 +715,10 @@
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::executes squad_state tools against the workspace .squad directory",
-            "validated-manual:lab:parallel-fanout@2026-10-22"
+            "validated-manual:lab:parallel-fanout@2026-10-22",
+            "validated-manual:lab:no-copilot-restart@2026-11-13",
+            "validated-manual:lab:no-copilot-compaction@2026-11-13",
+            "validated-manual:lab:no-copilot-customization-precedence@2026-11-13"
           ]
         },
         "kiro": {
@@ -996,7 +1001,8 @@
             "validated-test:test/upgrade-state-backend.test.ts::*",
             "validated-manual:lab:state-orphan@2026-10-22",
             "validated-manual:lab:state-twolayer@2026-10-22",
-            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_decide over the bridge lands in the squad-state branch for the %s backend, not the working tree"
+            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_decide over the bridge lands in the squad-state branch for the %s backend, not the working tree",
+            "validated-manual:lab:no-copilot-backend-isolation@2026-11-13"
           ],
           "notes": "F6 fixed: `squad_state_health` now reports `State backend: local|orphan|two-layer` plus the storage class and team squad dir. F8 fixed: `squad_state_list` without `dir` lists the root on orphan/two-layer."
         },
@@ -1194,7 +1200,8 @@
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/claude-hooks.test.ts::runs reject → assign → submit → approve, and approval clears the lockout",
             "validated-test:test/claude-hooks.test.ts::PreToolUse warns when a locked-out member edits a subject file, and never denies",
-            "validated-manual:lab:reviewer-lockout@2026-10-22"
+            "validated-manual:lab:reviewer-lockout@2026-10-22",
+            "validated-manual:lab:no-copilot-reviewer-rejection@2026-11-13"
           ]
         },
         "kiro": {
@@ -1526,11 +1533,12 @@
         },
         "claude": {
           "capability": "supported",
-          "validation": "validated-test",
+          "validation": "validated-live",
           "mechanism": "Digest §21.",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
-            "static-only"
+            "static-only",
+            "validated-manual:lab:no-copilot-human-signoff@2026-11-13"
           ]
         },
         "kiro": {
@@ -2706,7 +2714,8 @@
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp resolves the root .squad when launched from a monorepo subfolder",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude lists the root .mcp.json squad_state server from packages/api",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
-            "static-only"
+            "static-only",
+            "validated-manual:lab:no-copilot-monorepo-subfolder@2026-11-13"
           ],
           "notes": "Validate per host: does the host find root-level projections from a subfolder cwd? Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The runtime path works (state-mcp walks up to the root `.squad/` / follows `teamRoot`; see the live run where recorded), but the projected digest carries no team-root section, so the coordinator is not told how resolution works. Unsupported on this host until the section ships."
         },
@@ -4215,7 +4224,8 @@
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude --agent squad reads the roster through mcp__squad_state__squad_state_read",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_state_health names the configured backend (orphan) as the coordinator digest promises",
             "validated-manual:lab:plugin-mcp-headless@2026-11-10",
-            "validated-manual:lab:plugin-mcp-interactive@2026-11-10"
+            "validated-manual:lab:plugin-mcp-interactive@2026-11-10",
+            "validated-manual:lab:no-copilot-backend-outage@2026-11-13"
           ],
           "notes": "Plugin measurement (Claude Code 2.1.318, 2026-11-10, #2443): a `squad_state` server supplied by the Squad plugin (`plugin:squad:squad_state`, tools `mcp__plugin_squad_squad_state__*`) connects with no approval prompt and no `--mcp-config`, both interactively and headless (`-p`), from the repo root and from a package subfolder. A project `.mcp.json` server still prompts interactively (\"New MCP server found in this project\", default \"Continue without using this MCP server\"); headless `-p` on this version connects it without the flag."
         },
@@ -5063,6 +5073,108 @@
         "Agent"
       ],
       "notes": "Satellite linked to a team repo with Ripley and Dallas: roster/routing from the team via squad_state_read, `dallas` subagent read agents/dallas/charter.md via squad_state_read; no local team files written."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-routing",
+      "date": "2026-11-12",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read",
+        "Task"
+      ],
+      "notes": "Routed a CLI change to Dallas per routing.md; the coordinator made no edits itself and didn't commit. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-human-signoff",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Releases routed to a human member: the request was not taken as the sign-off; it asked, and proceeded only after an explicit yes (#2491). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-monorepo-subfolder",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Started in packages/api with the team at the repository root; squad_state launched and served the root team (#2490). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-reviewer-rejection",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash",
+        "Task"
+      ],
+      "notes": "Reviewer REJECT ran `squad lockout reject`, the revision went to another engineer, then re-review and approve; nothing merged in between. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-restart",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "A fresh session resumed from the TODOs the previous session left in decisions.md, without repeating finished work. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-customization-precedence",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "A team decision in decisions.md was followed unprompted over the coordinator default. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-backend-outage",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_health"
+      ],
+      "notes": "Bridge down with stateBackend two-layer: stopped after 2 turns, named the backend, pointed to `squad doctor`, wrote nothing (#2495). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-first-run-trusted",
+      "date": "2026-11-13",
+      "outcome": "partial",
+      "observedTools": [
+        "Bash",
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Trusted folder: `squad cast` x3, `squad client sync` and squad_state ran without prompts (#2496). Writing routing.md is not allowlisted, so headless runs deny it by design; the coordinator stopped and named what it needed. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-backend-isolation",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_health",
+        "mcp__squad_state__squad_decide"
+      ],
+      "notes": "Orphan backend (`squad upgrade --state-backend orphan`): decisions landed only on the squad-state branch, no working-tree files, no commit on main, 0 denials; the coordinator names the branch as the location (#2502). Model claude-opus-4-6[1m]. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-compaction",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "Work session (Dallas edit + commit, Ripley review, Scribe merge, one decision), then `/compact`, then resumed with \"make sure everything is finished\": no second commit, spawn or decision entry, and no invented approvals. It answered from the compacted summary without re-reading state. Model claude-opus-4-6[1m]. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
     }
   ],
   "expectedFailures": [
