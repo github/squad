@@ -73,3 +73,14 @@ describe('a denied action stays denied (live first run, 2026-11-13)', () => {
     }
   });
 });
+
+describe("a user's team decision reaches decisions.md in the same turn (live mixed-host run, 2026-11-14)", () => {
+  it('every non-Copilot digest spawns Scribe right after squad_decide for a user-stated decision', async () => {
+    const { buildCoordinatorInstructions } = await import('../packages/squad-sdk/src/client/adapters/coordinator.js');
+    for (const host of ['claude', 'kiro', 'opencode', 'cursor', 'codex', 'antigravity'] as const) {
+      expect(buildCoordinatorInstructions(host, '.squad'), host).toMatch(
+        /\*\*A decision the user states for the team\*\*.*right after `squad_decide`, spawn Scribe \(background\) in the same turn/,
+      );
+    }
+  });
+});
