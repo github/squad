@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { buildCoordinatorInstructions, claudeCoordinatorSkills } from './coordinator.js';
 import { CLAUDE_HOOK_EVENTS, claudeHookMatcher, type ClaudeHookEvent } from './claude-hooks.js';
+import { CLAUDE_SKIPPED_TEMPLATE_SKILLS } from './claude-skills.js';
 export { SQUAD_REPO_LAUNCHER_BOOTSTRAP, SQUAD_REPO_LAUNCHER_PATH, squadRepoLauncherArgs, squadRepoLauncherScript } from './repo-launcher.js';
 
 /** Plugin name: the namespace of its agents, skills, commands and MCP server. */
@@ -588,7 +589,7 @@ export function buildClaudePlugin(opts: BuildClaudePluginOptions): ClaudePluginF
   }
   const templates = fs
     .readdirSync(opts.templateSkillsDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && NAME_RE.test(e.name) && !skillNames.has(e.name))
+    .filter((e) => e.isDirectory() && NAME_RE.test(e.name) && !skillNames.has(e.name) && !CLAUDE_SKIPPED_TEMPLATE_SKILLS.has(e.name))
     .map((e) => e.name)
     .sort();
   for (const name of templates) {
