@@ -19,6 +19,14 @@ export const CLAUDE_SKILLS_DIR = '.claude/skills';
 
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Template skills never projected for Claude Code. They are Copilot's Init Mode: wait for a
+ * confirmation through an `ask_user` tool Claude Code lacks, and write the team by hand. Claude's
+ * coordinator uses `squad-coordinator-init-mode` instead (auto-confirm, `squad cast`, stop on a
+ * denied cast), and a request like "set up my team" could otherwise load the wrong one.
+ */
+export const CLAUDE_SKIPPED_TEMPLATE_SKILLS: ReadonlySet<string> = new Set(['init-mode', 'coordinator-init-mode']);
+
 function dirs(abs: string): string[] {
   try {
     return fs
@@ -64,7 +72,7 @@ export function projectClaudeSkills(
   const teamSkills = new Set(dirs(path.join(squadAbs, 'skills')));
   const templatesAbs = path.join(squadAbs, 'templates', 'skills');
   for (const name of opts.plugin ? [] : dirs(templatesAbs)) {
-    if (teamSkills.has(name) || current.has(name)) continue;
+    if (teamSkills.has(name) || current.has(name) || CLAUDE_SKIPPED_TEMPLATE_SKILLS.has(name)) continue;
     let skill: string;
     try {
       // A SKILL.md (or directory) linked outside the team directory is never copied into .claude/.
