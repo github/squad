@@ -34,7 +34,7 @@ import {
   reconcileSquadStateUserConfig,
   tombstoneStaleSquadStateInProjectMcp,
 } from './mcp-root.js';
-import { applyClientProjectionsForUpgrade, reportClientResults, type ClientId } from './clients.js';
+import { applyClientProjectionsForUpgrade, linkedTeamSquadDir, reportClientResults, type ClientId } from './clients.js';
 import {
   applyRetiredFiles,
   applySquadOwnedFiles,
@@ -387,7 +387,9 @@ function writeAgentTemplate(agentSrc: string, agentDest: string, cliVersion: str
   // still succeeds if rendering fails, but the stale-data risk is surfaced.
   if (options?.squadDir) {
     try {
-      syncTeamCapabilities({ squadDir: options.squadDir, agentFile: agentDest, storage });
+      // A linked project advertises the linked team's cast.
+      const capabilitiesDir = linkedTeamSquadDir(path.resolve(options.squadDir, '..')) ?? options.squadDir;
+      syncTeamCapabilities({ squadDir: capabilitiesDir, agentFile: agentDest, storage });
     } catch (error) {
       warn(
         `Could not refresh squad.agent.md team capabilities: ${
@@ -822,9 +824,14 @@ export function ensureGitignore(dest: string, options: { dryRun?: boolean } = {}
 /**
  * Create missing infrastructure directories
  */
+/** Team directories a linked project (remote mode) leaves to its team repository. */
+const LINKED_TEAM_DIRECTORIES = new Set(['.squad/agents', '.squad/casting', '.squad/identity']);
+
 export function ensureDirectories(dest: string): string[] {
   const created: string[] = [];
+  const linked = linkedTeamSquadDir(dest) !== null;
   for (const dir of ENSURE_DIRECTORIES) {
+    if (linked && LINKED_TEAM_DIRECTORIES.has(dir.replace(/\\/g, '/').replace(/\/$/, ''))) continue;
     const fullPath = path.join(dest, dir);
     if (!storage.existsSync(fullPath)) {
       storage.mkdirSync(fullPath, { recursive: true });
@@ -1131,6 +1138,7 @@ export async function ensureEsmImportsPatched(dest: string): Promise<boolean> {
  * Idempotent; the later ensure pass finds nothing left to create.
  */
 function preflightCastingPair(dest: string, templatesDir: string, filesUpdated: string[]): void {
+  if (linkedTeamSquadDir(dest) !== null) return; // The linked team repository holds the casting pair.
   const created = ensureCastingDefaults(dest, templatesDir);
   if (created.length > 0) {
     success(`scaffolded ${created.length} default casting files`);
@@ -1144,6 +1152,7 @@ function preflightCastingPair(dest: string, templatesDir: string, filesUpdated: 
  * user-owned and is changed only by the explicit `squad roster` command.
  */
 function prepareBuiltinAgents(dest: string, templatesDir: string, filesUpdated: string[]): void {
+  if (linkedTeamSquadDir(dest) !== null) return; // The built-ins' charters live in the linked team repository.
   const raiMigration = migrateLegacyRaiAgent(dest);
   if (raiMigration.migrated.length > 0) {
     success(`migrated .squad/agents/Rai/ → .squad/agents/rai/${raiMigration.recordedInGit ? ' (recorded with git mv)' : ''}`);
@@ -1202,7 +1211,9 @@ async function runEnsureChecks(
     filesUpdated.push(...dirsCreated);
   }
 
-  if (!options.skipCasting) {
+  // A project linked to a team repository keeps casting and team templates there.
+  const linkedTeam = linkedTeamSquadDir(dest) !== null;
+  if (!options.skipCasting && !linkedTeam) {
     const castingFiles = ensureCastingDefaults(dest, templatesDir);
     if (castingFiles.length > 0) {
       success(`scaffolded ${castingFiles.length} default casting files`);
@@ -1221,7 +1232,7 @@ async function runEnsureChecks(
     filesUpdated.push(...memoryFiles);
   }
 
-  const userOwned = ensureUserOwnedTemplates(dest, templatesDir);
+  const userOwned = ensureUserOwnedTemplates(dest, templatesDir, linkedTeam);
   if (userOwned.length > 0) {
     success(`installed ${userOwned.length} missing user-owned template(s): ${userOwned.join(', ')}`);
     filesUpdated.push(...userOwned);
@@ -1525,10 +1536,13 @@ export function ensureBuiltinAgents(dest: string, templatesDir: string): string[
  * (via runEnsureChecks) so that newly-added user-owned templates are installed
  * for existing squads on upgrade without overwriting any prior customization.
  */
-export function ensureUserOwnedTemplates(dest: string, templatesDir: string): string[] {
+export function ensureUserOwnedTemplates(dest: string, templatesDir: string, linkedTeam = false): string[] {
   const created: string[] = [];
   const squadDir = path.join(dest, '.squad');
-  const userOwned = TEMPLATE_MANIFEST.filter(f => !f.overwriteOnUpgrade && !f.source.startsWith('skills/'));
+  // A project linked to a team repository keeps the team's own files (routing, ceremonies,
+  // identity) there: only files outside `.squad/` are seeded locally.
+  const userOwned = TEMPLATE_MANIFEST.filter(f => !f.overwriteOnUpgrade && !f.source.startsWith('skills/') &&
+    (!linkedTeam || f.destination.startsWith('../')));
 
   for (const entry of userOwned) {
     const srcPath = path.join(templatesDir, entry.source);

@@ -28,6 +28,7 @@ import {
   type ClientId,
 } from '@bradygaster/squad-sdk/client';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
+import { resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
 import { getPackageVersion } from './version.js';
 
 export { CLIENT_IDS, parseClients, type ClientId };
@@ -153,6 +154,23 @@ export function persistClaudePlugin(squadDir: string, on: boolean): void {
  * (it would otherwise re-warn on every upgrade); already-configured clients stay.
  * Returns the clients that were synced and per-file results.
  */
+/**
+ * The linked team's squad directory when the project at `dest` (its own `.squad/`, not a parent's)
+ * uses a team repository (`squad link`, `init --mode remote`), else null.
+ */
+export function linkedTeamSquadDir(dest: string): string | null {
+  const paths = resolveSquadPaths(dest);
+  return paths?.mode === 'remote' && path.resolve(paths.projectDir) === path.resolve(dest, '.squad')
+    ? paths.teamSquadDir
+    : null;
+}
+
+/** `{ teamDir }` when `dest` is linked to a team repository (remote mode), else nothing. */
+export function linkedTeamDir(dest: string): { teamDir?: string } {
+  const teamDir = linkedTeamSquadDir(dest);
+  return teamDir ? { teamDir } : {};
+}
+
 export async function syncClients(
   dest: string,
   squadDir: string,
@@ -189,6 +207,7 @@ export async function syncClients(
     root: dest,
     mcp: { command: spec.command, args: spec.args },
     squadDir: path.relative(dest, squadDir).split(path.sep).join('/') || '.squad',
+    ...linkedTeamDir(dest),
   };
   const results = installClients(clients, ctx);
   const failedPaths = new Set(results.filter((r) => r.action === 'error').map((r) => r.path));
