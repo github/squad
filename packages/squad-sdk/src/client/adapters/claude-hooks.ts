@@ -223,13 +223,12 @@ export const SQUAD_STATE_PERMISSION_TOOLS = [
   'squad_state_list', 'squad_state_create_if_absent', 'squad_state_health', 'squad_state_upstreams',
 ] as const;
 /**
- * The `squad` subcommands the coordinator runs with Bash: casting, subagent sync and the reviewer
- * lockout steps. Not `lockout override`: that readmits a rejected author on a human's authority.
+ * The `squad` subcommands the coordinator runs with Bash: casting, subagent sync, recording a
+ * reviewer's rejection (it only adds a restriction) and reading lockout status. Not `assign`,
+ * `submit`, `approve` or `override`: those move a lockout toward release, and a prompt keeps an
+ * agent from clearing a lockout on its own (#2496 review).
  */
-const SQUAD_BASH_SUBCOMMANDS = [
-  'cast', 'client sync',
-  'lockout reject', 'lockout assign', 'lockout submit', 'lockout approve', 'lockout status',
-] as const;
+const SQUAD_BASH_SUBCOMMANDS = ['cast', 'client sync', 'lockout reject', 'lockout status'] as const;
 /** The plugin's `squad_state` server (`mcp__plugin_<plugin>_squad_state`); see CLAUDE_PLUGIN_MCP_PREFIX. */
 const PLUGIN_SQUAD_STATE_SERVER = 'mcp__plugin_squad_squad_state';
 

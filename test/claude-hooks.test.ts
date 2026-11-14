@@ -223,21 +223,15 @@ describe('Claude permission allowlist in .claude/settings.json', () => {
       'Bash(squad cast:*)',
       'Bash(squad client sync:*)',
       'Bash(squad lockout reject:*)',
-      'Bash(squad lockout assign:*)',
-      'Bash(squad lockout submit:*)',
-      'Bash(squad lockout approve:*)',
       'Bash(squad lockout status:*)',
       'Bash(node .squad/squad.mjs cast:*)',
       'Bash(node .squad/squad.mjs client sync:*)',
       'Bash(node .squad/squad.mjs lockout reject:*)',
-      'Bash(node .squad/squad.mjs lockout assign:*)',
-      'Bash(node .squad/squad.mjs lockout submit:*)',
-      'Bash(node .squad/squad.mjs lockout approve:*)',
       'Bash(node .squad/squad.mjs lockout status:*)',
     ]);
-    // Never the whole server (backend approval tools), never a lockout override.
+    // Never the whole server (backend approval tools), never a step that releases a lockout.
     expect(rules).not.toContain('mcp__squad_state');
-    expect(rules.some((r) => r.includes('backend') || r.includes('override') || r === 'Bash(squad lockout:*)')).toBe(false);
+    expect(rules.some((r) => /backend|override|assign|submit|approve/.test(r) || r === 'Bash(squad lockout:*)')).toBe(false);
     expect(claudePermissionRules('.squad', true)[0]).toBe('mcp__plugin_squad_squad_state__squad_decide');
     expect(claudePermissionRules('.ai-team', false)).toContain('Bash(node .ai-team/squad.mjs cast:*)');
     expect(claudePermissionRules('team\\.squad', false)).toContain('Bash(node team/.squad/squad.mjs cast:*)');
