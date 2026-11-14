@@ -137,6 +137,7 @@ export function renderClaudeMember(
   configEffort?: string,
   /** `squad_state` tool-name prefix: `mcp__squad_state__` (project `.mcp.json`) or the plugin's. */
   mcpPrefix = 'mcp__squad_state__',
+  linked = false,
 ): string {
   const parsed = parseCharterMarkdown(charter);
   const host = parseClaudeHostSettings(charter);
@@ -172,6 +173,10 @@ export function renderClaudeMember(
 
   const charterPath = `${squadDir}/agents/${id}/charter.md`;
   const historyPath = `${squadDir}/agents/${id}/history.md`;
+  const readCharter = linked
+    ? `This project uses a linked team repository, so read your charter and history with \`squad_state_read\` (keys \`agents/${id}/charter.md\` and \`agents/${id}/history.md\`), not from \`${squadDir}/\`. `
+    : `Before you start, read your charter at \`${charterPath}\` and your history at \`${historyPath}\`. ` +
+      `If the spawn prompt gives a TEAM ROOT, resolve these paths under it instead. `;
   const notesBlock =
     notes.length > 0
       ? `\n<!-- Charter preferences not projected to Claude Code: ${notes.join('; ').replace(/--/g, '- -')}. -->\n`
@@ -181,8 +186,7 @@ export function renderClaudeMember(
     `---\n${fields.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n` +
     `${generatedNote}\n${notesBlock}\n` +
     `You are **${name}**${role ? `, ${role},` : ''} on this project's Squad team.\n\n` +
-    `Before you start, read your charter at \`${charterPath}\` and your history at \`${historyPath}\`. ` +
-    `If the spawn prompt gives a TEAM ROOT, resolve these paths under it instead. ` +
+    readCharter +
     `Your charter is authoritative: follow its responsibilities and boundaries, and the task in the spawn prompt.\n\n` +
     `Squad dispatches specialists only from the coordinator: do not spawn subagents of your own. ` +
     `Read and write shared team state through the \`squad_state\` MCP tools (\`${mcpPrefix}*\`) when they are available.\n`
@@ -200,7 +204,9 @@ export function projectClaudeMembers(
   mcpPrefix?: string,
 ): ProjectionFile[] {
   const squadDir = ctx.squadDir ?? '.squad';
-  const squadAbs = path.resolve(ctx.root, squadDir);
+  // A linked team repository (remote mode) holds the members and routing.
+  const linked = ctx.teamDir !== undefined;
+  const squadAbs = linked ? path.resolve(ctx.teamDir!) : path.resolve(ctx.root, squadDir);
   const agentsAbs = path.join(squadAbs, 'agents');
   const routing = readRouting(squadAbs);
   const ids = memberIds(agentsAbs);
@@ -218,7 +224,7 @@ export function projectClaudeMembers(
       kind: 'managed',
       path: `${CLAUDE_AGENTS_DIR}/${id}.md`,
       ownedMarker,
-      content: renderClaudeMember(id, charter, routing, squadDir, generatedNote, effortConfig(id), mcpPrefix),
+      content: renderClaudeMember(id, charter, routing, squadDir, generatedNote, effortConfig(id), mcpPrefix, linked),
     });
   }
 

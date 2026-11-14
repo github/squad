@@ -312,7 +312,9 @@ describe('coordinator digest vs. host feature matrix', () => {
 
   // The optional fourth entry lists hosts whose digest has closed the gap: they assert it instead of `it.fails`.
   const gaps: Array<[string, RegExp, string, ClientId[]?]> = [
-    ['team-root resolution (teamRoot / stateLocation / TEAM_ROOT)', /teamRoot|stateLocation|TEAM_ROOT/, 'monorepo-team-root, dual-root-remote-mode'],
+    // Closed (#2487): every digest's "Linked team" rule (step 1) reads a linked team repository through squad_state.
+    ['linked team repository (teamRoot)', /\*\*Linked team:\*\*.*`teamRoot`.*squad_state_read/, 'dual-root-remote-mode', [...CLIENT_IDS]],
+    ['team-root resolution (stateLocation / TEAM_ROOT)', /stateLocation|TEAM_ROOT/, 'monorepo-team-root'],
     ['Azure DevOps issue tracking (az boards / ADO)', /az boards|Azure DevOps/, 'azure-devops (F3)'],
     ['GitLab issue tracking (glab)', /glab|GitLab/, 'gitlab-issues (F2)'],
     // Claude (#2442): member subagent frontmatter plus the per-spawn `model` rules in its dispatch section.
