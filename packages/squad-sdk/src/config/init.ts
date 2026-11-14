@@ -132,6 +132,8 @@ export interface InitOptions {
    * built-ins' policies), which live in that repository. Project-local state directories stay.
    */
   linkedTeam?: boolean;
+  /** The linked team's squad directory (with `linkedTeam`): its cast is advertised in the agent file. */
+  linkedTeamDir?: string;
   /** Project name */
   projectName: string;
   /** Project description (optional) */
@@ -1487,7 +1489,7 @@ ${projectDescription ? `- **Description:** ${projectDescription}\n` : ''}- **Cre
       createdFiles.push(toRelativePath(agentFile));
       // Advertise the (possibly still empty) cast to outer coordinators (#1608).
       try {
-        syncTeamCapabilities({ squadDir, agentFile, storage });
+        syncTeamCapabilities({ squadDir: (options.linkedTeam && options.linkedTeamDir) || squadDir, agentFile, storage });
       } catch (error) {
         warnings.push(
           `Could not refresh squad.agent.md team capabilities: ${

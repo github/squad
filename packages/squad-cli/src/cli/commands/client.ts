@@ -19,7 +19,7 @@ import {
   type ClientId,
   type ProjectionFile,
 } from '@bradygaster/squad-sdk/client';
-import { readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
+import { linkedTeamDir, readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
 import { detectSquadDir } from '../core/detect-squad-dir.js';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from '../core/mcp-spec.js';
 import { getPackageVersion } from '../core/version.js';
@@ -62,6 +62,8 @@ export async function listClients(dest: string): Promise<ClientListResult> {
     root: dest,
     mcp: { command: spec.command, args: spec.args },
     squadDir: path.relative(dest, squadDir).split(path.sep).join('/') || '.squad',
+    // A linked team's members are projected too, so they are expected here as well.
+    ...linkedTeamDir(dest),
   };
 
   const clients: ClientStatus[] = CLIENT_IDS

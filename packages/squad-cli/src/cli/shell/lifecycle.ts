@@ -10,6 +10,7 @@
 import path from 'node:path';
 import { FSStorageProvider } from '@bradygaster/squad-sdk';
 import { resolveStateDir } from '../core/effective-squad-dir.js';
+import { linkedTeamSquadDir } from '../core/clients.js';
 import { SessionRegistry } from './sessions.js';
 import { ShellRenderer } from './render.js';
 import type { ShellState, ShellMessage } from './types.js';
@@ -75,8 +76,9 @@ export class ShellLifecycle {
       throw err;
     }
 
-    // Resolve effective state dir (external when externalized)
-    const squadDir = resolveStateDir(localSquadDir);
+    // The team's files come from a linked team repository when there is one (remote mode), then
+    // from external state when externalized. Project-local files (.init-prompt) stay in localSquadDir.
+    const squadDir = resolveStateDir(linkedTeamSquadDir(this.options.teamRoot) ?? localSquadDir);
 
     const teamPath = path.join(squadDir, 'team.md');
     const teamContent = await storage.read(teamPath);

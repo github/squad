@@ -173,10 +173,22 @@ export function renderClaudeMember(
 
   const charterPath = `${squadDir}/agents/${id}/charter.md`;
   const historyPath = `${squadDir}/agents/${id}/history.md`;
+  // A linked team's files are outside this project, so the charter is carried in this file (it is
+  // regenerated on every sync). The history is read through squad_state only when the authored tool
+  // list allows it; the list is never widened.
+  const canReadState =
+    !host.tools || host.tools.some((t) => t === `${mcpPrefix}squad_state_read` || t === `${mcpPrefix}*` || t === mcpPrefix.replace(/__$/, ''));
+  if (linked && !canReadState) {
+    notes.push(`History not readable (the Tools list has no \`${mcpPrefix}squad_state_read\`; the spawn prompt must carry it)`);
+  }
   const readCharter = linked
-    ? `This project uses a linked team repository, so read your charter and history with \`squad_state_read\` (keys \`agents/${id}/charter.md\` and \`agents/${id}/history.md\`), not from \`${squadDir}/\`. `
+    ? `This project uses a linked team repository. Your charter from it is below. ` +
+      (canReadState
+        ? `Read your history with \`squad_state_read\` (key \`agents/${id}/history.md\`), not from \`${squadDir}/\`. `
+        : `Your history is not available to you here: rely on the spawn prompt. `)
     : `Before you start, read your charter at \`${charterPath}\` and your history at \`${historyPath}\`. ` +
       `If the spawn prompt gives a TEAM ROOT, resolve these paths under it instead. `;
+  const linkedCharter = linked ? `\n## Your charter (linked team repository)\n\n${charter.replace(/\r\n?/g, '\n').trim()}\n` : '';
   const notesBlock =
     notes.length > 0
       ? `\n<!-- Charter preferences not projected to Claude Code: ${notes.join('; ').replace(/--/g, '- -')}. -->\n`
@@ -189,7 +201,8 @@ export function renderClaudeMember(
     readCharter +
     `Your charter is authoritative: follow its responsibilities and boundaries, and the task in the spawn prompt.\n\n` +
     `Squad dispatches specialists only from the coordinator: do not spawn subagents of your own. ` +
-    `Read and write shared team state through the \`squad_state\` MCP tools (\`${mcpPrefix}*\`) when they are available.\n`
+    `Read and write shared team state through the \`squad_state\` MCP tools (\`${mcpPrefix}*\`) when they are available.\n` +
+    linkedCharter
   );
 }
 
@@ -210,7 +223,8 @@ export function projectClaudeMembers(
   const agentsAbs = path.join(squadAbs, 'agents');
   const routing = readRouting(squadAbs);
   const ids = memberIds(agentsAbs);
-  const effortConfig = readEffortConfig(squadAbs);
+  // Effort overrides are this project's own settings, even when the team is linked.
+  const effortConfig = readEffortConfig(path.resolve(ctx.root, squadDir));
   const files: ProjectionFile[] = [];
   for (const id of ids) {
     let charter: string;

@@ -166,7 +166,7 @@ export function linkedTeamSquadDir(dest: string): string | null {
 }
 
 /** `{ teamDir }` when `dest` is linked to a team repository (remote mode), else nothing. */
-function linkedTeamDir(dest: string): { teamDir?: string } {
+export function linkedTeamDir(dest: string): { teamDir?: string } {
   const teamDir = linkedTeamSquadDir(dest);
   return teamDir ? { teamDir } : {};
 }

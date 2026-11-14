@@ -323,12 +323,14 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
   }
 
   // A project linked to a team repository (`squad link`, `init --mode remote`) uses that team.
-  const linkedTeam = linkedTeamSquadDir(dest) !== null;
+  const linkedTeamDir = linkedTeamSquadDir(dest);
+  const linkedTeam = linkedTeamDir !== null;
 
   // Build SDK options
   const initOptions: InitOptions = {
     teamRoot: dest,
     linkedTeam,
+    ...(linkedTeamDir ? { linkedTeamDir } : {}),
     agentFileRoot,
     projectName: path.basename(dest) || 'my-project',
     agents: [
