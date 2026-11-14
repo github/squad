@@ -577,6 +577,25 @@ describe('squad_decide handler', () => {
 
 // #1256: on-behalf-of authors with spaces/parens/etc must be accepted;
 //        filename must be slugified; author > 200 chars must be rejected.
+describe('squad_decide says where a git-branch backend stored the decision (live scenario, 2026-11-13)', () => {
+  const testRoot = path.join('.', '.test-squad-decide-where-' + randomUUID());
+  afterEach(() => fs.rmSync(testRoot, { recursive: true, force: true }));
+  const decide = (registry: ToolRegistry) =>
+    registry.getTool('squad_decide')!.handler(
+      { author: 'fenster', summary: 'Use ESM', body: 'Named exports only.' } as DecisionRecord,
+      { sessionId: 's', toolCallId: 't', toolName: 'squad_decide', arguments: {} },
+    );
+
+  it('names the squad-state branch for orphan and two-layer, and adds nothing for local', async () => {
+    for (const backendName of ['orphan', 'two-layer']) {
+      const r = await decide(new ToolRegistry(testRoot, undefined, undefined, undefined, undefined, undefined, { backendName }));
+      expect(r.textResultForLlm).toContain(`That path is a key on the \`squad-state\` git branch (${backendName} backend): it is stored only there, and there is no file in the working tree.`);
+    }
+    const local = await decide(new ToolRegistry(testRoot));
+    expect(local.textResultForLlm).not.toMatch(/squad-state/);
+  });
+});
+
 describe('squad_decide author validation (Issue #1256)', () => {
   let registry: ToolRegistry;
   let testRoot: string;
