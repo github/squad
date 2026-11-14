@@ -3,68 +3,47 @@
  */
 import { test, expect } from '@playwright/test';
 
-const START = '/squad/docs/get-started/five-minute-start/';
-const TARGET = '/squad/docs/scenarios/ci-cd-integration/';
+const DEEP = '/squad/docs/scenarios/ci-cd-integration/';
 
-test.describe('Docs sidebar navigation', () => {
-  test('keeps the sidebar scroll position when opening another article', async ({ page }) => {
-    await page.goto(START);
+test.describe('Docs sidebar', () => {
+  test('starts collapsed except for the section holding the current page', async ({ page }) => {
+    await page.goto(DEEP);
+    const toggles = page.locator('#sidebar .sidebar-toggle');
+    const states = await toggles.evaluateAll((els) => els.map((e) => [e.textContent.trim(), e.getAttribute('aria-expanded')]));
+    const expanded = states.filter(([, s]) => s === 'true').map(([n]) => n);
+    expect(expanded).toEqual(['Scenarios']);
+    await expect(page.locator('#sidebar [aria-current="page"]')).toBeVisible();
+  });
 
-    await page.evaluate(() => sessionStorage.removeItem('squad-docs-sidebar-scroll'));
-
-    const sidebar = page.locator('#sidebar');
-    await expect(sidebar).toBeVisible();
-
-    await page.evaluate(() => {
-      const sidebar = document.getElementById('sidebar');
-      if (!sidebar) {
-        throw new Error('Sidebar not found');
-      }
-
-      sidebar.scrollTop = 900;
-      sidebar.dispatchEvent(new Event('scroll'));
-      window.scrollTo(0, 1000);
+  test('deep links scroll the current page into view in the sidebar', async ({ page }) => {
+    await page.goto('/squad/docs/reference/glossary/');
+    await expect(page.locator('#sidebar [aria-current="page"]')).toBeInViewport();
+    const inside = await page.evaluate(() => {
+      const s = document.getElementById('sidebar').getBoundingClientRect();
+      const a = document.querySelector('#sidebar [aria-current="page"]').getBoundingClientRect();
+      return a.top >= s.top && a.bottom <= s.bottom;
     });
+    expect(inside).toBe(true);
+  });
 
-    const initialSidebarScroll = await page.evaluate(() => {
-      const sidebar = document.getElementById('sidebar');
-      if (!sidebar) {
-        throw new Error('Sidebar not found');
-      }
+  test('navigating via the sidebar re-centers the new current page and collapses the old section', async ({ page }) => {
+    await page.goto('/squad/docs/get-started/five-minute-start/');
+    await page.getByRole('button', { name: 'Scenarios' }).click();
+    await page.locator('#sidebar a[href$="/docs/scenarios/ci-cd-integration/"]').click();
+    await page.waitForURL(/ci-cd-integration/);
+    await expect(page.getByRole('button', { name: 'Scenarios' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('button', { name: 'Get Started' })).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#sidebar [aria-current="page"]')).toBeInViewport();
+  });
 
-      return sidebar.scrollTop;
-    });
-
-    expect(initialSidebarScroll).toBeGreaterThan(0);
-
-    await page.evaluate((targetHref) => {
-      const link = document.querySelector(`#sidebar a[href="${targetHref}"]`)
-        ?? document.querySelector('#sidebar a[href*="docs/scenarios/ci-cd-integration/"]');
-
-      if (!(link instanceof HTMLAnchorElement)) {
-        throw new Error('Target sidebar link not found');
-      }
-
-      link.click();
-    }, TARGET);
-
-    await page.waitForURL(new RegExp(TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-
-    await expect.poll(async () => page.evaluate(() => {
-      const sidebar = document.getElementById('sidebar');
-      if (!sidebar) throw new Error('Sidebar not found');
-      return sidebar.scrollTop;
-    }), { timeout: 5000 }).toBeGreaterThan(initialSidebarScroll - 10);
-
-    const restoredSidebarScroll = await page.evaluate(() => {
-      const sidebar = document.getElementById('sidebar');
-      if (!sidebar) throw new Error('Sidebar not found');
-      return sidebar.scrollTop;
-    });
-
-    const pageScroll = await page.evaluate(() => window.scrollY);
-
-    expect(pageScroll).toBeLessThan(20);
-    expect(Math.abs(restoredSidebarScroll - initialSidebarScroll)).toBeLessThan(10);
+  test('chevron toggles a section open and closed', async ({ page }) => {
+    await page.goto(DEEP);
+    const toggle = page.getByRole('button', { name: 'Concepts' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#sidebar a[href$="/docs/concepts/architecture/"]')).toBeVisible();
+    await toggle.click();
+    await expect(page.locator('#sidebar a[href$="/docs/concepts/architecture/"]')).toBeHidden();
   });
 });
