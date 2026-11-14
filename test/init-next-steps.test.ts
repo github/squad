@@ -5,11 +5,11 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { initNextSteps, runInit } from '../packages/squad-cli/src/cli/core/init.js';
+import { CLAUDE_TRUST_NOTE, initNextSteps, runInit } from '../packages/squad-cli/src/cli/core/init.js';
 
 const plain = (clients: Parameters<typeof initNextSteps>[0], plugin?: boolean) => {
   const next = initNextSteps(clients, plugin);
-  return { lines: next.lines.map(line => line('', '')), tips: next.tips };
+  return { lines: next.lines.map(line => line('', '')), tips: next.tips, notes: next.notes };
 };
 
 describe('initNextSteps (#2453)', () => {
@@ -26,6 +26,13 @@ describe('initNextSteps (#2453)', () => {
     expect(lines).toEqual(["Run claude --agent squad --mcp-config .mcp.json and tell it what you're building."]);
     expect(tips).toEqual(['"squad:claude": "claude -p --agent squad --mcp-config .mcp.json"']);
     expect([...lines, ...tips].join('\n')).not.toMatch(/copilot/i);
+  });
+
+  it('tells a Claude user to trust the folder first, once, and nobody else', () => {
+    expect(plain(['claude']).notes).toEqual([CLAUDE_TRUST_NOTE]);
+    expect(plain(['claude'], true).notes).toEqual([CLAUDE_TRUST_NOTE]);
+    expect(CLAUDE_TRUST_NOTE).toMatch(/trust this folder/);
+    expect(plain(['copilot', 'kiro']).notes).toEqual([]);
   });
 
   it('uses the plugin coordinator in plugin mode', () => {

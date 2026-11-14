@@ -198,14 +198,22 @@ type Styled = (on: string, off: string) => string;
  * No `--client` means Copilot, the default host. With one host the line is
  * bare; with several, each line is prefixed with the host's name.
  */
+/**
+ * Claude Code applies the project's allow rules only in a trusted folder, so until the first
+ * interactive run (and in `claude -p` before it) every Squad tool call prompts or is denied.
+ */
+export const CLAUDE_TRUST_NOTE =
+  'Run claude interactively here first and accept "trust this folder": until then Claude Code ignores the permission rules Squad added, so its tools prompt each time (and claude -p denies them).';
+
 export function initNextSteps(
   clients: readonly ClientId[] | undefined,
   claudePlugin?: boolean,
-): { lines: Styled[]; tips: string[] } {
+): { lines: Styled[]; tips: string[]; notes: string[] } {
   const chosen: ClientId[] = clients && clients.length > 0 ? [...new Set(clients)] : ['copilot'];
   if (claudePlugin && !chosen.includes('claude')) chosen.push('claude');
   const steps: { host: string; text: Styled }[] = [];
   const tips: string[] = [];
+  const notes: string[] = [];
   for (const id of chosen) {
     const host = getHostProjection(id).label;
     if (id === 'copilot') {
@@ -214,15 +222,17 @@ export function initNextSteps(
     } else if (id === 'claude' && claudePlugin) {
       steps.push({ host, text: (on, off) => `Run ${on}claude${off}; the Squad plugin's coordinator starts by default in this repository.` });
       tips.push('"squad:claude": "claude -p --agent squad:squad"');
+      notes.push(CLAUDE_TRUST_NOTE);
     } else if (id === 'claude') {
       steps.push({ host, text: (on, off) => `Run ${on}claude --agent squad --mcp-config .mcp.json${off} and tell it what you're building.` });
       tips.push('"squad:claude": "claude -p --agent squad --mcp-config .mcp.json"');
+      notes.push(CLAUDE_TRUST_NOTE);
     } else {
       steps.push({ host, text: () => `Open ${host} in this repository and ask for the squad agent.` });
     }
   }
-  if (steps.length === 1) return { lines: [steps[0]!.text], tips };
-  return { lines: steps.map(s => (on: string, off: string) => `${s.host}: ${s.text(on, off)}`), tips };
+  if (steps.length === 1) return { lines: [steps[0]!.text], tips, notes };
+  return { lines: steps.map(s => (on: string, off: string) => `${s.host}: ${s.text(on, off)}`), tips, notes };
 }
 
 /**
@@ -646,6 +656,7 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
     console.log(`${GREEN}${BOLD}Squad initialized.${RESET} Next, in the host you want to use:`);
     for (const step of steps) console.log(`  ${step}`);
   }
+  for (const note of next.notes) console.log(`${DIM}${note}${RESET}`);
   console.log();
   if (next.tips.length > 0) {
     console.log(`${DIM}Tip: for non-interactive scripts that need squad_state tools, add to package.json:${RESET}`);
