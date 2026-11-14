@@ -23,7 +23,7 @@ import {
   reconcileSquadStateUserConfig,
   tombstoneStaleSquadStateInProjectMcp,
 } from './mcp-root.js';
-import { applyClientProjectionsForInit, readConfiguredClients, reportClientResults, type ClientId } from './clients.js';
+import { applyClientProjectionsForInit, linkedTeamSquadDir, readConfiguredClients, reportClientResults, type ClientId } from './clients.js';
 import { getHostProjection, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
 import {
   readTeamMd,
@@ -322,9 +322,15 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
     showDeprecationWarning();
   }
 
+  // A project linked to a team repository (`squad link`, `init --mode remote`) uses that team.
+  const linkedTeamDir = linkedTeamSquadDir(dest);
+  const linkedTeam = linkedTeamDir !== null;
+
   // Build SDK options
   const initOptions: InitOptions = {
     teamRoot: dest,
+    linkedTeam,
+    ...(linkedTeamDir ? { linkedTeamDir } : {}),
     agentFileRoot,
     projectName: path.basename(dest) || 'my-project',
     agents: [
@@ -399,7 +405,7 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
   // entries with overwriteOnUpgrade: false and copies each one only if absent.
   try {
     const templatesDir = getTemplatesDir();
-    ensureUserOwnedTemplates(dest, templatesDir);
+    ensureUserOwnedTemplates(dest, templatesDir, linkedTeam);
     // Baseline for `squad upgrade`: hashes of every squad-owned file as shipped by this init.
     recordShippedFilesAfterInit(dest, squadDir, templatesDir, version);
   } catch {
@@ -594,8 +600,9 @@ export async function runInit(dest: string, options: RunInitOptions = {}): Promi
   // Ask if the user wants to add @copilot as an autonomous team member.
   // This enables .github/copilot-instructions.md and adds Coding Agent
   // to the team roster, allowing squad-labeled issues to be auto-assigned.
-  const teamContent = readTeamMd(squadDir);
-  if (!hasCopilot(teamContent)) {
+  // A linked project's roster lives in the team repository: add @copilot there.
+  const teamContent = linkedTeam ? '' : readTeamMd(squadDir);
+  if (!linkedTeam && !hasCopilot(teamContent)) {
     if (isInteractiveSession()) {
       const { createInterface } = await import('node:readline/promises');
       const rl = createInterface({ input: process.stdin, output: process.stdout });
