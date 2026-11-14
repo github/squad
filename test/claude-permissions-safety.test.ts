@@ -62,3 +62,14 @@ describe('squad cast refuses to write through a symlink', () => {
     expect(symlinkUnder(link, path.join(link, 'agents', 'x', 'charter.md'))).toBe(path.join(link, 'agents', 'x'));
   });
 });
+
+describe('a denied action stays denied (live first run, 2026-11-13)', () => {
+  it('every coordinator digest forbids retrying a denied command or write another way', async () => {
+    const { buildCoordinatorInstructions } = await import('../packages/squad-sdk/src/client/adapters/coordinator.js');
+    for (const host of ['copilot', 'claude', 'kiro', 'opencode', 'cursor', 'codex', 'antigravity'] as const) {
+      const text = buildCoordinatorInstructions(host, '.squad');
+      expect(text, host).toMatch(/\*\*A denied action stays denied\.\*\*/);
+      expect(text, host).toMatch(/do NOT retry it or reach the same result another way \(another tool, path or launcher, shell redirection, a script/);
+    }
+  });
+});
