@@ -550,6 +550,50 @@ function buildSupportTable(): string {
 `;
 }
 
+/** The `## Built-in Support Agents` rows, keyed by built-in ID (matches `buildSupportTable`). */
+const BUILTIN_SUPPORT_ROWS: ReadonlyArray<{ id: string; name: string; row: string }> = [
+  { id: 'scribe', name: 'Scribe', row: '| Scribe | Decision Merger | `.squad/agents/scribe/charter.md` | 📋 Silent |' },
+  { id: 'ralph', name: 'Ralph', row: '| Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |' },
+  { id: 'rai', name: 'Rai', row: '| Rai | RAI Reviewer | `.squad/agents/rai/charter.md` | 🛡️ RAI |' },
+  { id: 'fact-checker', name: 'Fact Checker', row: "| Fact Checker | Devil's Advocate & Verification Agent | `.squad/agents/fact-checker/charter.md` | 🔍 Verifier |" },
+];
+
+/**
+ * Add a `## Built-in Support Agents` table to `team.md` for the built-ins that are installed
+ * (`installedIds`, e.g. those whose charter exists) but not yet on the roster, placed where
+ * `createTeam` puts it (before `## Coding Agent` or `## Project Context`, else at the end). Each
+ * built-in is checked on its own: one already listed anywhere (by charter path or a `| Name |` row,
+ * under `## Members` or elsewhere) is not repeated, and one that isn't installed gets no row. A
+ * roster that already has the section (or a legacy `## Support Identities` one) is left to
+ * `createTeam`, which owns it. Idempotent. Kept out of `## Members` so Init Mode's "empty roster"
+ * check still counts only cast members (#2522).
+ */
+export function ensureBuiltinSupportSection(content: string, installedIds: ReadonlySet<string>): string {
+  if (content.includes('## Built-in Support Agents') || content.includes('## Support Identities')) {
+    return content;
+  }
+  const missing = BUILTIN_SUPPORT_ROWS.filter(({ id, name }) =>
+    installedIds.has(id)
+    && !content.includes(`.squad/agents/${id}/charter.md`)
+    && !new RegExp(`^\\|\\s*${name}\\s*\\|`, 'm').test(content));
+  if (missing.length === 0) return content;
+  const section = [
+    '## Built-in Support Agents',
+    '',
+    '| Name | Role | Charter | Status |',
+    '|------|------|---------|--------|',
+    ...missing.map(({ row }) => row),
+    '',
+  ].join('\n');
+  for (const heading of ['## Coding Agent', '## Project Context']) {
+    const idx = content.indexOf(`\n${heading}`);
+    if (idx !== -1) {
+      return `${content.slice(0, idx + 1)}${section}\n${content.slice(idx + 1)}`;
+    }
+  }
+  return `${content.trimEnd()}\n\n${section}`;
+}
+
 function replaceSection(content: string, headings: string[], replacement: string): string {
   for (const heading of headings) {
     const headingIndex = content.indexOf(heading);

@@ -25,6 +25,7 @@ import { LocalAgentSource } from '@bradygaster/squad-sdk/config/agent-source';
 import { resolveSquadPaths, resolveExternalStateDir } from '@bradygaster/squad-sdk/resolution';
 import { BOLD, RESET, info, success } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';
+import { ensureBuiltinSupportSection } from '../core/cast.js';
 
 const storage = new FSStorageProvider();
 
@@ -212,6 +213,24 @@ function updateTeamMdWithAgent(squadDir: string, name: string, role: string, slu
   storage.writeSync(teamPath, updated);
 }
 
+/**
+ * `squad init` creates the built-in charters but leaves the roster empty, and casting one member at
+ * a time only adds that member's row. List the built-ins in `team.md` too, so every host reading the
+ * roster sees the same team (#2522). Only built-ins whose charter exists get a row.
+ */
+function ensureBuiltinRoster(squadDir: string): void {
+  const installed = new Set(
+    ['scribe', 'ralph', 'rai', 'fact-checker']
+      .filter((id) => storage.existsSync(path.join(squadDir, 'agents', id, 'charter.md'))),
+  );
+  if (installed.size === 0) return;
+  const teamPath = path.join(squadDir, 'team.md');
+  const existing = storage.readSync(teamPath);
+  if (existing === undefined) return;
+  const updated = ensureBuiltinSupportSection(existing, installed);
+  if (updated !== existing) storage.writeSync(teamPath, updated);
+}
+
 function updateRoutingMdWithAgent(squadDir: string, name: string, role: string): void {
   const routingPath = path.join(squadDir, 'routing.md');
   const row = `| ${role} | ${name} | — |`;
@@ -391,6 +410,7 @@ export async function runCastAdd(cwd: string, options: CastAddOptions): Promise<
   }
 
   updateTeamMdWithAgent(squadDir, rawName, displayRole, slug);
+  ensureBuiltinRoster(squadDir);
   updateRoutingMdWithAgent(squadDir, rawName, displayRole);
   await updateCastingStateWithAgent(squadDir, rawName, displayRole, slug);
   await addAgentToConfig(teamRoot, slug, displayRole);
