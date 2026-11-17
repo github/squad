@@ -47,6 +47,11 @@ git init
 
 ### 2. Install Squad
 
+Squad's canonical source repository and release home is
+[`github/squad`](https://github.com/github/squad). The existing
+`@bradygaster` npm namespace and `bradygaster` Homebrew and WinGet identifiers
+below are distribution names, not the repository location.
+
 Choose the install method for your platform:
 
 | Method | Command |
