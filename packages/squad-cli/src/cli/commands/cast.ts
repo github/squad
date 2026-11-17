@@ -216,14 +216,18 @@ function updateTeamMdWithAgent(squadDir: string, name: string, role: string, slu
 /**
  * `squad init` creates the built-in charters but leaves the roster empty, and casting one member at
  * a time only adds that member's row. List the built-ins in `team.md` too, so every host reading the
- * roster sees the same team (#2522). Skipped when the built-ins were never scaffolded.
+ * roster sees the same team (#2522). Only built-ins whose charter exists get a row.
  */
 function ensureBuiltinRoster(squadDir: string): void {
-  if (!storage.existsSync(path.join(squadDir, 'agents', 'scribe', 'charter.md'))) return;
+  const installed = new Set(
+    ['scribe', 'ralph', 'rai', 'fact-checker']
+      .filter((id) => storage.existsSync(path.join(squadDir, 'agents', id, 'charter.md'))),
+  );
+  if (installed.size === 0) return;
   const teamPath = path.join(squadDir, 'team.md');
   const existing = storage.readSync(teamPath);
   if (existing === undefined) return;
-  const updated = ensureBuiltinSupportSection(existing);
+  const updated = ensureBuiltinSupportSection(existing, installed);
   if (updated !== existing) storage.writeSync(teamPath, updated);
 }
 

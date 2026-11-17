@@ -278,9 +278,12 @@ describe('squad cast', () => {
       '',
     ].join('\n');
 
-    async function scaffoldInitShape(teamMd: string): Promise<string> {
+    async function scaffoldInitShape(
+      teamMd: string,
+      builtins: string[] = ['scribe', 'ralph', 'rai', 'fact-checker'],
+    ): Promise<string> {
       const sq = join(TEST_ROOT, '.squad');
-      for (const id of ['scribe', 'ralph', 'rai', 'fact-checker']) {
+      for (const id of builtins) {
         await mkdir(join(sq, 'agents', id), { recursive: true });
         await writeFile(join(sq, 'agents', id, 'charter.md'), `# ${id}\n`);
       }
@@ -310,19 +313,51 @@ describe('squad cast', () => {
       expect(members).not.toContain('Scribe');
     });
 
-    it('leaves a roster that already lists the built-ins under ## Members alone', async () => {
-      const withBuiltins = INIT_TEAM_MD.replace(
-        '|------|------|---------|--------|\n',
-        '|------|------|---------|--------|\n| Scribe | Decision Merger | `.squad/agents/scribe/charter.md` | 📋 Silent |\n',
+    it('leaves a roster that already lists every built-in under ## Members alone', async () => {
+      const allRows = [
+        '| Scribe | Decision Merger | `.squad/agents/scribe/charter.md` | 📋 Silent |',
+        '| Ralph | Work Monitor | `.squad/agents/ralph/charter.md` | 🔄 Monitor |',
+        '| Rai | RAI Reviewer | `.squad/agents/rai/charter.md` | 🛡️ RAI |',
+        '| Fact Checker | Fact Checker | `.squad/agents/fact-checker/charter.md` | 🔍 Verifier |',
+      ].join('\n');
+      const sq = await scaffoldInitShape(
+        INIT_TEAM_MD.replace('|------|------|---------|--------|\n', `|------|------|---------|--------|\n${allRows}\n`),
       );
-      const sq = await scaffoldInitShape(withBuiltins);
       vi.spyOn(console, 'log').mockImplementation(() => {});
       const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
       await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
 
       const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
       expect(teamMd).not.toContain('## Built-in Support Agents');
-      expect(teamMd.split('| Scribe |').length).toBe(2);
+      for (const name of ['Scribe', 'Ralph', 'Rai', 'Fact Checker']) {
+        expect(teamMd.split(`| ${name} |`).length).toBe(2);
+      }
+    });
+
+    it('adds only the built-ins not already listed, even when Scribe is absent', async () => {
+      // A legacy roster that lists Ralph (with no charter link) but not Scribe.
+      const sq = await scaffoldInitShape(
+        INIT_TEAM_MD.replace('|------|------|---------|--------|\n', '|------|------|---------|--------|\n| Ralph | Work Monitor | — | 🔄 Monitor |\n'),
+      );
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
+
+      const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
+      expect(teamMd.split('| Ralph |').length).toBe(2);
+      const support = teamMd.slice(teamMd.indexOf('## Built-in Support Agents'));
+      for (const name of ['Scribe', 'Rai', 'Fact Checker']) expect(support).toContain(`| ${name} |`);
+    });
+
+    it('adds rows only for built-ins whose charter exists', async () => {
+      const sq = await scaffoldInitShape(INIT_TEAM_MD, ['scribe']);
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
+
+      const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
+      expect(teamMd).toContain('| Scribe |');
+      for (const name of ['Ralph', 'Rai', 'Fact Checker']) expect(teamMd).not.toContain(`| ${name} |`);
     });
   });
 
