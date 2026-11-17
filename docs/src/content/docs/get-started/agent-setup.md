@@ -43,35 +43,35 @@ Without `gh`, use `curl -fsSL https://api.github.com/repos/github/squad/releases
 
 Each release carries one archive per platform plus `SHA256SUMS.txt`: `squad-linux-x64.tar.gz`, `squad-linux-arm64.tar.gz`, `squad-darwin-x64.tar.gz`, `squad-darwin-arm64.tar.gz`, `squad-win32-x64.zip`, `squad-win32-arm64.zip`. The archives vendor Node.js, so neither Node.js nor npm is needed. Confirm the asset exists for the tag before downloading: `gh release view "$TAG" -R github/squad --json assets --jq '.assets[].name'`.
 
-**macOS or Linux** (set `TARGET` to `linux` or `darwin`, then `x64` or `arm64`, from `uname -s` and `uname -m`; install under `$HOME/.local`):
+**macOS or Linux:** use the installer from the selected release tag. Passing `VERSION` pins the archive download to the same GitHub Release. The installer detects the operating system and CPU, downloads the matching archive and `SHA256SUMS.txt`, verifies the checksum, and installs under `/usr/local` when running as root or `$HOME/.local` otherwise.
 
 ```bash
-TARGET=linux-x64
-ASSET="squad-${TARGET}.tar.gz"
-TMP=$(mktemp -d)
-gh release download "$TAG" -R github/squad -p "$ASSET" -p SHA256SUMS.txt -D "$TMP"
-# curl alternative: https://github.com/github/squad/releases/download/$TAG/$ASSET (and SHA256SUMS.txt)
-(cd "$TMP" && grep " ${ASSET}\$" SHA256SUMS.txt | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; })
-tar -xzf "$TMP/$ASSET" -C "$TMP"
-mkdir -p "$HOME/.local/lib/squad" "$HOME/.local/bin"
-rm -rf "$HOME/.local/lib/squad"/*
-cp -R "$TMP/squad-${TARGET}/." "$HOME/.local/lib/squad/"
-ln -sf "$HOME/.local/lib/squad/squad" "$HOME/.local/bin/squad"
+INSTALLER=$(mktemp)
+curl -fsSL "https://raw.githubusercontent.com/github/squad/${TAG}/scripts/install.sh" -o "$INSTALLER"
+VERSION="$TAG" REPO=github/squad sh "$INSTALLER"
+rm -f "$INSTALLER"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Stop if the checksum check does not print `OK`. The archive contains a single `squad-<target>/` directory.
+Review the tagged installer before running it if repository policy requires review of downloaded scripts. Stop if it cannot verify the archive checksum.
 
 **Windows** (PowerShell; use `x64` or `arm64`):
 
 ```powershell
 $Asset = "squad-win32-x64.zip"
 $Tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "squad-$([guid]::NewGuid())")
-gh release download $Tag -R github/squad -p $Asset -p SHA256SUMS.txt -D $Tmp
+$BaseUrl = "https://github.com/github/squad/releases/download/$Tag"
+if (Get-Command gh -ErrorAction SilentlyContinue) {
+  gh release download $Tag -R github/squad -p $Asset -p SHA256SUMS.txt -D $Tmp
+} else {
+  Invoke-WebRequest "$BaseUrl/$Asset" -OutFile "$Tmp\$Asset"
+  Invoke-WebRequest "$BaseUrl/SHA256SUMS.txt" -OutFile "$Tmp\SHA256SUMS.txt"
+}
 $Expected = ((Get-Content "$Tmp\SHA256SUMS.txt" | Where-Object { $_ -match "\s$([regex]::Escape($Asset))$" }) -split '\s+')[0]
 if ((Get-FileHash "$Tmp\$Asset" -Algorithm SHA256).Hash -ne $Expected.ToUpper()) { throw "Checksum mismatch" }
-Expand-Archive "$Tmp\$Asset" -DestinationPath "$env:LOCALAPPDATA\Programs\squad" -Force
-$Exe = Get-ChildItem "$env:LOCALAPPDATA\Programs\squad" -Recurse -Filter squad.exe | Select-Object -First 1
+$InstallDir = Join-Path $env:LOCALAPPDATA "Programs\squad\$Tag"
+Expand-Archive "$Tmp\$Asset" -DestinationPath $InstallDir -Force
+$Exe = Get-ChildItem $InstallDir -Recurse -Filter squad.exe | Select-Object -First 1
 $env:Path = "$($Exe.DirectoryName);$env:Path"
 ```
 
