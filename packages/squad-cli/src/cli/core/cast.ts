@@ -550,6 +550,32 @@ function buildSupportTable(): string {
 `;
 }
 
+/**
+ * Add the `## Built-in Support Agents` table to a `team.md` that does not list the built-ins
+ * anywhere, placed where `createTeam` puts it (before `## Coding Agent` or `## Project Context`,
+ * else at the end). A roster that already names them (in that section, a legacy
+ * `## Support Identities` section, or as rows under `## Members`) is returned unchanged, so this
+ * is idempotent. Kept out of `## Members` so Init Mode's "empty roster" check still counts only
+ * cast members (#2522).
+ */
+export function ensureBuiltinSupportSection(content: string): string {
+  if (
+    content.includes('## Built-in Support Agents')
+    || content.includes('## Support Identities')
+    || content.includes('.squad/agents/scribe/charter.md')
+  ) {
+    return content;
+  }
+  const section = buildSupportTable();
+  for (const heading of ['## Coding Agent', '## Project Context']) {
+    const idx = content.indexOf(`\n${heading}`);
+    if (idx !== -1) {
+      return `${content.slice(0, idx + 1)}${section}\n${content.slice(idx + 1)}`;
+    }
+  }
+  return `${content.trimEnd()}\n\n${section}`;
+}
+
 function replaceSection(content: string, headings: string[], replacement: string): string {
   for (const heading of headings) {
     const headingIndex = content.indexOf(heading);
