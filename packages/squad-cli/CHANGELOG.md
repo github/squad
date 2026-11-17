@@ -20,6 +20,8 @@
 
 ### Patch Changes
 
+- `squad cast` adds the built-in support agents (Scribe, Ralph, Rai, Fact Checker) to `team.md` when the roster doesn't list them yet, each only if its charter exists and it isn't already listed. Claude Code and Copilot then report the same team after a cast. Coordinators also describe themselves separately in roster answers instead of listing "Squad" as a member (#2522).
+
 - When `squad_state` is unavailable and `.squad/config.json` sets a non-local `stateBackend`, the non-Copilot coordinators stop and say so instead of writing state files in the working tree directly.
 
 - Claude Code: `squad init`/`squad upgrade` add a scoped `.claude/settings.json` allowlist for Squad's own tools (the coordinator's `squad_state` tools by name, `squad cast`, `squad client sync`, `squad lockout reject` and `status` (the steps that release a lockout still ask); launcher rules only for Squad's own launcher; rollback removes only the rules Squad recorded adding), `squad cast` refuses to write through a symlink, and it is turned off with `"claudePermissions": "off"`. The non-Copilot coordinators run the reviewer gate on every code or test change unasked, treat a known gap against the issue or a recorded decision as a REJECT, never let an author review their own work, and name the recorded decision that shapes the work.

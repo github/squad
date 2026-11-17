@@ -20,6 +20,8 @@
 
 ### Patch Changes
 
+- `squad cast` adds the built-in support agents (Scribe, Ralph, Rai, Fact Checker) to `team.md` when the roster doesn't list them yet, each only if its charter exists and it isn't already listed. Claude Code and Copilot then report the same team after a cast. Coordinators also describe themselves separately in roster answers instead of listing "Squad" as a member (#2522).
+
 - Non-Copilot coordinators merge a decision the user states into `decisions.md` in the same turn (Scribe, background), so a teammate using Copilot, which reads only the merged file, sees it.
 
 - When `squad_state` is unavailable and `.squad/config.json` sets a non-local `stateBackend`, the non-Copilot coordinators stop and say so instead of writing state files in the working tree directly.
