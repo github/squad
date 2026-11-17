@@ -70,7 +70,9 @@ squad init
 All methods install the same CLI. Standalone installs vendor Node.js, so they do
 not require Node.js or access to the npm registry. See the
 [complete installation guide](https://github.github.com/squad/docs/get-started/installation/)
-for prerequisites and platform details.
+for prerequisites and platform details. To have an AI agent set Squad up for
+your repository, see the
+[agent setup guide](https://github.github.com/squad/docs/get-started/agent-setup/).
 
 > **⚡ Want to be up and running in under a second?** Use `squad init --preset default` to start with a fully-configured squad — complete with members, charters, and routing rules — ready to go immediately. The default `squad init` (without the flag) walks you through setup step by step, ideal if you prefer to build and customize your squad deliberately.
 
