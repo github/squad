@@ -18,12 +18,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade } from '@bradygaster/squad-cli/core/upgrade';
-import { runCastAdd } from '@bradygaster/squad-cli/commands/cast';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
-import { installClients, uninstallClients } from '@bradygaster/squad-sdk/client';
-import { clearResolveSquadCache, resolveGlobalSquadPath, resolveSquad, resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+import { runInit } from '@squad/cli/core/init';
+import { runUpgrade } from '@squad/cli/core/upgrade';
+import { runCastAdd } from '@squad/cli/commands/cast';
+import { FSStorageProvider } from '@squad/sdk';
+import { installClients, uninstallClients } from '@squad/sdk/client';
+import { clearResolveSquadCache, resolveGlobalSquadPath, resolveSquad, resolveSquadPaths } from '@squad/sdk/resolution';
 
 let tmp: string;
 let configHome: string;

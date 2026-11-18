@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ToolRegistry, resolveDecisionInboxDir, isMutableStateKey, type DecisionRecord } from '@bradygaster/squad-sdk/tools';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { ToolRegistry, resolveDecisionInboxDir, isMutableStateKey, type DecisionRecord } from '@squad/sdk/tools';
+import { FSStorageProvider } from '@squad/sdk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';

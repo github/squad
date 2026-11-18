@@ -16,8 +16,8 @@ const result = (status: number | null, stdout = '', stderr = '', signal: string 
   stderr,
   signal,
 });
-const SDK = '@bradygaster/squad-sdk';
-const CLI = '@bradygaster/squad-cli';
+const SDK = '@squad/sdk';
+const CLI = '@squad/cli';
 const versions = (sdk: string, cli: string) => ({
   [SDK]: { state: sdk },
   [CLI]: { state: cli },
@@ -104,7 +104,7 @@ function executeScenario(scenario: RegistryScenario) {
 describe('npm pre-publish registry reconciliation', () => {
   it('classifies only an explicit 404 as missing', () => {
     const state = classifyRegistryVersion({
-      name: '@bradygaster/squad-sdk',
+      name: '@squad/sdk',
       version: VERSION,
       localIntegrity: INTEGRITY,
       registry: 'https://registry.npmjs.org/',
@@ -121,7 +121,7 @@ describe('npm pre-publish registry reconciliation', () => {
       result(1, '', 'generic registry failure'),
     ]) {
       const state = classifyRegistryVersion({
-        name: '@bradygaster/squad-sdk',
+        name: '@squad/sdk',
         version: VERSION,
         localIntegrity: INTEGRITY,
         registry: 'https://registry.npmjs.org/',
@@ -169,7 +169,7 @@ describe('npm pre-publish registry reconciliation', () => {
 
   it('accepts a present version only when registry integrity matches the verified tarball', () => {
     const state = classifyRegistryVersion({
-      name: '@bradygaster/squad-sdk',
+      name: '@squad/sdk',
       version: VERSION,
       localIntegrity: INTEGRITY,
       registry: 'https://registry.npmjs.org/',
@@ -316,7 +316,7 @@ describe('npm pre-publish registry reconciliation', () => {
 
   it('classifies mismatching integrity as conflict and the workflow entry point fails closed', () => {
     const state = classifyRegistryVersion({
-      name: '@bradygaster/squad-sdk',
+      name: '@squad/sdk',
       version: VERSION,
       localIntegrity: INTEGRITY,
       registry: 'https://registry.npmjs.org/',
@@ -332,8 +332,8 @@ describe('npm pre-publish registry reconciliation', () => {
     mkdirSync(packsDir);
     mkdirSync(reconDir);
     writeFileSync(path.join(packsDir, 'local-packs.json'), JSON.stringify({
-      '@bradygaster/squad-sdk': { integrity: INTEGRITY },
-      '@bradygaster/squad-cli': { integrity: INTEGRITY },
+      '@squad/sdk': { integrity: INTEGRITY },
+      '@squad/cli': { integrity: INTEGRITY },
     }));
     try {
       expect(() => runRegistryClassification({

@@ -13,13 +13,13 @@
 import path from 'node:path';
 import { lstatSync, readFileSync, readdirSync, realpathSync, type Dirent } from 'node:fs';
 import { exec, execFileSync } from 'node:child_process';
-import { FSStorageProvider, resolveStateBackend, type StateBackendType } from '@bradygaster/squad-sdk';
-import { detectHistoricalCastingSchema, readCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
-import { resolveSquad, resolveSquadPaths, clearResolveSquadCache } from '@bradygaster/squad-sdk/resolution';
+import { FSStorageProvider, resolveStateBackend, type StateBackendType } from '@squad/sdk';
+import { detectHistoricalCastingSchema, readCastingRegistryPair } from '@squad/sdk/casting';
+import { resolveSquad, resolveSquadPaths, clearResolveSquadCache } from '@squad/sdk/resolution';
 import { fatalNoSquad } from '../core/errors.js';
-import { isMutableStateKey, MUTABLE_STATE_PATHS } from '@bradygaster/squad-sdk/tools';
-import { resolveUpstreams } from '@bradygaster/squad-sdk/upstream';
-import { squadRepoLauncherScript } from '@bradygaster/squad-sdk/client';
+import { isMutableStateKey, MUTABLE_STATE_PATHS } from '@squad/sdk/tools';
+import { resolveUpstreams } from '@squad/sdk/upstream';
+import { squadRepoLauncherScript } from '@squad/sdk/client';
 import { effectiveSquadDir } from '../core/effective-squad-dir.js';
 import { getPackageVersion } from '../core/version.js';
 import {
@@ -709,7 +709,7 @@ export async function checkSquadStateBridge(cwd: string): Promise<DoctorCheck> {
             return {
               name,
               status: 'fail',
-              message: `registry mirror cannot resolve the configured dist-tag. Pin @bradygaster/squad-cli@${expectedVersion} exactly, or ${fix.toLowerCase()}`,
+              message: `registry mirror cannot resolve the configured dist-tag. Pin @squad/cli@${expectedVersion} exactly, or ${fix.toLowerCase()}`,
             };
           }
           return {

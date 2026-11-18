@@ -210,7 +210,7 @@ describe('old-repository pattern', () => {
   });
 
   it.each([
-    ['the npm scope', 'npm install -g @bradygaster/squad-cli@insider'],
+    ['the npm scope', 'npm install -g @squad/cli@insider'],
     ['another repository whose name starts with squad', 'https://github.com/bradygaster/squadron'],
     ['a work reference', 'Ported from bradygaster/squad#131'],
     ['a look-alike host', 'https://mygithub.com/bradygaster/squad'],

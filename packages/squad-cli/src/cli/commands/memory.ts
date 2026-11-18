@@ -4,7 +4,7 @@ import {
   type MemoryClass,
   type MemoryLoadGuidance,
   type SquadStateContext,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SquadError } from '../core/errors.js';

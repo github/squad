@@ -1,8 +1,8 @@
 /**
- * Experimental Squad 2.0 conversation & harness backend subpath (`@bradygaster/squad-sdk/backend`).
+ * Experimental Squad 2.0 conversation & harness backend subpath (`@squad/sdk/backend`).
  *
  * @experimental This surface is exported only from the `./backend` subpath and is not re-exported
- * from the root `@bradygaster/squad-sdk` barrel.
+ * from the root `@squad/sdk` barrel.
  * @module backend
  */
 

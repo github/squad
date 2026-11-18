@@ -1,6 +1,6 @@
 import { ContainerClient } from '@azure/storage-blob';
-import type { StorageProvider, StorageStats } from '@bradygaster/squad-sdk';
-import { StateKeyConflictError, StateBackendUncertaintyError } from '@bradygaster/squad-sdk';
+import type { StorageProvider, StorageStats } from '@squad/sdk';
+import { StateKeyConflictError, StateBackendUncertaintyError } from '@squad/sdk';
 
 /**
  * Azure Blob Storage implementation of StorageProvider.

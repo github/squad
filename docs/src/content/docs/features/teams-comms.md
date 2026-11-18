@@ -5,7 +5,7 @@ description: Bidirectional chat integration between Squad and Microsoft Teams vi
 
 # Microsoft Teams Comms Adapter
 
-The Teams adapter lets your squad post updates and read replies through Microsoft Teams, alongside the existing file-based, email, and other comm channels. It ships in `@bradygaster/squad-sdk` as a `CommunicationAdapter` implementation and uses Microsoft Graph API for both 1:1 chats and channel messaging.
+The Teams adapter lets your squad post updates and read replies through Microsoft Teams, alongside the existing file-based, email, and other comm channels. It ships in `@squad/sdk` as a `CommunicationAdapter` implementation and uses Microsoft Graph API for both 1:1 chats and channel messaging.
 
 > **⚠️ Breaking change in v0.10:** `createCommunicationAdapter` is now async (returns `Promise<CommunicationAdapter>`). Callers must `await` the result.
 
@@ -78,7 +78,7 @@ The `redirectUri` is the local-only OAuth callback for browser PKCE — it never
 ## Usage from the SDK
 
 ```typescript
-import { createCommunicationAdapter } from '@bradygaster/squad-sdk/platform';
+import { createCommunicationAdapter } from '@squad/sdk/platform';
 
 // IMPORTANT: this is async now (breaking change in v0.10)
 const teams = await createCommunicationAdapter({ channel: 'teams' });

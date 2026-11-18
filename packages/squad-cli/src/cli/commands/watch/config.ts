@@ -5,13 +5,13 @@
  */
 
 import path from 'node:path';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
-import type { SquadStateContext, StateBackendType } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
+import type { SquadStateContext, StateBackendType } from '@squad/sdk';
 import {
   DEFAULT_CLAIM_SKEW_MARGIN_MS,
   DEFAULT_CLAIM_TTL_MS,
   claimTimingError,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 
 const storage = new FSStorageProvider();
 

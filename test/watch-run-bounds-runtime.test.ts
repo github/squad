@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   emit: vi.fn(async () => {}),
 }));
 
-vi.mock('@bradygaster/squad-sdk/platform', () => ({
+vi.mock('@squad/sdk/platform', () => ({
   getRemoteUrl: () => undefined,
   createPlatformAdapter: () => ({
     type: 'github',
@@ -19,25 +19,25 @@ vi.mock('@bradygaster/squad-sdk/platform', () => ({
     listPullRequests: async () => [],
   }),
 }));
-vi.mock('@bradygaster/squad-sdk/ralph/triage', () => ({
+vi.mock('@squad/sdk/ralph/triage', () => ({
   parseRoster: () => [{ name: 'Test', label: 'squad:test' }],
   parseRoutingRules: () => [],
   parseModuleOwnership: () => [],
   triageIssue: () => null,
 }));
-vi.mock('@bradygaster/squad-sdk/ralph/capabilities', () => ({
+vi.mock('@squad/sdk/ralph/capabilities', () => ({
   loadCapabilities: async () => null,
   filterByCapabilities: (issues: unknown[]) => ({ handled: issues, skipped: [] }),
   getPodId: () => undefined,
 }));
-vi.mock('@bradygaster/squad-sdk/ralph', () => ({
+vi.mock('@squad/sdk/ralph', () => ({
   RalphMonitor: class {
     start = async () => {};
     stop = mocks.monitorStop;
     healthCheck = async () => {};
   },
 }));
-vi.mock('@bradygaster/squad-sdk/runtime/event-bus', () => ({
+vi.mock('@squad/sdk/runtime/event-bus', () => ({
   EventBus: class { emit = mocks.emit; },
 }));
 vi.mock('../packages/squad-cli/src/cli/core/gh-cli.js', () => ({

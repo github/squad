@@ -19,8 +19,8 @@
 
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
-import { resolveStateBackend, TwoLayerBackend, type PromoteNotesResult } from '@bradygaster/squad-sdk';
-import { resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+import { resolveStateBackend, TwoLayerBackend, type PromoteNotesResult } from '@squad/sdk';
+import { resolveSquadPaths } from '@squad/sdk/resolution';
 import { BOLD, RESET, DIM, GREEN, YELLOW, RED } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';
 

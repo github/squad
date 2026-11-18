@@ -22,7 +22,7 @@ The Insider Program gives you access to cutting-edge features before they ship. 
 Install the insider build from npm using the honor system:
 
 ```bash
-npm install -g @bradygaster/squad-cli@insider
+npm install -g @squad/cli@insider
 ```
 
 That's it. You're now on insider builds. For Homebrew and WinGet, see the [Insider Program guide](https://github.github.com/squad/docs/insider-program/).

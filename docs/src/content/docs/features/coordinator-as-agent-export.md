@@ -180,7 +180,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: npm install -g @bradygaster/squad-cli
+      - run: npm install -g @squad/cli
       - run: squad export agent --check
 ```
 
@@ -223,7 +223,7 @@ The export pipeline lives at `packages/squad-sdk/src/repo-native/`:
 3. **Frontmatter renderer** — emits valid custom-agent YAML
 4. **File writer** — handles safety checks and atomic write
 
-You can use the SDK module directly if you want to embed coordinator export into your own tooling — see `@bradygaster/squad-sdk/repo-native`.
+You can use the SDK module directly if you want to embed coordinator export into your own tooling — see `@squad/sdk/repo-native`.
 
 ---
 

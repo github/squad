@@ -10,6 +10,7 @@ import {
   readDistTags,
   runRegistryPreflight,
 } from '../scripts/release/registry-preflight.mjs';
+import { PACKAGE_KEYS } from '../scripts/release/classify-npm-registry.mjs';
 
 const VERSION = '2.0.0-preview.4';
 const REGISTRY = 'https://registry.npmjs.org/';
@@ -18,7 +19,7 @@ const result = (status: number | null, stdout = '', stderr = '') => ({ status, s
 describe('read-only registry preflight', () => {
   it('records only explicit package, tag-ref, and release absence responses as absent', () => {
     expect(classifyPackageVersion({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       version: VERSION,
       registry: REGISTRY,
       spawn: () => result(1, '', 'npm error code E404\n404 Not Found'),
@@ -41,13 +42,13 @@ describe('read-only registry preflight', () => {
 
   it('records TLS, git transport, and malformed responses as UNKNOWN', () => {
     expect(classifyPackageVersion({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       version: VERSION,
       registry: REGISTRY,
       spawn: () => result(1, '', 'ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE'),
     }).state).toBe('UNKNOWN');
     expect(readDistTags({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       registry: REGISTRY,
       spawn: () => result(0, '{broken'),
     })).toMatchObject({
@@ -73,7 +74,7 @@ describe('read-only registry preflight', () => {
     const spawn = (command: string, args: string[]) => {
       if (command === 'gh') return result(1, '', 'gh: Not Found (HTTP 404)');
       if (command === 'git') return result(0);
-      const spec = args.find((arg) => arg.startsWith('@bradygaster/')) ?? '';
+      const spec = args.find((arg) => PACKAGE_KEYS.some(([, name]) => arg.startsWith(`${name}@`))) ?? '';
       if (args.includes('dist-tags')) {
         return result(0, JSON.stringify({ insider: '2.0.0-preview.3', preview: '2.0.0-preview.3', latest: '1.1.0' }));
       }
@@ -97,7 +98,7 @@ describe('read-only registry preflight', () => {
         githubRef: { state: '404', ref: `refs/tags/v${VERSION}` },
       });
       expect(evidence.githubRelease.state).toBe('404');
-      for (const name of ['@bradygaster/squad-cli', '@bradygaster/squad-sdk']) {
+      for (const name of ['@squad/cli', '@squad/sdk']) {
         expect(evidence.packages[name].version.state).toBe('404');
         expect(evidence.packages[name].distTags.values).toEqual({
           insider: '2.0.0-preview.3',

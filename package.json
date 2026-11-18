@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "dependencies": {
-    "@bradygaster/squad-sdk": "file:packages/squad-sdk"
+    "@squad/sdk": "file:packages/squad-sdk"
   },
   "overrides": {
-    "@bradygaster/squad-cli": {
-      "@bradygaster/squad-sdk": "$@bradygaster/squad-sdk"
+    "@squad/cli": {
+      "@squad/sdk": "$@squad/sdk"
     }
   },
   "scripts": {

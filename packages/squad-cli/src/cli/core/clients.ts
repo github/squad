@@ -26,9 +26,9 @@ import {
   resolveInsideRoot,
   type ApplyResult,
   type ClientId,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
-import { resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+import { resolveSquadPaths } from '@squad/sdk/resolution';
 import { getPackageVersion } from './version.js';
 
 export { CLIENT_IDS, parseClients, type ClientId };

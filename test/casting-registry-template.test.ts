@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseAgentProvenanceRegistry } from '@bradygaster/squad-sdk/casting';
+import { parseAgentProvenanceRegistry } from '@squad/sdk/casting';
 
 const LOCATIONS = [
   '.squad-templates/casting-registry.json',

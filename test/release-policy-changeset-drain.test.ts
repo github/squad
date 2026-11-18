@@ -29,8 +29,8 @@ function fixtureRoot(changesets: Record<string, string>): string {
   return dir;
 }
 
-const GOOD = '---\n"@bradygaster/squad-cli": patch\n---\n\nFix the thing.\n';
-const GOOD_TWO = '---\n"@bradygaster/squad-sdk": minor\n"@bradygaster/squad-cli": patch\n---\n\nAdd a thing.\n';
+const GOOD = '---\n"@squad/cli": patch\n---\n\nFix the thing.\n';
+const GOOD_TWO = '---\n"@squad/sdk": minor\n"@squad/cli": patch\n---\n\nAdd a thing.\n';
 const drain = (root: string, mode: 'ci' | 'release') => runPolicyGates({ root, mode }).gates.find((g) => g.id === 'changeset-drain')!;
 const nodeFloor = (root: string) => runPolicyGates({ root, mode: 'ci' }).gates.find((g) => g.id === 'node-security-floor')!;
 
@@ -63,15 +63,15 @@ describe('policy gate changeset-drain is branch/event-aware', () => {
     const root = fixtureRoot({
       'no-frontmatter.md': 'Just prose.\n',
       'wrong-pkg.md': '---\n"@bradygaster/create-squad": patch\n---\n\nx\n',
-      'bad-bump.md': '---\n"@bradygaster/squad-cli": huge\n---\n\nx\n',
-      'empty.md': '---\n"@bradygaster/squad-cli": patch\n---\n\n   \n',
+      'bad-bump.md': '---\n"@squad/cli": huge\n---\n\nx\n',
+      'empty.md': '---\n"@squad/cli": patch\n---\n\n   \n',
     });
     try {
       const gate = drain(root, 'ci');
       expect(gate.ok).toBe(false);
       expect(gate.detail).toContain('no-frontmatter.md: missing frontmatter block');
       expect(gate.detail).toContain("wrong-pkg.md: package '@bradygaster/create-squad' is not publishable");
-      expect(gate.detail).toContain("bad-bump.md: bump 'huge' for @bradygaster/squad-cli is not patch|minor|major");
+      expect(gate.detail).toContain("bad-bump.md: bump 'huge' for @squad/cli is not patch|minor|major");
       expect(gate.detail).toContain('empty.md: empty summary');
       expect(validateChangeset(root, 'no-frontmatter.md')).toEqual(['missing frontmatter block (--- ... ---)']);
     } finally {

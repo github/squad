@@ -32,7 +32,7 @@ git checkout .ai-team/
 If you haven't committed `.squad/` yet, it's gone. Rebuild:
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 
@@ -178,7 +178,7 @@ git checkout HEAD^ .github/agents/squad.agent.md
 Or reinstall a previous version:
 
 ```bash
-npm install -g @bradygaster/squad-cli@0.1.5
+npm install -g @squad/cli@0.1.5
 ```
 
 **Your team's knowledge is safe.** `.ai-team/` is untouched.

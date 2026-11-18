@@ -86,7 +86,7 @@ if (evidenceDir) {
   const reportPath = path.join(evidenceDir, 'pack-evidence.json');
   if (!existsSync(reportPath)) throw new Error(`Missing ${reportPath}`);
   const report = JSON.parse(readFileSync(reportPath, 'utf8'));
-  for (const name of ['@bradygaster/squad-sdk', '@bradygaster/squad-cli']) {
+  for (const name of ['@squad/sdk', '@squad/cli']) {
     const entry = report.packages?.[name];
     if (!entry?.filename || !/^[0-9a-f]{64}$/.test(entry.sha256 ?? '')) {
       throw new Error(`Invalid evidence entry for ${name}`);

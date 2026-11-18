@@ -7,15 +7,15 @@
  * repository-variable escape hatches:
  *
  *   workspace-integrity   root/SDK/CLI versions identical; lockfile workspace entries match;
- *                         no stale registry-resolved @bradygaster/squad-* entries; CLI->SDK
+ *                         no stale registry-resolved SDK/CLI entries (current or legacy names); CLI->SDK
  *                         dependency floor is '>=<version>' for prereleases and has no
  *                         prerelease suffix for stable versions (package.json AND lockfile)
  *   prerelease-guard      every workspace version is X.Y.Z, X.Y.Z-preview.N or X.Y.Z-insider.N
  *   node-security-floor   standalone defaults meet the published minimum for their Node major
  *   publish-policy        every `npm ... publish` is workspace-scoped or one of the two exact
  *                         verified tarball paths used by squad-npm-publish.yml
- *   publish-allowlist     the publishable workspaces are exactly @bradygaster/squad-sdk and
- *                         @bradygaster/squad-cli; the root stays private
+ *   publish-allowlist     the publishable workspaces are exactly @squad/sdk and
+ *                         @squad/cli; the root stays private
  *   changelog-heading     CHANGELOG.md has `## [<version>]`; whatsnew has `## v<version>`
  *   changeset-drain       release mode: no pending .changeset fragments remain;
  *                         ci mode (pull_request): pending fragments are allowed and must be
@@ -38,16 +38,28 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-export const PUBLISH_ALLOWLIST = Object.freeze(['@bradygaster/squad-sdk', '@bradygaster/squad-cli']);
-export const PUBLISH_ALLOWLIST_DIRS = Object.freeze({ '@bradygaster/squad-sdk': 'packages/squad-sdk', '@bradygaster/squad-cli': 'packages/squad-cli' });
+export const PUBLISH_ALLOWLIST = Object.freeze(['@squad/sdk', '@squad/cli']);
+export const PUBLISH_ALLOWLIST_DIRS = Object.freeze({ '@squad/sdk': 'packages/squad-sdk', '@squad/cli': 'packages/squad-cli' });
 export const SANCTIONED_VERSION = /^\d+\.\d+\.\d+(-(preview|insider)(\.\d+)?)?$/;
 
 // Mirrors test/publish-policy.test.ts and the awk program in squad-ci.yml.
 const NPM_PUBLISH_COMMAND = /(?:^|&&|\|\||;)\s*(?:(?:if|then)\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*npm\s+[^#;&|]*\bpublish\b[^#;&|]*/;
 const WORKSPACE_FLAG = /(?:^|\s)(?:-w|--workspace)(?:=|\s|$)/;
-const VERIFIED_TARBALL = /npm\s+publish\s+"\$PACKS_DIR\/bradygaster-squad-(?:sdk|cli)-\$\{VERSION\}\.tgz"(?:\s|$)/;
-
 const readJson = (root, rel) => JSON.parse(readFileSync(path.join(root, rel), 'utf8'));
+const DISTRIBUTION_IDENTITY = JSON.parse(readFileSync(new URL('./distribution-identity.json', import.meta.url), 'utf8'));
+const WORKSPACE_PACKAGE_NAMES = [DISTRIBUTION_IDENTITY.npm.cli, DISTRIBUTION_IDENTITY.npm.sdk]
+  .flatMap((entry) => [entry.current, ...entry.legacy]);
+
+// `npm pack` names a scoped package's tarball `<scope>-<name>-<version>.tgz` (e.g. @squad/cli -> squad-cli-2.0.0.tgz).
+export function packTarballPrefix(packageName) {
+  return packageName.replace(/^@/, '').replace('/', '-');
+}
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const VERIFIED_TARBALL = new RegExp(
+  `npm\\s+publish\\s+"\\$PACKS_DIR\\/(?:${[DISTRIBUTION_IDENTITY.npm.sdk.current, DISTRIBUTION_IDENTITY.npm.cli.current]
+    .map((name) => `${escapeRegExp(packTarballPrefix(name))}-\\$\\{VERSION\\}\\.tgz`)
+    .join('|')})"(?:\\s|$)`,
+);
 
 function workflowInputDefault(text, trigger, input) {
   const lines = text.split(/\r?\n/);
@@ -94,7 +106,7 @@ export function runPolicyGates({ root = ROOT, mode = 'ci' } = {}) {
   {
     const problems = [];
     for (const [key, val] of Object.entries(lock.packages ?? {})) {
-      if (key.includes('node_modules/@bradygaster/squad-') && val.resolved && /^https?:/.test(val.resolved)) problems.push(`stale registry entry ${key} -> ${val.resolved}`);
+      if (WORKSPACE_PACKAGE_NAMES.some((name) => key.endsWith(`node_modules/${name}`)) && val.resolved && /^https?:/.test(val.resolved)) problems.push(`stale registry entry ${key} -> ${val.resolved}`);
     }
     const expectedVersions = [
       ['package.json', rootPkg.version], ['packages/squad-sdk/package.json', sdk.version], ['packages/squad-cli/package.json', cli.version],
@@ -102,8 +114,8 @@ export function runPolicyGates({ root = ROOT, mode = 'ci' } = {}) {
       ['package-lock.json packages/squad-sdk', lock.packages?.['packages/squad-sdk']?.version], ['package-lock.json packages/squad-cli', lock.packages?.['packages/squad-cli']?.version],
     ];
     for (const [where, v] of expectedVersions) if (v !== version) problems.push(`${where} is '${v}', root is '${version}'`);
-    const dep = cli.dependencies?.['@bradygaster/squad-sdk'];
-    const lockDep = lock.packages?.['packages/squad-cli']?.dependencies?.['@bradygaster/squad-sdk'];
+    const dep = cli.dependencies?.['@squad/sdk'];
+    const lockDep = lock.packages?.['packages/squad-cli']?.dependencies?.['@squad/sdk'];
     if (version.includes('-')) {
       const expected = `>=${version}`;
       if (dep !== expected) problems.push(`CLI package.json SDK dependency is '${dep}', expected '${expected}'`);

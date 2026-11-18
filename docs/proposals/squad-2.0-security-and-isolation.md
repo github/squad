@@ -1,7 +1,7 @@
 # Squad 2.0 — Security, Threat Model & Isolation
 
 **Status:** Proposal, partially implemented · **Owner:** Worf (Security & Reliability) · **Scope:** Client/Backend decoupling and multi-client projections (Claude Code, Kiro, OpenCode, Cursor, GitHub Copilot, OpenAI Codex, Google Antigravity) plus the `DurableSquad` remote backend.
-**Contract suite:** `test/squad-20-security-contracts.test.ts` exercises the shipped product modules (`@bradygaster/squad-sdk/backend`, `@bradygaster/squad-sdk/client`, `squad-cli/core/backend-mcp`) for every property marked **Implemented** below. Properties marked **Not implemented** have no test on purpose; they are design intent, not shipped behavior.
+**Contract suite:** `test/squad-20-security-contracts.test.ts` exercises the shipped product modules (`@squad/sdk/backend`, `@squad/sdk/client`, `squad-cli/core/backend-mcp`) for every property marked **Implemented** below. Properties marked **Not implemented** have no test on purpose; they are design intent, not shipped behavior.
 
 ## 1. Trust model
 

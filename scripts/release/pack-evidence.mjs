@@ -2,7 +2,7 @@
 /**
  * Pack evidence for a Squad release.
  *
- * Packs @bradygaster/squad-sdk and @bradygaster/squad-cli from the current tree into an
+ * Packs @squad/sdk and @squad/cli from the current tree into an
  * evidence directory and records, per package:
  *   - the tarball file name, byte size, sha256 and the npm `integrity` (sha512) / `shasum`
  *   - the `npm pack --dry-run --json` file list
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-export const PACKAGES = Object.freeze({ '@bradygaster/squad-sdk': 'packages/squad-sdk', '@bradygaster/squad-cli': 'packages/squad-cli' });
+export const PACKAGES = Object.freeze({ '@squad/sdk': 'packages/squad-sdk', '@squad/cli': 'packages/squad-cli' });
 
 /**
  * Denied content patterns. Each hit must be allowlisted explicitly or the scan fails.
@@ -149,9 +149,9 @@ export function packEvidence({ root = ROOT, outDir, expectVersion, expectSdkDep,
     if (!existsSync(path.join(pkgDir, 'dist'))) { result.problems.push(`${name}: dist/ missing; run npm run build first`); continue; }
     const manifestPath = path.join(pkgDir, 'package.json');
     const originalManifest = readFileSync(manifestPath, 'utf8');
-    if (pinSdkDepExact && name === '@bradygaster/squad-cli') {
+    if (pinSdkDepExact && name === '@squad/cli') {
       const manifest = JSON.parse(originalManifest);
-      manifest.dependencies['@bradygaster/squad-sdk'] = manifest.version;
+      manifest.dependencies['@squad/sdk'] = manifest.version;
       writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
     }
     let dry; let packed;
@@ -159,7 +159,7 @@ export function packEvidence({ root = ROOT, outDir, expectVersion, expectSdkDep,
       dry = JSON.parse(execFileSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: pkgDir, encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }))[0];
       packed = JSON.parse(execFileSync(npm, ['pack', '--json', '--ignore-scripts', '--pack-destination', outDir], { cwd: pkgDir, encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }))[0];
     } finally {
-      if (pinSdkDepExact && name === '@bradygaster/squad-cli') writeFileSync(manifestPath, originalManifest);
+      if (pinSdkDepExact && name === '@squad/cli') writeFileSync(manifestPath, originalManifest);
     }
     const tarball = path.join(outDir, packed.filename);
     const bytes = readFileSync(tarball);
@@ -177,7 +177,7 @@ export function packEvidence({ root = ROOT, outDir, expectVersion, expectSdkDep,
       rmSync(extract, { recursive: true, force: true });
     }
 
-    const sdkDep = manifest.dependencies?.['@bradygaster/squad-sdk'] ?? null;
+    const sdkDep = manifest.dependencies?.['@squad/sdk'] ?? null;
     const entry = {
       name, dir, filename: packed.filename, bytes: bytes.length, sha256: sha256(bytes), integrity: packed.integrity, shasum: packed.shasum,
       fileCount: files.length, unpackedSize: packed.unpackedSize, files,
@@ -189,7 +189,7 @@ export function packEvidence({ root = ROOT, outDir, expectVersion, expectSdkDep,
     if (expectVersion && manifest.version !== expectVersion) result.problems.push(`${name}: tarball package.json version ${manifest.version} != ${expectVersion}`);
     if (manifest.name !== name) result.problems.push(`${name}: tarball package.json name is ${manifest.name}`);
     if (manifest.private) result.problems.push(`${name}: tarball package.json is private`);
-    if (name === '@bradygaster/squad-cli') {
+    if (name === '@squad/cli') {
       if (expectSdkDepExact && sdkDep !== manifest.version) result.problems.push(`${name}: SDK dependency ${sdkDep} is not the exact pin ${manifest.version}`);
       else if (expectSdkDep && sdkDep !== expectSdkDep) result.problems.push(`${name}: SDK dependency ${sdkDep} != ${expectSdkDep}`);
     }

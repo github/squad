@@ -69,7 +69,7 @@ Start a new project:
 mkdir ~/projects/new-mobile-app
 cd ~/projects/new-mobile-app
 git init
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 
@@ -139,7 +139,7 @@ This is intentional. Skills are **reusable**. Project details are **not**.
 When Squad releases a new version:
 
 ```bash
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 squad upgrade
 ```
 

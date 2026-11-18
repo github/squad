@@ -32,9 +32,10 @@
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import { isMachineSpecificMcpSpec, projectSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
 import { writeManagedText, writeManagedTextAtomic } from './managed-file.js';
+import { KNOWN_CLI_PATH_PATTERN, isKnownCliPackageSpec } from './package-identity.js';
 
 const storage = new FSStorageProvider();
 
@@ -355,10 +356,11 @@ function isSquadManagedHashedEntry(entry: McpServerEntry): boolean {
   const args = Array.isArray(entry.args) ? entry.args : [];
   if (args.at(-1) !== 'state-mcp') return false;
   if (entry.command === 'npx') {
-    return args.some(arg => /^@bradygaster\/squad-cli(?:@.+)?$/.test(arg));
+    return args.some(arg => isKnownCliPackageSpec(arg));
   }
   if (entry.command === process.execPath || path.basename(entry.command ?? '').toLowerCase() === 'node') {
-    return args.some(arg => /(?:^|[\\/])@bradygaster[\\/]squad-cli[\\/]dist[\\/]cli-entry\.js$/i.test(arg));
+    const installedEntry = new RegExp(`(?:^|[\\\\/])(?:${KNOWN_CLI_PATH_PATTERN})[\\\\/]dist[\\\\/]cli-entry\\.js$`, 'i');
+    return args.some(arg => installedEntry.test(arg));
   }
   return /(?:^|[\\/])squad(?:\.exe|\.cmd|\.ps1)?$/i.test(entry.command ?? '');
 }

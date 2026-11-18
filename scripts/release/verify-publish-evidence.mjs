@@ -24,7 +24,7 @@ export function verifyPublishEvidence({
   }
   const report = JSON.parse(readFileSync(path.join(evidenceDir, 'pack-evidence.json'), 'utf8'));
   if (!report.ok) throw new Error('pack-evidence.json does not report ok=true');
-  const expected = ['@bradygaster/squad-sdk', '@bradygaster/squad-cli'];
+  const expected = ['@squad/sdk', '@squad/cli'];
   const tgzs = readdirSync(evidenceDir).filter((file) => file.endsWith('.tgz')).sort();
   if (tgzs.length !== 2) throw new Error(`evidence must contain exactly two tarballs, found ${tgzs.join(', ')}`);
   const local = {};
@@ -32,7 +32,7 @@ export function verifyPublishEvidence({
     const entry = report.packages?.[name];
     if (!entry) throw new Error(`missing evidence for ${name}`);
     if (entry.manifest?.version !== version) throw new Error(`${name} evidence version ${entry.manifest?.version} != ${version}`);
-    if (name.endsWith('squad-cli') && entry.manifest?.sdkDependency !== version) {
+    if (name === expected[1] && entry.manifest?.sdkDependency !== version) {
       throw new Error(`CLI evidence does not pin SDK exactly to ${version}`);
     }
     if (!entry.privacy?.denyPatterns?.includes('email-upn')) throw new Error(`${name} evidence lacks the email-upn privacy rule`);

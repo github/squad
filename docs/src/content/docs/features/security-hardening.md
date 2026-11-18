@@ -282,7 +282,7 @@ See [Agent Framework Integration](/squad/docs/guide/agent-framework-integration/
 Squad's `HookPipeline` intercepts tool calls before and after execution. Use pre-hooks to enforce security policy at the tool layer, independent of the agent's prompt instructions — hooks are code; prompts can be ignored.
 
 ```typescript
-import { HookPipeline, PreToolUseHook, PreToolUseContext, PreToolUseResult } from '@bradygaster/squad-sdk';
+import { HookPipeline, PreToolUseHook, PreToolUseContext, PreToolUseResult } from '@squad/sdk';
 
 // Block writes outside .squad/
 // PreToolUseHook signature: (ctx: PreToolUseContext) => PreToolUseResult | Promise<PreToolUseResult>

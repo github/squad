@@ -5,13 +5,13 @@
 
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import { detectSquadDir, resolveWorktreeMainCheckout } from './detect-squad-dir.js';
 import { success, BOLD, RESET, YELLOW, GREEN, DIM } from './output.js';
 import { fatal } from './errors.js';
 import { detectProjectType } from './project-type.js';
 import { getPackageVersion, stampVersion } from './version.js';
-import { initSquad as sdkInitSquad, cleanupOrphanInitPrompt, clearResolveSquadCache, type InitOptions } from '@bradygaster/squad-sdk';
+import { initSquad as sdkInitSquad, cleanupOrphanInitPrompt, clearResolveSquadCache, type InitOptions } from '@squad/sdk';
 import { installGitHooks } from '../commands/install-hooks.js';
 import { liftInitMutableStateOntoOrphan } from '../commands/migrate-backend.js';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
@@ -24,7 +24,7 @@ import {
   tombstoneStaleSquadStateInProjectMcp,
 } from './mcp-root.js';
 import { applyClientProjectionsForInit, linkedTeamSquadDir, readConfiguredClients, reportClientResults, type ClientId } from './clients.js';
-import { getHostProjection, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
+import { getHostProjection, readClaudePluginMode } from '@squad/sdk/client';
 import {
   readTeamMd,
   writeTeamMd,
@@ -161,7 +161,7 @@ const INIT_LANDMARKS = [
 function showDeprecationWarning(): void {
   console.log();
   console.log(`${YELLOW}⚠️  DEPRECATION: .ai-team/ is deprecated and will be removed in v1.0.0${RESET}`);
-  console.log(`${YELLOW}    Run 'npx @bradygaster/squad-cli upgrade --migrate-directory' to migrate to .squad/${RESET}`);
+  console.log(`${YELLOW}    Run 'npx @squad/cli upgrade --migrate-directory' to migrate to .squad/${RESET}`);
   console.log(`${YELLOW}    Details: https://github.com/github/squad/issues/101${RESET}`);
   console.log();
 }

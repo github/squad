@@ -41,7 +41,7 @@ merges `dev` directly into `main`.
 Choose one method:
 
 ```bash
-npm install -g @bradygaster/squad-cli@insider
+npm install -g @squad/cli@insider
 
 brew tap bradygaster/squad
 brew install --cask squad-insider
@@ -54,7 +54,7 @@ winget install --id bradygaster.Squad.Insider --exact
 ### Upgrade Existing Repo to Insider
 
 ```bash
-npm install -g @bradygaster/squad-cli@insider
+npm install -g @squad/cli@insider
 squad upgrade
 ```
 
@@ -111,7 +111,7 @@ Found a bug? We want to hear about it.
 Want to go back to stable releases?
 
 ```bash
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 ```
 
 Homebrew users switch from `squad-insider` to `squad`; WinGet users switch from
@@ -146,7 +146,7 @@ Upgrade through npm, Homebrew, or WinGet to fetch the latest snapshot.
 **A:** Roll back immediately:
 
 ```bash
-npm install -g @bradygaster/squad-cli@latest   # Back to stable
+npm install -g @squad/cli@latest   # Back to stable
 squad upgrade                                   # Apply stable version
 ```
 

@@ -11,7 +11,7 @@ CLI, Copilot agent, or SDK? Pick the right mode for your workflow.
 Install Squad globally or per-project, then use terminal commands to initialize, route work, and manage your team.
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 squad status
 squad watch
@@ -41,11 +41,11 @@ Squad: Hey Brady, what are you building?
 Write TypeScript code that spawns agents, routes work, and coordinates teams programmatically. Full access to Squad's internals.
 
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 ```typescript
-import { Coordinator } from '@bradygaster/squad-sdk';
+import { Coordinator } from '@squad/sdk';
 
 const coordinator = new Coordinator();
 const result = await coordinator.route('Build a login page');

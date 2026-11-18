@@ -215,7 +215,7 @@ The Copilot CLI runs as a subprocess. It must be present in the deployment envir
 | Scenario | Recommended approach |
 |---|---|
 | Interactive CLI workflow, local dev, prompt scripting | Squad CLI (`squad`, `squad aspire`) |
-| TypeScript / JavaScript integration, Copilot SDK extensions | `@bradygaster/squad-sdk` (TypeScript SDK) |
+| TypeScript / JavaScript integration, Copilot SDK extensions | `@squad/sdk` (TypeScript SDK) |
 | .NET durable workflows, multi-model composition, Aspire AppHost | `Squad.Agents.AI` (this guide) |
 | Embedding multiple teams in one .NET app | `AddKeyedSquadAgent` with per-team keys |
 

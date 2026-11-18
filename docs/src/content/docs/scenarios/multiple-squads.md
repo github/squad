@@ -70,7 +70,7 @@ Pick the squad whose domain knowledge is closest to your new project.
 ```bash
 cd ~/projects/new-platform
 git init
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 

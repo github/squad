@@ -9,9 +9,9 @@ import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, chmodSync, renameSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomBytes } from 'crypto';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade, ensureGitattributes, ensureGitignore, ensureDirectories, ensureCastingDefaults, selfUpgradeCli, selfUpgradeCommand, detectPackageManager, migrateLegacyRaiAgent } from '@bradygaster/squad-cli/core/upgrade';
-import { getPackageVersion } from '@bradygaster/squad-cli/core/version';
+import { runInit } from '@squad/cli/core/init';
+import { runUpgrade, ensureGitattributes, ensureGitignore, ensureDirectories, ensureCastingDefaults, selfUpgradeCli, selfUpgradeCommand, detectPackageManager, migrateLegacyRaiAgent } from '@squad/cli/core/upgrade';
+import { getPackageVersion } from '@squad/cli/core/version';
 
 const TEST_ROOT = join(tmpdir(), `.test-cli-upgrade-${randomBytes(4).toString('hex')}`);
 const TEST_HOME = join(tmpdir(), `.test-cli-upgrade-home-${randomBytes(4).toString('hex')}`);
@@ -171,7 +171,7 @@ describe('CLI: upgrade command', () => {
     // After MCP-BRIDGE-BROKEN fix the args MUST pin the CLI version so npx
     // does not silently resolve to the npm `latest` dist-tag (which lacks the
     // state-mcp command). Match a regex rather than literal version.
-    expect(upgraded).toMatch(/args: \['-y', '@bradygaster\/squad-cli@[^']+', 'state-mcp'\]/);
+    expect(upgraded).toMatch(/args: \['-y', '@squad\/cli@[^']+', 'state-mcp'\]/);
     expect(upgraded).toContain('  EXAMPLE-github:');
     expect(upgraded).toContain("    args: ['-y', '@anthropic/github-mcp-server']");
     expect(upgraded).toContain('      GITHUB_TOKEN: ${GITHUB_TOKEN}');
@@ -536,9 +536,9 @@ describe('CLI: upgrade command', () => {
 
   describe('selfUpgradeCli shells out with the correct package manager and dist-tag', () => {
     const EXPECTED: Record<'npm' | 'pnpm' | 'yarn', Record<'latest' | 'insider', string>> = {
-      npm: { latest: 'npm install -g @bradygaster/squad-cli@latest', insider: 'npm install -g @bradygaster/squad-cli@insider' },
-      pnpm: { latest: 'pnpm add -g @bradygaster/squad-cli@latest', insider: 'pnpm add -g @bradygaster/squad-cli@insider' },
-      yarn: { latest: 'yarn global add @bradygaster/squad-cli@latest', insider: 'yarn global add @bradygaster/squad-cli@insider' },
+      npm: { latest: 'npm install -g @squad/cli@latest', insider: 'npm install -g @squad/cli@insider' },
+      pnpm: { latest: 'pnpm add -g @squad/cli@latest', insider: 'pnpm add -g @squad/cli@insider' },
+      yarn: { latest: 'yarn global add @squad/cli@latest', insider: 'yarn global add @squad/cli@insider' },
     };
 
     for (const pm of ['npm', 'pnpm', 'yarn'] as const) {
@@ -581,12 +581,12 @@ describe('CLI: upgrade command', () => {
     it('surfaces package-manager failures as a thrown error with the retry command (no false success)', async () => {
       const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
       await expect(selfUpgradeCli({ packageManager: 'npm', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw eacces; } }))
-        .rejects.toThrow(/Self-upgrade failed: Permission denied\. Try: sudo npm install -g @bradygaster\/squad-cli@latest/);
+        .rejects.toThrow(/Self-upgrade failed: Permission denied\. Try: sudo npm install -g @squad\/cli@latest/);
       const ebusy = Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
       await expect(selfUpgradeCli({ insider: true, packageManager: 'pnpm', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw ebusy; } }))
-        .rejects.toThrow(/in use .*pnpm add -g @bradygaster\/squad-cli@insider/);
+        .rejects.toThrow(/in use .*pnpm add -g @squad\/cli@insider/);
       await expect(selfUpgradeCli({ packageManager: 'yarn', currentVersion: '1.0.0', resolveTagVersion: async () => null, exec: () => { throw new Error('boom'); } }))
-        .rejects.toThrow(/Upgrade failed\. Try running manually: yarn global add @bradygaster\/squad-cli@latest/);
+        .rejects.toThrow(/Upgrade failed\. Try running manually: yarn global add @squad\/cli@latest/);
     });
   });
 
@@ -684,7 +684,7 @@ describe('CLI: upgrade command', () => {
       mcpServers: {
         squad_state: {
           command: '"npx"',
-          args: ['-y', '@bradygaster/squad-cli@0.9.1', 'state-mcp'],
+          args: ['-y', '@squad/cli@0.9.1', 'state-mcp'],
         },
       },
     }));

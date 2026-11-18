@@ -67,8 +67,8 @@ jobs:
             exit 1
           fi
           echo "✅ npm registry is reachable"
-          if ! npm view @bradygaster/squad-sdk version 2>/dev/null; then
-            echo "::warning::Cannot verify @bradygaster/squad-sdk on registry — package may not exist yet or registry is degraded"
+          if ! npm view @squad/sdk version 2>/dev/null; then
+            echo "::warning::Cannot verify @squad/sdk on registry — package may not exist yet or registry is degraded"
           else
             echo "✅ @bradygaster package namespace is accessible"
           fi
@@ -113,11 +113,11 @@ jobs:
 
           # Query npm for the latest insider build number for this base version
           # Fail hard if npm is unreachable — defaulting to 0 risks republishing an existing version
-          SDK_VERSIONS=$(npm view @bradygaster/squad-sdk versions --json 2>&1) || {
+          SDK_VERSIONS=$(npm view @squad/sdk versions --json 2>&1) || {
             echo "::error::Failed to query npm for squad-sdk versions. Cannot safely compute insider version."
             exit 1
           }
-          CLI_VERSIONS=$(npm view @bradygaster/squad-cli versions --json 2>&1) || {
+          CLI_VERSIONS=$(npm view @squad/cli versions --json 2>&1) || {
             echo "::error::Failed to query npm for squad-cli versions. Cannot safely compute insider version."
             exit 1
           }
@@ -160,8 +160,8 @@ jobs:
         if: ${{ inputs.dry_run == 'true' }}
         run: |
           echo "🏜️ DRY RUN — would have published:"
-          echo "  @bradygaster/squad-sdk@${{ steps.version.outputs.insider_version }}"
-          echo "  @bradygaster/squad-cli@${{ steps.version.outputs.insider_version }}"
+          echo "  @squad/sdk@${{ steps.version.outputs.insider_version }}"
+          echo "  @squad/cli@${{ steps.version.outputs.insider_version }}"
 
   release:
     name: Create insider GitHub prerelease

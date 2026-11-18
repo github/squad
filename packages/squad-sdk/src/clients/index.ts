@@ -1,6 +1,6 @@
 /**
  * @deprecated Canonical home is ../client/adapters (+ ../client/adapter-contract).
- * Kept as a re-export of the exact same symbols for @bradygaster/squad-sdk/clients.
+ * Kept as a re-export of the exact same symbols for @squad/sdk/clients.
  *
  * @module clients
  */

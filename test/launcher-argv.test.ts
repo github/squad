@@ -14,10 +14,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { squadRepoLauncher } from '@bradygaster/squad-sdk/client';
+import { squadRepoLauncher } from '@squad/sdk/client';
 
 const win = process.platform === 'win32';
-const PKG = ['@bradygaster', 'squad-cli'];
+const PKG = ['@squad', 'cli'];
 
 /** Arguments cmd.exe or a shell would rewrite, split or expand. */
 const HOSTILE = [

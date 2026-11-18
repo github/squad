@@ -124,7 +124,7 @@ describe('publish workflow insider promotion graph (Issue #1497, superseded by p
     expect(promotion).toContain('needs: [prepare, publish]');
     expect(promotion).toContain("needs.prepare.outputs.stable_release == 'true'");
     expect(promotion).toContain("needs.publish.outputs.outcome == 'COMPLETE'");
-    expect(promotion).toContain('@bradygaster/squad-sdk');
-    expect(promotion).toContain('@bradygaster/squad-cli');
+    expect(promotion).toContain('@squad/sdk');
+    expect(promotion).toContain('@squad/cli');
   });
 });

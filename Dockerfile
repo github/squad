@@ -7,7 +7,7 @@
 # uid 1001, SIGTERM drain, `squad watch --execute` as the default command).
 #
 # The difference from the reference Dockerfile in that page is where the CLI
-# comes from: instead of `npm install -g @bradygaster/squad-cli` at image build
+# comes from: instead of `npm install -g @squad/cli` at image build
 # time, this copies a self-contained bundle produced by
 # scripts/build-standalone.mjs. npm is used only inside the builder stage, so
 # the final image has no dependency on registry.npmjs.org — matching the goal

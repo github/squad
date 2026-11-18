@@ -50,11 +50,11 @@ const {
 
 // ── Module mocks ────────────────────────────────────────────────────
 
-vi.mock('@bradygaster/squad-sdk', () => ({
+vi.mock('@squad/sdk', () => ({
   FSStorageProvider: vi.fn(function () { return mockStorage; }),
 }));
 
-vi.mock('@bradygaster/squad-sdk/client', () => ({
+vi.mock('@squad/sdk/client', () => ({
   SquadClient: vi.fn(function () {
     return {
       listModels: mockListModels,

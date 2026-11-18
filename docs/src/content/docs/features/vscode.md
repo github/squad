@@ -24,7 +24,7 @@ Install the CLI with any method in the
 [Installation guide](../get-started/installation.md). For example, with npm:
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
 Creates `.github/agents/squad.agent.md` and `.squad/templates/`. Then open VS Code and select **Squad** from the agent picker.
@@ -165,8 +165,8 @@ if (!isVSCodeMode) {
 **DO:** Import specific types and functions
 
 ```typescript
-import type { CastMember, AgentCharter } from '@bradygaster/squad-sdk';
-import { loadConfig, resolveSquad } from '@bradygaster/squad-sdk';
+import type { CastMember, AgentCharter } from '@squad/sdk';
+import { loadConfig, resolveSquad } from '@squad/sdk';
 ```
 
 **DON'T:** Import the CLI entry point — this will call `process.exit()` and crash your extension.
@@ -174,7 +174,7 @@ import { loadConfig, resolveSquad } from '@bradygaster/squad-sdk';
 ### Load Configuration
 
 ```typescript
-import { loadConfig, resolveSquad } from '@bradygaster/squad-sdk';
+import { loadConfig, resolveSquad } from '@squad/sdk';
 
 try {
   const squadPath = resolveSquad(workspaceRoot);
@@ -189,7 +189,7 @@ try {
 ### Spawn Agents
 
 ```typescript
-import { SquadCoordinator } from '@bradygaster/squad-sdk';
+import { SquadCoordinator } from '@squad/sdk';
 
 const coordinator = new SquadCoordinator({ teamRoot: squadPath });
 await coordinator.initialize();
@@ -201,7 +201,7 @@ await coordinator.execute(decision, 'refactor this function');
 ### Stream Responses
 
 ```typescript
-import { startStreaming } from '@bradygaster/squad-sdk';
+import { startStreaming } from '@squad/sdk';
 
 const stream = await startStreaming(agentResponse);
 for await (const chunk of stream) {

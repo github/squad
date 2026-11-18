@@ -10,7 +10,7 @@
  * @module cli/commands/update-check
  */
 
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import { type CacheData, getCachePath, fetchLatestVersion, writeCache } from '../self-update.js';
 import { parseVersion, isNewer, type ReleaseChannel } from '../upgrade.js';
 import { getPackageVersion } from '../core/version.js';

@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { CopilotSession } from '@github/copilot-sdk';
-import { normalizeToolNameForCopilot } from '@bradygaster/squad-sdk/client';
+import { normalizeToolNameForCopilot } from '@squad/sdk/client';
 import type { MessageConnection } from 'vscode-jsonrpc/node';
 import type { Tool } from '@github/copilot-sdk';
 

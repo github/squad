@@ -21,6 +21,9 @@ import { tmpdir } from 'node:os';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const NODE_MODULES = join(ROOT, 'node_modules');
 const SYNTHETIC_MARKER = 'QUARTZ_NAVIGATOR_SYNTHETIC_TEAM';
+const [SDK_SCOPE, SDK_BARE] = JSON.parse(
+  readFileSync(join(ROOT, 'scripts', 'release', 'distribution-identity.json'), 'utf8'),
+).npm.sdk.current.split('/');
 
 if (!existsSync(NODE_MODULES)) {
   throw new Error('node_modules is required; restore the locked dependencies before running this check');
@@ -57,7 +60,7 @@ function linkDependencies(destination) {
     const source = join(NODE_MODULES, entry.name);
     const target = join(destinationModules, entry.name);
 
-    if (entry.name !== '@bradygaster') {
+    if (entry.name !== SDK_SCOPE) {
       symlinkSync(source, target, entry.isDirectory() ? 'dir' : 'file');
       continue;
     }
@@ -65,7 +68,7 @@ function linkDependencies(destination) {
     mkdirSync(target);
     for (const scopedEntry of readdirSync(source, { withFileTypes: true })) {
       const scopedTarget = join(target, scopedEntry.name);
-      if (scopedEntry.name === 'squad-sdk') {
+      if (scopedEntry.name === SDK_BARE) {
         symlinkSync(join(destination, 'packages', 'squad-sdk'), scopedTarget, 'dir');
       } else {
         symlinkSync(

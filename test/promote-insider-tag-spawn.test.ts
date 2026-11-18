@@ -20,18 +20,18 @@ describe('promoteInsiderTag npm command flow (Issue #1497)', () => {
       .mockReturnValueOnce({ status: 0, stdout: '{"insider":"0.12.0"}\n', stderr: '' })
       .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' });
 
-    promoteInsiderTag('@bradygaster/squad-sdk', '0.13.0');
+    promoteInsiderTag('@squad/sdk', '0.13.0');
 
     expect(spawnSyncMock).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(/^npm(?:\.cmd)?$/),
-      ['view', '@bradygaster/squad-sdk@0.13.0', 'version', '--json'],
+      ['view', '@squad/sdk@0.13.0', 'version', '--json'],
       expect.any(Object),
     );
     expect(spawnSyncMock).toHaveBeenNthCalledWith(
       3,
       expect.stringMatching(/^npm(?:\.cmd)?$/),
-      ['dist-tag', 'add', '@bradygaster/squad-sdk@0.13.0', 'insider'],
+      ['dist-tag', 'add', '@squad/sdk@0.13.0', 'insider'],
       expect.any(Object),
     );
   });
@@ -39,14 +39,14 @@ describe('promoteInsiderTag npm command flow (Issue #1497)', () => {
   it('does not promote an unpublished package version', () => {
     spawnSyncMock.mockReturnValueOnce({ status: 1, stdout: '', stderr: 'E404 not found' });
 
-    expect(() => promoteInsiderTag('@bradygaster/squad-cli', '0.13.0')).toThrow(
-      /npm view failed for @bradygaster\/squad-cli@0\.13\.0/,
+    expect(() => promoteInsiderTag('@squad/cli', '0.13.0')).toThrow(
+      /npm view failed for @squad\/cli@0\.13\.0/,
     );
 
     expect(spawnSyncMock).toHaveBeenCalledTimes(1);
     expect(spawnSyncMock.mock.calls[0][1]).toEqual([
       'view',
-      '@bradygaster/squad-cli@0.13.0',
+      '@squad/cli@0.13.0',
       'version',
       '--json',
     ]);
@@ -58,8 +58,8 @@ describe('promoteInsiderTag npm command flow (Issue #1497)', () => {
       .mockReturnValueOnce({ status: 0, stdout: '{"insider":"0.12.0"}\n', stderr: '' })
       .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'permission denied' });
 
-    expect(() => promoteInsiderTag('@bradygaster/squad-sdk', '0.13.0')).toThrow(
-      /npm dist-tag add failed for @bradygaster\/squad-sdk@0\.13\.0/,
+    expect(() => promoteInsiderTag('@squad/sdk', '0.13.0')).toThrow(
+      /npm dist-tag add failed for @squad\/sdk@0\.13\.0/,
     );
 
     expect(spawnSyncMock).toHaveBeenCalledTimes(3);

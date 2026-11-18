@@ -10,7 +10,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import { effectiveSquadDir } from '../../core/effective-squad-dir.js';
 import { fatal, fatalNoSquad } from '../../core/errors.js';
 import { GREEN, RED, DIM, BOLD, RESET, YELLOW } from '../../core/output.js';
@@ -21,17 +21,17 @@ import {
   parseRoster,
   triageIssue,
   type TriageIssue,
-} from '@bradygaster/squad-sdk/ralph/triage';
-import { RalphMonitor } from '@bradygaster/squad-sdk/ralph';
-import { EventBus } from '@bradygaster/squad-sdk/runtime/event-bus';
+} from '@squad/sdk/ralph/triage';
+import { RalphMonitor } from '@squad/sdk/ralph';
+import { EventBus } from '@squad/sdk/runtime/event-bus';
 import { ghAvailable, ghAuthenticated, ghRateLimitCheck, isRateLimitError } from '../../core/gh-cli.js';
-import type { MachineCapabilities } from '@bradygaster/squad-sdk/ralph/capabilities';
+import type { MachineCapabilities } from '@squad/sdk/ralph/capabilities';
 import {
   PredictiveCircuitBreaker,
   getTrafficLight,
-} from '@bradygaster/squad-sdk/ralph/rate-limiting';
-import { createPlatformAdapter } from '@bradygaster/squad-sdk/platform';
-import type { PlatformAdapter, WorkItem, PullRequest as SdkPullRequest } from '@bradygaster/squad-sdk/platform';
+} from '@squad/sdk/ralph/rate-limiting';
+import { createPlatformAdapter } from '@squad/sdk/platform';
+import type { PlatformAdapter, WorkItem, PullRequest as SdkPullRequest } from '@squad/sdk/platform';
 
 import type { WatchConfig } from './config.js';
 import { parseWatchDuration, watchBoundReason } from './bounds.js';
@@ -342,7 +342,7 @@ async function runCheck(
       vlog?.log(`  #${issue.number}: "${issue.title}" [${labels}] assignees=[${assignees}]`);
     }
 
-    const { filterByCapabilities } = await import('@bradygaster/squad-sdk/ralph/capabilities');
+    const { filterByCapabilities } = await import('@squad/sdk/ralph/capabilities');
     const { handled: capableIssues, skipped: incapableIssues } = filterByCapabilities(issues, capabilities);
 
     for (const { issue, missing } of incapableIssues) {
@@ -816,7 +816,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   const modules = parseModuleOwnership(routingContent);
 
   // Load machine capabilities (#514)
-  const { loadCapabilities } = await import('@bradygaster/squad-sdk/ralph/capabilities');
+  const { loadCapabilities } = await import('@squad/sdk/ralph/capabilities');
   const capabilities = await loadCapabilities(teamRoot);
   if (capabilities) {
     console.log(`${DIM}📦 Machine: ${capabilities.machine} — ${capabilities.capabilities.length} capabilities loaded${RESET}`);
@@ -878,7 +878,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
 
   // Work claims (ADR-002): flag > config.json watch.claims > none
   const { resolveExecutorIdentity, DEFAULT_CLAIM_TTL_MS, DEFAULT_CLAIM_SKEW_MARGIN_MS } =
-    await import('@bradygaster/squad-sdk/ralph/claims');
+    await import('@squad/sdk/ralph/claims');
   const { createWatchClaimProvider, describeClaimProvider, resolveWorkRepo } = await import('./claims.js');
   // Hostname fallback is pseudonymized, salted with the (unpublished) team root path.
   const executor = resolveExecutorIdentity({ capabilities, actor: config.authUser, hostnameSalt: path.resolve(teamRoot) });
@@ -909,7 +909,7 @@ export async function runWatch(dest: string, options: WatchOptions | WatchConfig
   }
   let claimTelemetry: { shutdown: () => Promise<void> } | undefined;
   if (claimProvider.guarantees.exclusion !== 'none' && isWatchTelemetryEnabled()) {
-    const { initSquadTelemetry } = await import('@bradygaster/squad-sdk');
+    const { initSquadTelemetry } = await import('@squad/sdk');
     const initialized = initializeWatchClaimMetrics(
       claimProvider,
       () => initSquadTelemetry({ serviceName: 'squad-watch', mode: 'cli', installTransport: false }),

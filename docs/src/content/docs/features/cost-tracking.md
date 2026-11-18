@@ -59,7 +59,7 @@ The current session is the Squad session of the newest record in the ledger. If 
 ## Budget Configuration
 
 ```typescript
-import { defineSquad, defineAgent, defineBudget } from '@bradygaster/squad-sdk';
+import { defineSquad, defineAgent, defineBudget } from '@squad/sdk';
 
 export default defineSquad({
   defaults: {

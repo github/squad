@@ -4,12 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 // keep the real SDK (squad upgrade code imports much of it); only resolveSquadState is stubbed
-vi.mock('@bradygaster/squad-sdk', async (importOriginal) => ({
+vi.mock('@squad/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveSquadState: vi.fn(),
 }));
 
-import { resolveSquadState } from '@bradygaster/squad-sdk';
+import { resolveSquadState } from '@squad/sdk';
 import {
   BACKEND_CONTRACT_STAGE,
   BACKEND_PROTOCOL_VERSION,
@@ -24,7 +24,7 @@ import {
   type HarnessAdapter,
   type HarnessEventEnvelope,
   type SquadBackend,
-} from '@bradygaster/squad-sdk/backend';
+} from '@squad/sdk/backend';
 import {
   BLOCK_BEGIN,
   CLIENT_IDS,
@@ -43,7 +43,7 @@ import {
   type ClientContext,
   type ClientId,
   type RuntimeBinding,
-} from '@bradygaster/squad-sdk/clients';
+} from '@squad/sdk/clients';
 import {
   backfillCastingRegistryFromTeam,
   ensureCastingRegistryPair,
@@ -52,7 +52,7 @@ import {
   parseAgentProvenanceRegistry,
   readCastingRegistryPair,
   repairHandwrittenCastingRegistry,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 import { ensureCastingDefaults, ensureGitattributes, ensureGitignore, runUpgrade } from '../packages/squad-cli/src/cli/core/upgrade.js';
 import { isInteractiveSession, runInit } from '../packages/squad-cli/src/cli/core/init.js';
 import { persistClients } from '../packages/squad-cli/src/cli/core/clients.js';
@@ -63,7 +63,7 @@ import type {
   HarnessAdapter as CRHarness,
   HarnessEventEnvelope as CRHarnessEvent,
   SquadBackend as CRBackend,
-} from '@bradygaster/squad-sdk/backend';
+} from '@squad/sdk/backend';
 
 const SUITE = path.resolve(__dirname, '..', 'test-fixtures', 'spec', 'suite-v0.2');
 const matrix = JSON.parse(fs.readFileSync(path.join(SUITE, 'capability-matrix.json'), 'utf8')) as {
@@ -181,7 +181,7 @@ describe('Scenario 1: client projections and --client', () => {
   let root: string;
   const ctx = (over: Partial<ClientContext> = {}): ClientContext => ({
     root,
-    mcp: { command: 'npx', args: ['-y', '@bradygaster/squad-cli', 'state-mcp'] },
+    mcp: { command: 'npx', args: ['-y', '@squad/cli', 'state-mcp'] },
     ...over,
   });
   beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad20-clients-')); });
@@ -777,7 +777,7 @@ describe('RC1→stable exit 1: upgrade and rollback from a v0.1 workspace', () =
   }));
   const ctx = (): ClientContext => ({
     root,
-    mcp: { command: 'npx', args: ['-y', '@bradygaster/squad-cli', 'state-mcp'] },
+    mcp: { command: 'npx', args: ['-y', '@squad/cli', 'state-mcp'] },
   });
   const readJson = (rel: string) => JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
 
@@ -1151,8 +1151,8 @@ describe('RC1→stable exit 3: clean-room client and harness against the public 
 
   it('exposes the required runtime surface through the public package exports', async () => {
     const rootIndexSrc = fs.readFileSync(path.resolve(__dirname, '..', 'packages/squad-sdk/src/index.ts'), 'utf8');
-    const backendPkg = await import('@bradygaster/squad-sdk/backend');
-    const clientsPkg = await import('@bradygaster/squad-sdk/clients');
+    const backendPkg = await import('@squad/sdk/backend');
+    const clientsPkg = await import('@squad/sdk/clients');
     expect(BACKEND_CONTRACT_STAGE).toBe('experimental');
     expect(backendPkg.BACKEND_CONTRACT_STAGE).toBe('experimental');
     expect(rootIndexSrc).not.toMatch(/\.\/backend\//);
@@ -1169,8 +1169,8 @@ describe('RC1→stable exit 3: clean-room client and harness against the public 
   });
 
   it('declares capabilities per matrix and negotiates the expected intersection for all five clients', async () => {
-    const { createSquadBackend: create } = await import('@bradygaster/squad-sdk/backend');
-    const { getClientAdapter: adapterOf, CLIENT_IDS: ids } = await import('@bradygaster/squad-sdk/clients');
+    const { createSquadBackend: create } = await import('@squad/sdk/backend');
+    const { getClientAdapter: adapterOf, CLIENT_IDS: ids } = await import('@squad/sdk/clients');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad20-cleanroom-caps-'));
     try {
       const backend = create({ kind: 'local', squadDir: dir });
@@ -1186,7 +1186,7 @@ describe('RC1→stable exit 3: clean-room client and harness against the public 
   });
 
   it.each(['file-backed local', 'durable-http'] as const)('executes golden-trace.json end to end (%s)', async (mode) => {
-    const { createSquadBackend: create, DefaultHarnessRegistry: Registry } = await import('@bradygaster/squad-sdk/backend');
+    const { createSquadBackend: create, DefaultHarnessRegistry: Registry } = await import('@squad/sdk/backend');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad20-cleanroom-'));
     try {
       const approval = ev('approval.requested');
@@ -1720,9 +1720,9 @@ describe('claude .gitignore marker block is projected and rolled back', () => {
   });
 });
 describe('client adapter contract is exposed canonically and through the deprecated /clients alias', () => {
-  it('@bradygaster/squad-sdk/client and /clients export the same adapter symbols', async () => {
-    const canonical = await import('@bradygaster/squad-sdk/client');
-    const alias = await import('@bradygaster/squad-sdk/clients');
+  it('@squad/sdk/client and /clients export the same adapter symbols', async () => {
+    const canonical = await import('@squad/sdk/client');
+    const alias = await import('@squad/sdk/clients');
     for (const name of ['createClientAdapter', 'AdapterUnboundError', 'CAPABILITY_TOKENS_BY_HOST', 'capabilityFlagsFromTokens', 'resolveEffectiveCapabilityTokens',
       'getClientAdapter', 'installClients', 'CLIENT_IDS']) {
       expect(canonical, name).toHaveProperty(name);
@@ -1731,7 +1731,7 @@ describe('client adapter contract is exposed canonically and through the depreca
   });
 
   it('R3-12: CAPABILITY_TOKENS_BY_HOST carries the full capability-matrix baseline for all 7 hosts', async () => {
-    const { CAPABILITY_TOKENS_BY_HOST, resolveEffectiveCapabilityTokens } = await import('@bradygaster/squad-sdk/client');
+    const { CAPABILITY_TOKENS_BY_HOST, resolveEffectiveCapabilityTokens } = await import('@squad/sdk/client');
     const projection = new Set(['native-hooks', 'steering-files']);
     for (const id of CLIENT_IDS) {
       const declared = CAPABILITY_TOKENS_BY_HOST[id];
@@ -1749,7 +1749,7 @@ describe('client adapter contract is exposed canonically and through the depreca
   });
 
   it('every host declares tokens that map onto the capability flags consistently', async () => {
-    const { CAPABILITY_TOKENS_BY_HOST, capabilityFlagsFromTokens } = await import('@bradygaster/squad-sdk/client');
+    const { CAPABILITY_TOKENS_BY_HOST, capabilityFlagsFromTokens } = await import('@squad/sdk/client');
     expect(Object.keys(CAPABILITY_TOKENS_BY_HOST).sort()).toEqual([...CLIENT_IDS].sort());
     for (const id of CLIENT_IDS) {
       const flags = capabilityFlagsFromTokens(CAPABILITY_TOKENS_BY_HOST[id], getClientAdapter(id).capabilities.transportModes);
@@ -2005,7 +2005,7 @@ describe('Brady re-review 13 defect repros', () => {
   });
 
   it('11. TOML [[array_table]] boundaries and quoted keys survive upsert/remove', async () => {
-    const { upsertTomlTable, removeTomlTable } = await import('@bradygaster/squad-sdk/client');
+    const { upsertTomlTable, removeTomlTable } = await import('@squad/sdk/client');
     const doc = '[mcp_servers.squad_state]\n"command" = "old"\n\n[[skills.config]]\npath = "/a"\n';
     const out = upsertTomlTable(doc, 'mcp_servers.squad_state', { command: '"squad"' });
     expect(out.match(/command\s*=/g)).toHaveLength(1);
@@ -2014,7 +2014,7 @@ describe('Brady re-review 13 defect repros', () => {
   });
 
   it('12. capability tokens match capability-matrix.json for all 7 hosts', async () => {
-    const { CAPABILITY_TOKENS_BY_HOST } = await import('@bradygaster/squad-sdk/client');
+    const { CAPABILITY_TOKENS_BY_HOST } = await import('@squad/sdk/client');
     for (const id of CLIENT_IDS) {
       expect(CAPABILITY_TOKENS_BY_HOST[id].filter(t => !['native-hooks', 'steering-files'].includes(t)).sort()).toEqual([...matrix.clients[id]!.clientCapabilities].sort());
     }
@@ -2077,7 +2077,7 @@ describe('Open review threads on #2239', () => {
         mcpServers: {
           squad_state: {
             command: '"npx"',
-            args: ['-y', '@bradygaster/squad-cli@0.9.1', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.9.1', 'state-mcp'],
           },
         },
       }, null, 2));

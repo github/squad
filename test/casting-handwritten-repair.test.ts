@@ -13,9 +13,9 @@ import {
   parseTeamRoster,
   readCastingRegistryPair,
   repairHandwrittenCastingRegistry,
-} from '@bradygaster/squad-sdk/casting';
-import { isInteractiveSession, runInit } from '@bradygaster/squad-cli/core/init';
-import { ensureCastingDefaults, runUpgrade } from '@bradygaster/squad-cli/core/upgrade';
+} from '@squad/sdk/casting';
+import { isInteractiveSession, runInit } from '@squad/cli/core/init';
+import { ensureCastingDefaults, runUpgrade } from '@squad/cli/core/upgrade';
 
 const MANIFEST = 'registry-history.commit.json';
 const JOURNAL = 'registry-history.transaction.json';

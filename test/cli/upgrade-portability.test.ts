@@ -6,10 +6,10 @@ import { runInit } from '../../packages/squad-cli/src/cli/core/init.js';
 import { runUpgrade } from '../../packages/squad-cli/src/cli/core/upgrade.js';
 import { getPackageVersion } from '../../packages/squad-cli/src/cli/core/version.js';
 import { STANDALONE_HOME_ENV } from '../../packages/squad-cli/src/cli/core/mcp-spec.js';
-import { squadRepoLauncherArgs } from '@bradygaster/squad-sdk/client';
+import { squadRepoLauncherArgs } from '@squad/sdk/client';
 import { getTemplatesDir } from '../../packages/squad-cli/src/cli/core/templates.js';
 import { copyManagedFile, writeManagedText } from '../../packages/squad-cli/src/cli/core/managed-file.js';
-import { TEAM_CAPABILITIES_BEGIN } from '@bradygaster/squad-sdk/config';
+import { TEAM_CAPABILITIES_BEGIN } from '@squad/sdk/config';
 
 let root: string;
 const originalStandalone = process.env[STANDALONE_HOME_ENV];
@@ -58,7 +58,7 @@ describe('upgrade portability and destination newlines', () => {
       const version = getPackageVersion();
       const fallback = {
         command: 'npx',
-        args: ['-y', `@bradygaster/squad-cli@${version}`, 'state-mcp'],
+        args: ['-y', `@squad/cli@${version}`, 'state-mcp'],
       };
       expect(config.mcpServers.custom).toEqual(custom);
       expect(config.mcpServers.squad_state.env).toEqual({ EXTRA: 'keep' });

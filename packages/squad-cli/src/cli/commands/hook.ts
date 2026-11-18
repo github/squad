@@ -5,8 +5,8 @@
  * Reads the hook event JSON on stdin and prints advisory JSON output. It never blocks: any error
  * prints nothing and exits 0, so a broken hook cannot stop a session.
  */
-import { resolveSquadState } from '@bradygaster/squad-sdk';
-import { CLAUDE_HOOK_EVENTS, runClaudeHook } from '@bradygaster/squad-sdk/client';
+import { resolveSquadState } from '@squad/sdk';
+import { CLAUDE_HOOK_EVENTS, runClaudeHook } from '@squad/sdk/client';
 import { getPackageVersion } from '../core/version.js';
 
 const STDIN_TIMEOUT_MS = 5_000;

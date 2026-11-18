@@ -132,13 +132,13 @@ describe('Claude hooks in .claude/settings.json', () => {
 
   it('opted in, adds one Squad handler per event that runs the MCP launcher with `hook claude <Event>`', () => {
     config({ claudeHooks: 'advisory' });
-    installClients(['claude'], { root, mcp: { command: 'npx', args: ['-y', '@bradygaster/squad-cli@1.2.3', 'state-mcp'] } });
+    installClients(['claude'], { root, mcp: { command: 'npx', args: ['-y', '@squad/cli@1.2.3', 'state-mcp'] } });
     const hooks = JSON.parse(fs.readFileSync(settingsAbs(), 'utf8')).hooks;
     expect(Object.keys(hooks)).toEqual(['SessionStart', 'SubagentStart', 'PreToolUse', 'PostToolUse', 'Stop']);
     expect(hooks.PreToolUse).toEqual([
       {
         matcher: 'Edit|MultiEdit|Write|NotebookEdit',
-        hooks: [{ type: 'command', command: 'npx', args: ['-y', '@bradygaster/squad-cli@1.2.3', 'hook', 'claude', 'PreToolUse'], timeout: 15 }],
+        hooks: [{ type: 'command', command: 'npx', args: ['-y', '@squad/cli@1.2.3', 'hook', 'claude', 'PreToolUse'], timeout: 15 }],
       },
     ]);
     expect(JSON.stringify(hooks)).not.toContain('permissionDecision');

@@ -113,23 +113,23 @@ If `.squad/casting/registry.json` was previously hand-edited by an agent or is e
 - Pre-repair originals are archived at `.squad/casting/handwritten-archive-<sha256>/`.
 - If an entry cannot be proven (for example, bare strings without a role/name object or a roster row with no matching charter folder), `squad upgrade` fails closed and prints the exact dropped entries and how to fix them (`npx squad cast --name <Name> --role "<Role>"`).
 
-### Deprecated `@bradygaster/squad-sdk/clients` alias
+### Deprecated `@squad/sdk/clients` alias
 
-If you import host adapter APIs programmatically, update `@bradygaster/squad-sdk/clients` to the canonical `@bradygaster/squad-sdk/client` subpath. The `/clients` subpath remains exported in 2.0 as a deprecated compatibility alias for the same symbols.
+If you import host adapter APIs programmatically, update `@squad/sdk/clients` to the canonical `@squad/sdk/client` subpath. The `/clients` subpath remains exported in 2.0 as a deprecated compatibility alias for the same symbols.
 
 ### Experimental backend flag (`--experimental-backend`)
 
-`@bradygaster/squad-sdk/backend` (`BACKEND_CONTRACT_STAGE = 'experimental'`) is an opt-in preview surface (DurableSquad Phase 2 server-side integration for remote durable approvals and lease epochs is pending):
+`@squad/sdk/backend` (`BACKEND_CONTRACT_STAGE = 'experimental'`) is an opt-in preview surface (DurableSquad Phase 2 server-side integration for remote durable approvals and lease epochs is pending):
 
 - In `squad state-mcp`, the 11 `squad_backend_*` MCP conversation tools are disabled by default. Pass `--experimental-backend` or set `SQUAD_EXPERIMENTAL_BACKEND=1` to expose them (`SQUAD_BACKEND_URL` alone does not enable them).
-- In SDK code, import `createSquadBackend` / `DurableHttpSquadBackend` from `@bradygaster/squad-sdk/backend` and pass an explicit `https://` `baseUrl` (`http://` only for localhost) and optional `token`.
+- In SDK code, import `createSquadBackend` / `DurableHttpSquadBackend` from `@squad/sdk/backend` and pass an explicit `https://` `baseUrl` (`http://` only for localhost) and optional `token`.
 
 ### Rolling back client projections (`uninstallClients`)
 
 To remove generated host projections and restore shared files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.gitignore`, and shared MCP config files) byte-for-byte outside Squad's managed sections:
 
 ```ts
-import { uninstallClients } from '@bradygaster/squad-sdk/client';
+import { uninstallClients } from '@squad/sdk/client';
 
 uninstallClients(['claude', 'cursor', 'codex'], {
   root: process.cwd(),
@@ -143,7 +143,7 @@ This is **projection uninstall only**. It does not change the installed CLI, you
 
 ### There is no supported downgrade
 
-Never run an older Squad CLI (`npx @bradygaster/squad-cli@<old>`, an old standalone bundle, or a stale global install) against a repository that has been upgraded:
+Never run an older Squad CLI (`npx @squad/cli@<old>`, an old standalone bundle, or a stale global install) against a repository that has been upgraded:
 
 - Old CLIs have no newer-version guard; a real `squad upgrade` from them rewrites the coordinator, skills, workflows and templates back to the old version.
 - 0.9.1's `squad upgrade --dry-run` is **not trustworthy**: it performs the downgrade instead of previewing it. Later 0.13.x–1.1.0 CLIs honor `--dry-run` but still preview overwriting Squad-owned files.
@@ -159,7 +159,7 @@ Squad 2.0 removes some 1.x features outright; the single record of what was remo
 
 ### Downgrading and old CLIs
 
-Squad does not support downgrading in place. Older CLIs have no "newer workspace" guard — a 0.9.x or 1.x `squad upgrade` run against a 2.0 workspace will rewrite Squad-owned files to its own templates without warning, and on 0.9.1 `squad upgrade --dry-run` still writes. To go back, restore `.github/agents/squad.agent.md`, `.github/workflows/squad-*.yml` and `.squad/` from version control, then install the older CLI. Keep the CLI version pinned per repository (`npx @bradygaster/squad-cli@<version>`) when several people work on the same workspace.
+Squad does not support downgrading in place. Older CLIs have no "newer workspace" guard — a 0.9.x or 1.x `squad upgrade` run against a 2.0 workspace will rewrite Squad-owned files to its own templates without warning, and on 0.9.1 `squad upgrade --dry-run` still writes. To go back, restore `.github/agents/squad.agent.md`, `.github/workflows/squad-*.yml` and `.squad/` from version control, then install the older CLI. Keep the CLI version pinned per repository (`npx @squad/cli@<version>`) when several people work on the same workspace.
 
 ---
 
@@ -169,7 +169,7 @@ Squad does not support downgrading in place. Older CLIs have no "newer workspace
 
 ## Tested upgrade paths
 
-Every row below is a pinned, published artifact of an older Squad release driven through `squad init` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (`npm pack` of `@bradygaster/squad-sdk` + `@bradygaster/squad-cli`) by `test/squad-20-upgrade-matrix.test.ts`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: `test-fixtures/spec/suite-v0.2/upgrade-matrix.json` (protocol `upgrade-matrix/v1`).
+Every row below is a pinned, published artifact of an older Squad release driven through `squad init` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (`npm pack` of `@squad/sdk` + `@squad/cli`) by `test/squad-20-upgrade-matrix.test.ts`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: `test-fixtures/spec/suite-v0.2/upgrade-matrix.json` (protocol `upgrade-matrix/v1`).
 
 ### Three different things
 
@@ -183,12 +183,12 @@ Every row below is a pinned, published artifact of an older Squad release driven
 
 ### Runs
 
-All recorded runs executed against **one tree**, commit `9b254ba858abc19ef62e513993d9802312bfe34c`, with harness hash `a9713d320fdb479c…` (sha256 over the suite, renderer, workflow, fs hook and this fixture minus `runs`; the integrity test refuses a recorded run whose harness differs from the committed one, so folding results may change nothing but the runs data).
+All recorded runs executed against **one tree**, commit `758861e6bcc66e2466c1cb66d94f654712aec1e6`, with harness hash `48482391aaaf04da…` (sha256 over the suite, renderer, workflow, fs hook and this fixture minus `runs`; the integrity test refuses a recorded run whose harness differs from the committed one, so folding results may change nothing but the runs data).
 
 | Platform | Arch | Node | Target | Tree (targetSha) | Trigger | Recorded | Outcome |
 |----------|------|------|--------|------------------|---------|----------|---------|
-| Linux (`linux`) | x64 | v22.23.4 | v2.0.0-preview.4 | `9b254ba858ab` | [pull_request](https://github.com/github/squad/actions/runs/43147851248) | 2026-11-12 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
-| Windows (`win32`) | x64 | v22.23.4 | v2.0.0-preview.4 | `9b254ba858ab` | [pull_request](https://github.com/github/squad/actions/runs/43147851248) | 2026-11-12 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
+| Linux (`linux`) | x64 | v22.23.4 | v2.0.0 | `758861e6bcc6` | [pull_request](https://github.com/github/squad/actions/runs/44384646543) | 2026-11-18 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
+| Windows (`win32`) | x64 | v22.23.5 | v2.0.0 | `758861e6bcc6` | [pull_request](https://github.com/github/squad/actions/runs/44384646543) | 2026-11-18 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
 
 ### Producers (pinned, immutable provenance)
 
@@ -395,12 +395,12 @@ Recorded by the `downgrade-probe` check (dry-run on a copy; the only assertion i
 
 | Platform | Producer | Shapes | Observed |
 |----------|----------|--------|----------|
-| `linux` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0-preview.4 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 68 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
+| `linux` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 68 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
 | `linux` | 0.13.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.0.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.0.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.1.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
-| `win32` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0-preview.4 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 67 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
+| `win32` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 67 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
 | `win32` | 0.13.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `win32` | 1.0.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `win32` | 1.0.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |

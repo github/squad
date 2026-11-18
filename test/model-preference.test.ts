@@ -32,7 +32,7 @@ import {
   clampContextTier,
   CATEGORY_ORDER,
   type GitHubModelCategory,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import {
   resolveAgentModel,
   resolveModel as centralResolveModel,
@@ -40,8 +40,8 @@ import {
   buildCatalogCategoryMap,
   type ModelResolutionOptions,
   type ResolvedModel,
-} from '@bradygaster/squad-sdk/agents';
-import { MODELS } from '@bradygaster/squad-sdk';
+} from '@squad/sdk/agents';
+import { MODELS } from '@squad/sdk';
 
 // Temp directory for each test
 let squadDir: string;
@@ -1252,14 +1252,14 @@ describe('legacy config resolveModel delegates to the central resolver (#1720)',
 });
 
 describe('documented resolver entry point (#1720)', () => {
-  it('@bradygaster/squad-sdk/agents exports resolveAgentModel as the same function as its resolveModel', () => {
-    expect(typeof resolveAgentModel, '@bradygaster/squad-sdk/agents must export resolveAgentModel').toBe('function');
+  it('@squad/sdk/agents exports resolveAgentModel as the same function as its resolveModel', () => {
+    expect(typeof resolveAgentModel, '@squad/sdk/agents must export resolveAgentModel').toBe('function');
     expect(resolveAgentModel, 'resolveAgentModel must be an alias of the agents resolveModel, not a fork').toBe(centralResolveModel);
   });
 
   it('model-selection-reference names the subpath that exports resolveAgentModel with provenance', async () => {
     const reference = readFileSync(join(import.meta.dirname, '..', '.squad-templates', 'model-selection-reference.md'), 'utf8');
-    const match = reference.match(/`resolveAgentModel` (?:from|in) `(@bradygaster\/squad-sdk[^`]*)`/);
+    const match = reference.match(/`resolveAgentModel` (?:from|in) `(@squad\/sdk[^`]*)`/);
     expect(match, 'model-selection-reference.md must name the module that exports resolveAgentModel').toBeTruthy();
     const mod = (await import(match![1]!)) as { resolveAgentModel?: (o: unknown) => unknown };
     expect(typeof mod.resolveAgentModel, `${match![1]} must export resolveAgentModel`).toBe('function');

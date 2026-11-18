@@ -24,6 +24,7 @@ export const END = '<!-- UPGRADE-MATRIX:END -->';
 
 const PLATFORM_LABEL = { win32: 'Windows', linux: 'Linux', darwin: 'macOS' };
 const STATUS_ICON = { pass: '✅', fail: '🔴', skipped: '⏭️' };
+const IDENTITY = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'release', 'distribution-identity.json'), 'utf8'));
 
 const esc = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
@@ -129,7 +130,7 @@ export function renderSection(matrix) {
   lines.push('');
   lines.push('## Tested upgrade paths');
   lines.push('');
-  lines.push(`Every row below is a pinned, published artifact of an older Squad release driven through \`squad init\` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (\`npm pack\` of \`@bradygaster/squad-sdk\` + \`@bradygaster/squad-cli\`) by \`test/squad-20-upgrade-matrix.test.ts\`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: \`${path.relative(ROOT, MATRIX_PATH).replace(/\\/g, '/')}\` (protocol \`${matrix.protocol}\`).`);
+  lines.push(`Every row below is a pinned, published artifact of an older Squad release driven through \`squad init\` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (\`npm pack\` of \`${IDENTITY.npm.sdk.current}\` + \`${IDENTITY.npm.cli.current}\`) by \`test/squad-20-upgrade-matrix.test.ts\`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: \`${path.relative(ROOT, MATRIX_PATH).replace(/\\/g, '/')}\` (protocol \`${matrix.protocol}\`).`);
   lines.push('');
   lines.push('### Three different things');
   lines.push('');

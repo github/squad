@@ -16,7 +16,7 @@ import {
   normalizeWorkKey,
   resolveExecutorIdentity,
   workKeyToString,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 import { describeClaimProviderContract, manualClock, testIdentity } from './helpers/claim-provider-contract.js';
 
 describeClaimProviderContract('NoopClaimProvider', () => {

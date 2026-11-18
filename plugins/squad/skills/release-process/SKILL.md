@@ -77,8 +77,8 @@ Choose a unique SemVer version and update all package manifests:
 ```bash
 VERSION=0.14.0-preview.1
 npm version "$VERSION" --workspaces --include-workspace-root --no-git-tag-version
-npm pkg set "dependencies.@bradygaster/squad-sdk=>=$VERSION" \
-  --workspace @bradygaster/squad-cli
+npm pkg set "dependencies.@squad/sdk=>=$VERSION" \
+  --workspace @squad/cli
 npm install --package-lock-only
 ```
 
@@ -129,7 +129,7 @@ The workflow:
 Install the resulting preview:
 
 ```bash
-npm install -g @bradygaster/squad-cli@preview
+npm install -g @squad/cli@preview
 ```
 
 The same preview is available through `brew install --cask squad-preview` and
@@ -215,8 +215,8 @@ Use `insider`, `preview`, or `latest` for `DIST_TAG`:
 VERSION=0.14.0
 DIST_TAG=latest
 
-npm view @bradygaster/squad-sdk "dist-tags.$DIST_TAG"
-npm view @bradygaster/squad-cli "dist-tags.$DIST_TAG"
+npm view @squad/sdk "dist-tags.$DIST_TAG"
+npm view @squad/cli "dist-tags.$DIST_TAG"
 gh release view "v$VERSION"
 ```
 
@@ -278,8 +278,8 @@ Prepare the next development version in a normal PR to `dev`:
 ```bash
 NEXT_VERSION=0.15.0-preview.1
 npm version "$NEXT_VERSION" --workspaces --include-workspace-root --no-git-tag-version
-npm pkg set "dependencies.@bradygaster/squad-sdk=>=$NEXT_VERSION" \
-  --workspace @bradygaster/squad-cli
+npm pkg set "dependencies.@squad/sdk=>=$NEXT_VERSION" \
+  --workspace @squad/cli
 npm install --package-lock-only
 ```
 

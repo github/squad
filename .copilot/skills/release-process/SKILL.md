@@ -30,7 +30,7 @@ Before either channel:
 git fetch origin dev main
 git merge-base origin/dev origin/main
 grep '"version"' package.json packages/squad-sdk/package.json packages/squad-cli/package.json
-node -p "require('./packages/squad-cli/package.json').dependencies['@bradygaster/squad-sdk']"
+node -p "require('./packages/squad-cli/package.json').dependencies['@squad/sdk']"
 grep -F "## [$VERSION]" CHANGELOG.md
 SKIP_BUILD_BUMP=1 npm run build
 npx vitest run
@@ -128,10 +128,10 @@ publication.
 ## Verify
 
 ```bash
-npm view @bradygaster/squad-sdk dist-tags.preview
-npm view @bradygaster/squad-cli dist-tags.preview
-npm view @bradygaster/squad-sdk dist-tags.latest
-npm view @bradygaster/squad-cli dist-tags.latest
+npm view @squad/sdk dist-tags.preview
+npm view @squad/cli dist-tags.preview
+npm view @squad/sdk dist-tags.latest
+npm view @squad/cli dist-tags.latest
 gh release view "v$VERSION"
 ```
 

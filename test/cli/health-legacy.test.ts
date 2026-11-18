@@ -23,8 +23,8 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runSquadHealth, type HealthCheckId, type HealthReport } from '../../packages/squad-cli/src/cli/commands/health.js';
-import { parseRoutingRulesMarkdown } from '@bradygaster/squad-sdk/parsers';
-import { parseCharterMarkdown } from '@bradygaster/squad-sdk/agents';
+import { parseRoutingRulesMarkdown } from '@squad/sdk/parsers';
+import { parseCharterMarkdown } from '@squad/sdk/agents';
 
 let repoRoot: string;
 

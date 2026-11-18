@@ -44,7 +44,7 @@ This replaces manual `.squad/team.md`, `.squad/routing.md`, and agent charters w
 ### 1. Install the SDK
 
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 ### 2. Create `squad.config.ts`
@@ -55,7 +55,7 @@ import {
   defineTeam,
   defineAgent,
   defineRouting,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 export default defineSquad({
   team: defineTeam({
@@ -371,7 +371,7 @@ const telemetry = defineTelemetry({
 Define a reusable skill that agents can load on demand.
 
 ```typescript
-import { defineSkill } from '@bradygaster/squad-sdk';
+import { defineSkill } from '@squad/sdk';
 
 const gitWorkflow = defineSkill({
   name: 'git-workflow',
@@ -530,7 +530,7 @@ import {
   defineHooks,
   defineCasting,
   defineTelemetry,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 export default defineSquad({
   version: '1.0.0',

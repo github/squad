@@ -1,4 +1,4 @@
-# @bradygaster/squad-cli
+# @squad/cli
 
 The programmable multi-agent CLI for GitHub Copilot. Build an AI team, assign roles, and let them work your repo—automating issue triage, code review, documentation, and more through orchestrated AI agents.
 
@@ -20,17 +20,19 @@ registry.
 
 ```bash
 # Global (recommended)
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 
 # Project-local
-npm install --save-dev @bradygaster/squad-cli
+npm install --save-dev @squad/cli
 
 # Preview channel
-npm install -g @bradygaster/squad-cli@preview
+npm install -g @squad/cli@preview
 
 # Insider channel (pre-release builds)
-npm install -g @bradygaster/squad-cli@insider
+npm install -g @squad/cli@insider
 ```
+
+Upgrading from `@bradygaster/squad-cli`? Run `npm uninstall -g @bradygaster/squad-cli` first, since both packages provide the `squad` command. See the [Package Rename guide](https://github.github.com/squad/docs/get-started/package-rename/).
 
 ### Install without npm
 
@@ -398,7 +400,7 @@ ensure your Node.js version is 22.5 or later.
 
 - **Documentation:** [docs.squad.ai](https://docs.squad.ai)
 - **CLI Reference:** [docs.squad.ai/reference/cli](https://docs.squad.ai/reference/cli) — detailed command docs
-- **SDK:** [@bradygaster/squad-sdk](https://www.npmjs.com/package/@bradygaster/squad-sdk) — programmatic API
+- **SDK:** [@squad/sdk](https://www.npmjs.com/package/@squad/sdk) — programmatic API
 - **GitHub:** [github.com/github/squad](https://github.com/github/squad)
 - **Issues:** [github.com/github/squad/issues](https://github.com/github/squad/issues)
 

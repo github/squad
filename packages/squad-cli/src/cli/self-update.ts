@@ -2,7 +2,7 @@
  * Self-update check — Phase 1: background version check with notification.
  *
  * Non-blocking startup check that queries the npm registry for the latest
- * version of @bradygaster/squad-cli and displays a passive banner when
+ * version of @squad/cli and displays a passive banner when
  * an update is available. Results are cached for 24 hours.
  *
  * Disable with: SQUAD_NO_UPDATE_CHECK=1
@@ -12,16 +12,24 @@
 
 import path from 'node:path';
 import os from 'node:os';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 
 const storage = new FSStorageProvider();
 import { compareVersions } from './upgrade.js';
+import { CLI_PACKAGE_NAME, getInstalledCliPackageName, isLegacyCliPackageName } from './core/package-identity.js';
 import { BOLD, RESET, DIM, YELLOW } from './core/output.js';
 
-const PACKAGE_NAME = '@bradygaster/squad-cli';
+const PACKAGE_NAME = CLI_PACKAGE_NAME;
 const REGISTRY_URL = `https://registry.npmjs.org/${PACKAGE_NAME}`;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FETCH_TIMEOUT_MS = 3000; // 3 seconds
+
+/** Upgrade hint; installs under a retired package name must remove it first (same `squad` bin). */
+function updateCommand(): string {
+  const installed = getInstalledCliPackageName();
+  const install = `npm install -g ${PACKAGE_NAME}@latest`;
+  return isLegacyCliPackageName(installed) ? `npm uninstall -g ${installed} && ${install}` : install;
+}
 
 export interface CacheData {
   latestVersion: string;
@@ -117,7 +125,7 @@ export async function notifyIfUpdateAvailable(currentVersion: string): Promise<v
     if (compareVersions(latest, currentVersion) > 0) {
       console.log(
         `\n${YELLOW}⚡${RESET} ${BOLD}Squad v${latest}${RESET} available ${DIM}(you have v${currentVersion})${RESET}` +
-        `\n   Run: ${BOLD}npm install -g @bradygaster/squad-cli@latest${RESET}\n`,
+        `\n   Run: ${BOLD}${updateCommand()}${RESET}\n`,
       );
     }
   } catch {

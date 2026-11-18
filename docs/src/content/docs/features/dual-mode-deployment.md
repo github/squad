@@ -69,14 +69,14 @@ The first manifest that exists is loaded; the search stops there (no merging). I
 
 ## SDK programmatic access
 
-The new exports from `@bradygaster/squad-sdk/ralph/capabilities`:
+The new exports from `@squad/sdk/ralph/capabilities`:
 
 ```typescript
 import {
   getDeploymentMode,
   getPodId,
   type DeploymentMode,
-} from '@bradygaster/squad-sdk/ralph/capabilities';
+} from '@squad/sdk/ralph/capabilities';
 
 const mode: DeploymentMode = getDeploymentMode();  // 'agent-per-node' | 'squad-per-pod'
 const podId: string | undefined = getPodId();       // e.g. 'worker-1', or undefined

@@ -56,7 +56,7 @@ Not sure which to use? See [Choose your interface](get-started/choose-your-inter
 ## Installation
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
 Prefer a package manager or cannot reach npm? Install with Homebrew, WinGet, the
@@ -223,7 +223,7 @@ Squad automatically picks the right response speed based on your request complex
 Define your team in TypeScript instead of maintaining markdown files manually. Write a `squad.config.ts` with type-safe builder functions, and `squad build` generates the `.squad/` governance markdown.
 
 ```typescript
-import { defineSquad, defineTeam, defineAgent, defineRouting } from '@bradygaster/squad-sdk';
+import { defineSquad, defineTeam, defineAgent, defineRouting } from '@squad/sdk';
 
 export default defineSquad({
   team: defineTeam({

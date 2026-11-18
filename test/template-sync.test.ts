@@ -18,7 +18,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
-import { parseAgentProvenanceRegistry } from '@bradygaster/squad-sdk/casting';
+import { parseAgentProvenanceRegistry } from '@squad/sdk/casting';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');

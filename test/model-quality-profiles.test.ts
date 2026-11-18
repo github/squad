@@ -22,17 +22,17 @@ import {
   resolveModel as adapterResolveModel,
   readModelProfile,
   writeModelProfile,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import {
   resolveAgentModel,
   buildCatalogCategoryMap,
   AgentLifecycleManager,
   type ModelResolutionOptions,
   type TaskType,
-} from '@bradygaster/squad-sdk/agents';
-import { MODELS } from '@bradygaster/squad-sdk/runtime/constants';
-import { EventBus } from '@bradygaster/squad-sdk/runtime/event-bus';
-import type { SquadClientWithPool } from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/agents';
+import { MODELS } from '@squad/sdk/runtime/constants';
+import { EventBus } from '@squad/sdk/runtime/event-bus';
+import type { SquadClientWithPool } from '@squad/sdk/client';
 
 const STALE_IDS = ['claude-opus-4.7', 'claude-opus-4.6', 'claude-sonnet-4.6', 'claude-sonnet-4.5', 'gemini-3.1-pro'];
 const NEVER_RECOMMENDED = ['gpt-5.6-sol-fast', 'hydrafusion', 'hydrafusion-max'];

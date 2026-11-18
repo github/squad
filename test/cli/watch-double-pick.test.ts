@@ -29,8 +29,8 @@ import {
   InMemoryClaimStore,
   type ExecutorIdentity,
   type WorkClaimProvider,
-} from '@bradygaster/squad-sdk/ralph/claims';
-import { GitRefClaimProvider } from '@bradygaster/squad-sdk/ralph/claims-git';
+} from '@squad/sdk/ralph/claims';
+import { GitRefClaimProvider } from '@squad/sdk/ralph/claims-git';
 import { ExecuteCapability } from '../../packages/squad-cli/src/cli/commands/watch/capabilities/execute.js';
 import { FleetDispatchCapability } from '../../packages/squad-cli/src/cli/commands/watch/capabilities/fleet-dispatch.js';
 import type { WatchContext } from '../../packages/squad-cli/src/cli/commands/watch/types.js';

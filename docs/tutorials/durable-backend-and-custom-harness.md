@@ -1,6 +1,6 @@
 # Durable backend and custom harness tutorial
 
-> **Experimental Preview — Bring Your Own Server:** `@bradygaster/squad-sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
+> **Experimental Preview — Bring Your Own Server:** `@squad/sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
 
 > **Canonical Published Docs:** See [Squad 2.0 architecture](../src/content/docs/concepts/squad-2-0-architecture.md) and the [SDK Reference](../src/content/docs/reference/sdk.md) on the published Astro docs site for the architectural overview and API surface.
 
@@ -38,7 +38,7 @@ import {
   createSquadBackend,
   type BackendMessage,
   type ProtocolHello,
-} from '@bradygaster/squad-sdk/backend';
+} from '@squad/sdk/backend';
 
 const baseUrl = process.env.SQUAD_BACKEND_URL;
 if (!baseUrl) throw new Error('SQUAD_BACKEND_URL is required');
@@ -111,7 +111,7 @@ import {
   type HarnessDescriptor,
   type HarnessEventEnvelope,
   type HarnessSubmission,
-} from '@bradygaster/squad-sdk/backend';
+} from '@squad/sdk/backend';
 
 import path from 'node:path';
 

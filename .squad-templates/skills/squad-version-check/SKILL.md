@@ -1,6 +1,6 @@
 ---
 name: "squad-version-check"
-description: "Internals of how @bradygaster/squad-cli stamps its version, how `squad upgrade` works (what it preserves vs overwrites), and how to probe the npm registry for the latest version from a coordinator prompt."
+description: "Internals of how @squad/cli stamps its version, how `squad upgrade` works (what it preserves vs overwrites), and how to probe the npm registry for the latest version from a coordinator prompt."
 allowedTools: []
 confidence: medium
 domain: squad-internals
@@ -18,13 +18,13 @@ source: "validated in bradygaster/squad#1173 recon (2026-05-26)."
 
 ## What This Skill Covers
 
-Reusable knowledge about how `@bradygaster/squad-cli` stamps its version into `squad.agent.md`, how `squad upgrade` works, what it preserves vs. overwrites, and how to probe the npm registry for the latest version from a coordinator prompt.
+Reusable knowledge about how `@squad/cli` stamps its version into `squad.agent.md`, how `squad upgrade` works, what it preserves vs. overwrites, and how to probe the npm registry for the latest version from a coordinator prompt.
 
 ---
 
 ## Package & Registry Facts
 
-- **Package name:** `@bradygaster/squad-cli`
+- **Package name:** `@squad/cli`
 - **Registry:** npm (public)
 - **CLI binary:** `squad` (registered via `package.json#bin.squad`)
 - **Node version requirement:** Node ≥22.5.0 (ESM-only codebase)
@@ -74,9 +74,9 @@ Reads the stamped version back from `squad.agent.md`:
 
 ### Self-upgrade path (`selfUpgradeCli()`):
 Detects npm/pnpm/yarn via `npm_execpath` and `npm_config_user_agent`. Runs:
-- npm: `npm install -g @bradygaster/squad-cli@latest`
-- pnpm: `pnpm add -g @bradygaster/squad-cli@latest`
-- yarn: `yarn global add @bradygaster/squad-cli@latest`
+- npm: `npm install -g @squad/cli@latest`
+- pnpm: `pnpm add -g @squad/cli@latest`
+- yarn: `yarn global add @squad/cli@latest`
 Use `@insider` tag for insider builds.
 
 ### `compareSemver(a, b)` utility (in upgrade.js):
@@ -106,7 +106,7 @@ The file is read-only from the upgrade path's perspective. Only the coordinator 
 Use this one-liner from inside a coordinator prompt to fetch dist-tags:
 
 ```
-npm view @bradygaster/squad-cli dist-tags --json
+npm view @squad/cli dist-tags --json
 ```
 
 - Timeout: **5 seconds.** If no response within 5 seconds, abandon and show normal greeting.

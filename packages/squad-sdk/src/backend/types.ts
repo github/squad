@@ -5,7 +5,7 @@
  * conversation backend. Local CLI, MCP and remote durable modes all run
  * through this one contract.
  *
- * @experimental Exported from `@bradygaster/squad-sdk/backend` only while the
+ * @experimental Exported from `@squad/sdk/backend` only while the
  * Squad 2.0 conversation and harness contract stabilizes.
  * @module backend/types
  */

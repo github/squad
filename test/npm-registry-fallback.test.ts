@@ -44,7 +44,7 @@ describe('resolveSquadStateMcpSpec: deterministic exact fallback', () => {
     });
     expect(spec).toEqual({
       command: 'npx',
-      args: ['-y', '@bradygaster/squad-cli@0.0.0', 'state-mcp'],
+      args: ['-y', '@squad/cli@0.0.0', 'state-mcp'],
       source: 'pinned',
     });
   });

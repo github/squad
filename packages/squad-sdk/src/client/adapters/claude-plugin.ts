@@ -40,7 +40,7 @@ export const CLAUDE_PLUGIN_STATIC_FILES: Readonly<Record<string, string>> = {
 /** Marketplace name: users install `squad@squad`. */
 export const CLAUDE_MARKETPLACE_NAME = 'squad';
 
-const CLI_PACKAGE = '@bradygaster/squad-cli';
+const CLI_PACKAGE = '@squad/cli';
 const REPOSITORY = 'https://github.com/github/squad';
 const DESCRIPTION =
   'Squad for Claude Code: a coordinator that routes work to a team of specialist subagents, with shared team state in the squad_state MCP server.';

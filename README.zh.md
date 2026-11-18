@@ -37,7 +37,7 @@ git init
 
 | 安装方式 | 命令 |
 |----------|------|
-| npm（所有平台，需要 Node.js 22.5+） | `npm install -g @bradygaster/squad-cli` |
+| npm（所有平台，需要 Node.js 22.5+） | `npm install -g @squad/cli` |
 | Homebrew（macOS） | `brew install --cask bradygaster/squad/squad` |
 | WinGet（Windows） | `winget install --id bradygaster.Squad --exact` |
 | 安装脚本（macOS/Linux，无需 npm） | 查看[独立安装指南](https://github.github.com/squad/docs/features/standalone-install/) |
@@ -45,6 +45,10 @@ git init
 预览版和 Insider 版也可通过 Homebrew 的 `squad-preview`、
 `squad-insider` cask，或 WinGet 的 `bradygaster.Squad.Preview`、
 `bradygaster.Squad.Insider` 软件包安装。
+
+> **Upgrading from `@bradygaster/squad-cli`?** npm 包已更名为 `@squad/cli` 和
+> `@squad/sdk`。安装前请先运行 `npm uninstall -g @bradygaster/squad-cli`，详见
+> [Package Rename 指南](https://github.github.com/squad/docs/get-started/package-rename/)。
 
 你也可以从 [GitHub Releases](https://github.com/github/squad/releases/latest)
 直接下载 macOS、Linux 或 Windows 压缩包。
@@ -100,7 +104,7 @@ Squad 会提议一个团队 — 每个成员的名字都来自一个持久化的
 
 | 安装方式 | 更新命令 |
 |----------|----------|
-| npm | `npm install -g @bradygaster/squad-cli@latest` |
+| npm | `npm install -g @squad/cli@latest` |
 | Homebrew | `brew upgrade --cask squad` |
 | WinGet | `winget upgrade --id bradygaster.Squad --exact` |
 | 安装脚本 | 重新运行[安装脚本](https://github.github.com/squad/docs/features/standalone-install/#macos-and-linux) |
@@ -271,7 +275,7 @@ Squad 不按人类的时间表工作。当你分配任务时，协调员会同�
 
 ```typescript
 // squad.config.ts
-import { defineSquad, defineTeam, defineAgent } from '@bradygaster/squad-sdk';
+import { defineSquad, defineTeam, defineAgent } from '@squad/sdk';
 
 export default defineSquad({
   team: defineTeam({ name: 'Platform Squad', members: ['@edie', '@mcmanus'] }),
@@ -289,8 +293,8 @@ export default defineSquad({
 ## Monorepo 开发
 
 Squad 是一个包含两个包的 monorepo：
-- **`@bradygaster/squad-sdk`** — 核心运行时和可编程智能体编排库
-- **`@bradygaster/squad-cli`** — 依赖 SDK 的命令行界面
+- **`@squad/sdk`** — 核心运行时和可编程智能体编排库
+- **`@squad/cli`** — 依赖 SDK 的命令行界面
 
 ### 构建
 
@@ -350,4 +354,4 @@ SDK 提供对智能体编排的编程控制 —— 自定义工具、钩子流�
 - [扩展性指南](docs/src/content/docs/guide/extensibility.md)
 - [示例](samples/README.md) —— 八个从入门到进阶的可运行示例
 
-SDK 安装：`npm install @bradygaster/squad-sdk`
+SDK 安装：`npm install @squad/sdk`

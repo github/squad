@@ -15,14 +15,14 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { hostname, tmpdir } from 'node:os';
-import { resolveSquadHome, ensureSquadHome, resolvePresetsDir } from '@bradygaster/squad-sdk/resolution';
+import { resolveSquadHome, ensureSquadHome, resolvePresetsDir } from '@squad/sdk/resolution';
 import {
   listPresets,
   loadPreset,
   applyPreset,
   savePreset,
   seedBuiltinPresets,
-} from '@bradygaster/squad-sdk/presets';
+} from '@squad/sdk/presets';
 import {
   CastingCommitInDoubtError,
   commitCastingRegistryPair,
@@ -30,7 +30,7 @@ import {
   readCastingRegistryPair,
   reconcileAgentProvenanceRegistry,
   recoverCastingRegistryTransaction,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 import {
   _setPresetRegistryHooksForTesting,
   scaffoldPresetIntoSquad,
@@ -1982,7 +1982,7 @@ describe('savePreset()', () => {
 // the same code path via resolveInstallSource — splitting the git clone
 // into a small helper so it can be stubbed is a separate follow-up.
 
-import { installPresetFromSource } from '@bradygaster/squad-sdk/presets';
+import { installPresetFromSource } from '@squad/sdk/presets';
 
 describe('installPresetFromSource() — local paths', () => {
   const originalEnv = process.env['SQUAD_HOME'];

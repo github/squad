@@ -2,11 +2,11 @@
 /**
  * Verify the Squad npm package PAIR on the public registry with bounded backoff.
  *
- * For @bradygaster/squad-sdk and @bradygaster/squad-cli at --version:
+ * For @squad/sdk and @squad/cli at --version:
  *   - `npm view <pkg>@<version> version dist.integrity dist.shasum` must return the version and
  *     the integrity recorded for the locally packed tarball (--local-packs from the publish job),
  *   - `npm view <pkg> dist-tags.<tag>` must equal the version,
- *   - with --install-check: `npm install -g --prefix <tmp> @bradygaster/squad-cli@<tag>` from an
+ *   - with --install-check: `npm install -g --prefix <tmp> @squad/cli@<tag>` from an
  *     isolated HOME must install CLI and SDK at exactly <version> and `--version` must print it.
  *
  * Registry reads that never converge within --max-wait-seconds are reported as UNKNOWN, not as
@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const REGISTRY = process.env.PUBLIC_REGISTRY ?? 'https://registry.npmjs.org/';
-const PACKAGES = ['@bradygaster/squad-sdk', '@bradygaster/squad-cli'];
+const PACKAGES = ['@squad/sdk', '@squad/cli'];
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function arg(k, dflt) { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : dflt; }
@@ -70,15 +70,15 @@ function installCheckRun() {
   writeFileSync(rc, '');
   const env = { ...process.env, HOME: home, USERPROFILE: home, NPM_CONFIG_USERCONFIG: rc, NPM_CONFIG_CACHE: path.join(root, 'cache'), NODE_AUTH_TOKEN: '' };
   try {
-    const r = spawnSync(npm, ['install', '-g', '--prefix', prefix, '--no-audit', '--no-fund', '--ignore-scripts', `--registry=${REGISTRY}`, `@bradygaster/squad-cli@${tag}`], { env, encoding: 'utf8', shell: process.platform === 'win32' });
+    const r = spawnSync(npm, ['install', '-g', '--prefix', prefix, '--no-audit', '--no-fund', '--ignore-scripts', `--registry=${REGISTRY}`, `@squad/cli@${tag}`], { env, encoding: 'utf8', shell: process.platform === 'win32' });
     if (r.status !== 0) return { ok: false, error: (r.stderr || r.stdout || '').slice(-800) };
     const modules = process.platform === 'win32' ? path.join(prefix, 'node_modules') : path.join(prefix, 'lib', 'node_modules');
-    const cliPkg = JSON.parse(readFileSync(path.join(modules, '@bradygaster', 'squad-cli', 'package.json'), 'utf8'));
-    const sdkPath = [path.join(modules, '@bradygaster', 'squad-sdk', 'package.json'), path.join(modules, '@bradygaster', 'squad-cli', 'node_modules', '@bradygaster', 'squad-sdk', 'package.json')].find(existsSync);
+    const cliPkg = JSON.parse(readFileSync(path.join(modules, '@squad', 'cli', 'package.json'), 'utf8'));
+    const sdkPath = [path.join(modules, '@squad', 'sdk', 'package.json'), path.join(modules, '@squad', 'cli', 'node_modules', '@squad', 'sdk', 'package.json')].find(existsSync);
     const sdkPkg = sdkPath ? JSON.parse(readFileSync(sdkPath, 'utf8')) : null;
-    const ver = spawnSync(process.execPath, [path.join(modules, '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js'), '--version'], { env, encoding: 'utf8' });
-    const ok = cliPkg.version === version && sdkPkg?.version === version && cliPkg.dependencies?.['@bradygaster/squad-sdk'] === version && (ver.stdout || '').includes(version);
-    return { ok, cliVersion: cliPkg.version, sdkVersion: sdkPkg?.version ?? null, cliSdkDependency: cliPkg.dependencies?.['@bradygaster/squad-sdk'] ?? null, versionOutput: (ver.stdout || ver.stderr || '').trim().slice(0, 200) };
+    const ver = spawnSync(process.execPath, [path.join(modules, '@squad', 'cli', 'dist', 'cli-entry.js'), '--version'], { env, encoding: 'utf8' });
+    const ok = cliPkg.version === version && sdkPkg?.version === version && cliPkg.dependencies?.['@squad/sdk'] === version && (ver.stdout || '').includes(version);
+    return { ok, cliVersion: cliPkg.version, sdkVersion: sdkPkg?.version ?? null, cliSdkDependency: cliPkg.dependencies?.['@squad/sdk'] ?? null, versionOutput: (ver.stdout || ver.stderr || '').trim().slice(0, 200) };
   } catch (e) {
     return { ok: false, error: String(e).slice(0, 800) };
   } finally {

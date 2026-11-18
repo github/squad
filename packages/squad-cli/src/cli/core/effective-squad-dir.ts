@@ -11,8 +11,8 @@ import { detectSquadDir, type SquadDirInfo } from './detect-squad-dir.js';
 import {
   loadDirConfig,
   resolveExternalStateDir,
-} from '@bradygaster/squad-sdk';
-import { resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+} from '@squad/sdk';
+import { resolveSquadPaths } from '@squad/sdk/resolution';
 
 /**
  * Resolve the effective state directory from a local .squad/ path.

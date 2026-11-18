@@ -3,10 +3,10 @@
 //
 // Squad plugin launcher. Runs the Squad CLI with this process's arguments, resolved in this order:
 //   1. SQUAD_CLI (a command, or a .js entry run with this Node)
-//   2. the project's own install: node_modules/@bradygaster/squad-cli
+//   2. the project's own install: node_modules/@squad/cli
 //   3. a `squad` on PATH (never this plugin's own bin/)
 //   4. the CLI that last ran `squad init` or `squad upgrade` on this machine (~/.squad/cli.json)
-//   5. npx -y @bradygaster/squad-cli@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
+//   5. npx -y @squad/cli@<this plugin's version>, only when SQUAD_ALLOW_NPX=1: it downloads and runs
 //      code, so it is opt-in. Without it, the launcher fails with install instructions.
 // 2, 3 and 4 are skipped when their version is older than this plugin's: an older CLI lacks commands the
 // plugin calls (`dashboard`, `hook --plugin`). The version is read from package.json, BUNDLE-INFO.json
@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PKG = '@bradygaster/squad-cli';
+const PKG = '@squad/cli';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const projectStart = () => process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const ownBin = path.join(root, 'bin');

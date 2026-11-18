@@ -22,9 +22,9 @@
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
-import { resolveSquadHome, ensureSquadHome, resolvePresetsDir } from '@bradygaster/squad-sdk/resolution';
-import { listPresets, loadPreset, applyPreset, savePreset, seedBuiltinPresets, installPresetFromSource } from '@bradygaster/squad-sdk/presets';
-import { resolveSquad } from '@bradygaster/squad-sdk/resolution';
+import { resolveSquadHome, ensureSquadHome, resolvePresetsDir } from '@squad/sdk/resolution';
+import { listPresets, loadPreset, applyPreset, savePreset, seedBuiltinPresets, installPresetFromSource } from '@squad/sdk/presets';
+import { resolveSquad } from '@squad/sdk/resolution';
 import { success, warn, info, BOLD, RESET, DIM } from '../core/output.js';
 import { fatal } from '../core/errors.js';
 

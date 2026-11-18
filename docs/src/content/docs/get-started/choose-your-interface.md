@@ -35,13 +35,13 @@ squad watch
 squad aspire
 ```
 See [CLI Reference](../reference/cli.md) for all commands.
-### SDK (`@bradygaster/squad-sdk`)
+### SDK (`@squad/sdk`)
 Programmatic access for building tools on top of Squad. Typed APIs, routing config, agent lifecycle hooks.
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 ```typescript
-import { resolveSquad, loadConfig, SquadCoordinator } from '@bradygaster/squad-sdk';
+import { resolveSquad, loadConfig, SquadCoordinator } from '@squad/sdk';
 ```
 See [SDK Reference](../reference/sdk.md) for the complete API.
 ### Copilot Coding Agent (`@copilot`)

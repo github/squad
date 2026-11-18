@@ -9,7 +9,7 @@ This guide covers connecting to the Copilot SDK via Squad's adapter layer, manag
 `SquadClient` wraps `@github/copilot-sdk` with lifecycle management and auto-reconnection:
 
 ```typescript
-import { SquadClient } from '@bradygaster/squad-sdk';
+import { SquadClient } from '@squad/sdk';
 
 const client = new SquadClient({
   port: 3000,
@@ -29,7 +29,7 @@ The client tracks connection state via `SquadConnectionState`: `disconnected →
 Use `SquadClientWithPool` for production workloads — it composes `SquadClient`, `SessionPool`, and `EventBus`:
 
 ```typescript
-import { SquadClientWithPool } from '@bradygaster/squad-sdk';
+import { SquadClientWithPool } from '@squad/sdk';
 
 const squad = new SquadClientWithPool({
   client: clientOptions,

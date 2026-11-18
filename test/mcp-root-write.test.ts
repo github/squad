@@ -33,7 +33,7 @@ import type { SquadStateMcpSpec } from '../packages/squad-cli/src/cli/core/mcp-s
 const PINNED_SPEC: SquadStateMcpSpec = {
   source: 'pinned',
   command: 'npx',
-  args: ['-y', '@bradygaster/squad-cli@0.9.6-preview.14', 'state-mcp'],
+  args: ['-y', '@squad/cli@0.9.6-preview.14', 'state-mcp'],
 };
 
 function legacySimpleHash(input: string): string {
@@ -137,7 +137,7 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
           mcpServers: {
             squad_state: {
               command: 'npx',
-              args: ['-y', '@bradygaster/squad-cli@0.0.1-old', 'state-mcp'],
+              args: ['-y', '@squad/cli@0.0.1-old', 'state-mcp'],
               env: {
                 npm_config_registry: 'https://internal-proxy.example/npm/',
                 npm_config_allow_remote: 'all',
@@ -296,17 +296,17 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
         mcpServers: {
           [key]: {
             command: 'npx',
-            args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
             env: {},
             tools: ['*'],
           },
           ...Object.fromEntries(legacyKeys.map(legacyKey => [legacyKey, {
             command: 'npx',
-            args: ['-y', '@bradygaster/squad-cli@0.9.6', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.9.6', 'state-mcp'],
           }])),
           [otherKey]: {
             command: 'npx',
-            args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
           },
           custom: { command: 'custom-mcp', args: [] },
         },
@@ -343,11 +343,11 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
           mcpServers: {
             [legacyKey]: {
               command: 'npx',
-              args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+              args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
             },
             [unrelatedKey]: {
               command: 'npx',
-              args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+              args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
             },
           },
         }, null, 2) + '\n');
@@ -380,11 +380,11 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
           mcpServers: {
             [legacyKey]: {
               command: 'npx',
-              args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+              args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
             },
             [unrelatedKey]: {
               command: 'npx',
-              args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+              args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
             },
           },
         }, null, 2) + '\n');
@@ -427,7 +427,7 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
         mcpServers: {
           [key]: {
             command: 'npx',
-            args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
           },
         },
       }, null, 2) + '\n';
@@ -453,7 +453,7 @@ describe('iter-8 mcp-root: repo-root .mcp.json writer + project tombstone', () =
         mcpServers: {
           [key]: {
             command: 'npx',
-            args: ['-y', '@bradygaster/squad-cli@0.10.0', 'state-mcp'],
+            args: ['-y', '@squad/cli@0.10.0', 'state-mcp'],
           },
           custom: { command: 'custom-mcp', args: [] },
         },

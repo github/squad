@@ -24,8 +24,8 @@
 
 | Before | After |
 |--------|-------|
-| `npx github:bradygaster/squad` | `npm install -g @bradygaster/squad-cli` |
-| `@bradygaster/create-squad` | `@bradygaster/squad-cli` |
+| `npx github:bradygaster/squad` | `npm install -g @squad/cli` |
+| `@bradygaster/create-squad` | `@squad/cli` |
 | `.ai-team/` directory | `.squad/` directory |
 | v0.5.4 (beta) | v2.0.0 (stable) |
 
@@ -33,16 +33,16 @@
 
 ## Upgrading from v1.x to v2.0
 
-If you are already on Squad v1.x (`@bradygaster/squad-cli` and `@bradygaster/squad-sdk`), upgrading to v2.0 requires no reinitialization:
+If you are already on Squad v1.x (`@squad/cli` and `@squad/sdk`), upgrading to v2.0 requires no reinitialization:
 
 ```bash
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 squad upgrade
 ```
 
 - **Copilot-only projects:** `squad upgrade` without `--client` updates `.github/agents/squad.agent.md` and templates in place without creating files for other AI hosts.
-- **Multi-host projections:** Pass `--client claude,kiro,opencode,cursor,codex,antigravity` (or `--client all`) to `squad init` or `squad upgrade` to project your team across all 7 supported hosts; use `uninstallClients()` from `@bradygaster/squad-sdk/client` for byte-preserving rollback.
-- **SDK imports:** `@bradygaster/squad-sdk/client` is the canonical subpath for client and host-adapter APIs (`@bradygaster/squad-sdk/clients` is retained as a deprecated alias). Experimental backend APIs live under `@bradygaster/squad-sdk/backend`.
+- **Multi-host projections:** Pass `--client claude,kiro,opencode,cursor,codex,antigravity` (or `--client all`) to `squad init` or `squad upgrade` to project your team across all 7 supported hosts; use `uninstallClients()` from `@squad/sdk/client` for byte-preserving rollback.
+- **SDK imports:** `@squad/sdk/client` is the canonical subpath for client and host-adapter APIs (`@squad/sdk/clients` is retained as a deprecated alias). Experimental backend APIs live under `@squad/sdk/backend`.
 - **Full details:** See [Upgrading to Squad 2.0](../scenarios/upgrading.md#upgrading-to-squad-20) and [Using Squad across clients](../scenarios/using-squad-across-clients.md).
 - **Which old versions are verified:** [Tested upgrade paths](../scenarios/upgrading.md#tested-upgrade-paths) lists every published release (0.9.1 through 1.1.0, pinned npm tarball or GitHub Release bundle) that the CI matrix upgrades on Windows and Linux under each project state shape, with per-row results, every not-applicable cell explained, and the known findings. There is no supported downgrade — see [There is no supported downgrade](../scenarios/upgrading.md#there-is-no-supported-downgrade).
 
@@ -113,12 +113,12 @@ This is the biggest jump. The codebase was rewritten in TypeScript, the `.squad/
 
    **Global (recommended):**
    ```bash
-   npm install -g @bradygaster/squad-cli@latest
+   npm install -g @squad/cli@latest
    ```
 
    **Local (project dependency):**
    ```bash
-   npm install --save-dev @bradygaster/squad-cli@latest
+   npm install --save-dev @squad/cli@latest
    ```
 
 4. **Remove the old `.squad/` directory:**
@@ -174,12 +174,12 @@ If you're already on v0.8.x or a later release, this is a simple update.
 
 **Global:**
 ```bash
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 ```
 
 **Local:**
 ```bash
-npm install --save-dev @bradygaster/squad-cli@latest
+npm install --save-dev @squad/cli@latest
 ```
 
 Verify the version:
@@ -196,7 +196,7 @@ Your `.squad/` directory is compatible — no reinitialization needed.
 
 ## Scenario 4: Was Using @bradygaster/create-squad
 
-The `@bradygaster/create-squad` package is deprecated. It has been replaced by `@bradygaster/squad-cli`.
+The `@bradygaster/create-squad` package is deprecated. It has been replaced by `@squad/cli`.
 
 ### Switch
 
@@ -205,7 +205,7 @@ The `@bradygaster/create-squad` package is deprecated. It has been replaced by `
 npm uninstall -g @bradygaster/create-squad
 
 # Install the new package
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
 The `squad` command works the same way. Your `.squad/` directory does not need to change if you were already on v0.8.x or later.
@@ -229,7 +229,7 @@ With:
 
 ```bash
 # NEW
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
 Then use the `squad` command directly. If you had this in scripts or CI/CD workflows, update every reference — see [Scenario 8: Using Squad in CI/CD](#scenario-8-using-squad-in-cicd).
@@ -320,7 +320,7 @@ If you run Squad in GitHub Actions or another CI/CD system, update your workflow
     node-version: '22'
 
 - name: Install Squad
-  run: npm install -g @bradygaster/squad-cli@latest
+  run: npm install -g @squad/cli@latest
 
 - name: Run Squad
   run: squad doctor && squad status
@@ -348,7 +348,7 @@ If you import Squad as a library, the package name and API have changed.
 npm install @bradygaster/squad
 
 # NEW
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 ### Import Change
@@ -358,7 +358,7 @@ npm install @bradygaster/squad-sdk
 import { Squad } from '@bradygaster/squad';
 
 // NEW
-import { Squad } from '@bradygaster/squad-sdk';
+import { Squad } from '@squad/sdk';
 ```
 
 ### API Notes
@@ -376,7 +376,7 @@ import { Squad } from '@bradygaster/squad-sdk';
 Squad isn't on your PATH. Install globally:
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
 ### npm 404 error when installing
@@ -384,10 +384,10 @@ npm install -g @bradygaster/squad-cli
 You may be using the old package name. Use the correct name:
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 ```
 
-If the package genuinely isn't published yet, check [the npm page](https://www.npmjs.com/package/@bradygaster/squad-cli) or the [GitHub repo](https://github.com/github/squad) for release status.
+If the package genuinely isn't published yet, check [the npm page](https://www.npmjs.com/package/@squad/cli) or the [GitHub repo](https://github.com/github/squad) for release status.
 
 ### Permission denied during install
 
@@ -450,8 +450,8 @@ squad --version
 If it shows an old version:
 
 ```bash
-npm uninstall -g @bradygaster/squad-cli
-npm install -g @bradygaster/squad-cli@latest
+npm uninstall -g @squad/cli
+npm install -g @squad/cli@latest
 ```
 
 ### Team roster gone after upgrade
@@ -505,7 +505,7 @@ fnm use 22
 If you need to downgrade to the previous stable release:
 
 ```bash
-npm install -g @bradygaster/squad-cli@1.0.1
+npm install -g @squad/cli@1.0.1
 ```
 
 ### Warnings

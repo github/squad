@@ -26,13 +26,15 @@ Choose one method for your platform.
 Use npm when Node.js 22.5 or later is already available:
 
 ```bash
-npm install -g @bradygaster/squad-cli@latest
+npm install -g @squad/cli@latest
 ```
+
+Upgrading from the old `@bradygaster/squad-cli` package? Remove it first with `npm uninstall -g @bradygaster/squad-cli`; both packages provide the `squad` command. See [Package Rename](../package-rename/).
 
 To test an on-demand prerelease from `dev`:
 
 ```bash
-npm install -g @bradygaster/squad-cli@preview
+npm install -g @squad/cli@preview
 ```
 
 ### macOS or Linux install script
@@ -145,11 +147,11 @@ from `.squad/`.
 The SDK is a Node.js project dependency for building tools on top of Squad:
 
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 ```typescript
-import { defineConfig, loadConfig, resolveSquad } from '@bradygaster/squad-sdk';
+import { defineConfig, loadConfig, resolveSquad } from '@squad/sdk';
 ```
 
 See the [SDK Reference](../reference/sdk.md) for the typed configuration,
@@ -161,9 +163,9 @@ Update the CLI through the same channel used to install it:
 
 | Installed with | Update command |
 |----------------|----------------|
-| npm | `npm install -g @bradygaster/squad-cli@latest` |
-| npm preview | `npm install -g @bradygaster/squad-cli@preview` |
-| npm insider | `npm install -g @bradygaster/squad-cli@insider` |
+| npm | `npm install -g @squad/cli@latest` |
+| npm preview | `npm install -g @squad/cli@preview` |
+| npm insider | `npm install -g @squad/cli@insider` |
 | Homebrew | `brew upgrade --cask squad` |
 | Homebrew preview | `brew upgrade --cask squad-preview` |
 | Homebrew insider | `brew upgrade --cask squad-insider` |
@@ -185,7 +187,7 @@ squad doctor
 If you use the SDK, update it separately:
 
 ```bash
-npm install @bradygaster/squad-sdk@latest
+npm install @squad/sdk@latest
 ```
 
 ## Troubleshooting
@@ -211,7 +213,7 @@ current directory and its parents; it never falls back to a user-profile directo
 Update the CLI using its installation channel, then update the SDK:
 
 ```bash
-npm install @bradygaster/squad-sdk@latest
+npm install @squad/sdk@latest
 ```
 
 ## Next step

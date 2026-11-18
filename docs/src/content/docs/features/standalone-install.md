@@ -9,7 +9,7 @@ CI runners behind a corporate firewall, locked-down build agents, and air-gapped
 mirrors. It is also simply a faster install for anyone who does not otherwise
 have a Node toolchain.
 
-`npm install -g @bradygaster/squad-cli` remains fully supported. All install
+`npm install -g @squad/cli` remains fully supported. All install
 methods provide the same Squad CLI; choose based on your platform and whether
 your environment can reach the npm registry.
 

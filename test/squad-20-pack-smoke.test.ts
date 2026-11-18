@@ -1,10 +1,10 @@
 /**
  * Squad 2.0 Packed Clean-Install & v1.1.0 → 2.0 Upgrade/Rollback Smoke Test
  *
- * Packs `@bradygaster/squad-sdk` and `@bradygaster/squad-cli` via `npm pack`,
+ * Packs `@squad/sdk` and `@squad/cli` via `npm pack`,
  * unpacks the published tarball artifacts into an isolated directory, and verifies:
  * 1. Tarball contents include `/client`, `/clients`, `/backend`, `templates/`, and `dist/cli-entry.js` without leaking `.squad/`.
- * 2. Subpath exports (`@bradygaster/squad-sdk/client`, `/clients`, `/backend`) resolve from the packed artifact.
+ * 2. Subpath exports (`@squad/sdk/client`, `/clients`, `/backend`) resolve from the packed artifact.
  * 3. Clean `squad init --client claude,codex` from the packed CLI scaffolds `.squad/` and host projections.
  * 4. Upgrading a v1.1.0 workspace with `squad upgrade --client all --force` repairs a handwritten casting registry,
  *    preserves user `.squad/` state and `.mcp.json` / `CLAUDE.md` content, projects all 7 hosts, and rolls back
@@ -55,7 +55,7 @@ describe('Squad 2.0 npm pack clean-install and v1.1.0 → 2.0 upgrade/rollback s
     const sdkTarball = packPkg(sdkDir);
     const cliTarball = packPkg(cliDir);
 
-    // Unpack both tarballs into stagingDir/node_modules/@bradygaster/{squad-sdk,squad-cli}
+    // Unpack both tarballs into stagingDir/node_modules/@squad/{sdk,cli}
     const unpackInto = (tarball: string, destDir: string) => {
       const extractTmp = mkdtempSync(join(stagingDir, 'extract-'));
       execFileSync('tar', ['-xzf', tarball, '-C', extractTmp], { stdio: 'ignore' });
@@ -64,8 +64,8 @@ describe('Squad 2.0 npm pack clean-install and v1.1.0 → 2.0 upgrade/rollback s
       rmSync(extractTmp, { recursive: true, force: true });
     };
 
-    const unpackedSdk = join(stagingDir, 'node_modules', '@bradygaster', 'squad-sdk');
-    const unpackedCli = join(stagingDir, 'node_modules', '@bradygaster', 'squad-cli');
+    const unpackedSdk = join(stagingDir, 'node_modules', '@squad', 'sdk');
+    const unpackedCli = join(stagingDir, 'node_modules', '@squad', 'cli');
     unpackInto(sdkTarball, unpackedSdk);
     unpackInto(cliTarball, unpackedCli);
 
@@ -95,8 +95,8 @@ describe('Squad 2.0 npm pack clean-install and v1.1.0 → 2.0 upgrade/rollback s
   });
 
   it('packs dist/client, dist/clients, dist/backend, templates, and cli-entry.js without leaking .squad state', () => {
-    const unpackedSdk = join(stagingDir, 'node_modules', '@bradygaster', 'squad-sdk');
-    const unpackedCli = join(stagingDir, 'node_modules', '@bradygaster', 'squad-cli');
+    const unpackedSdk = join(stagingDir, 'node_modules', '@squad', 'sdk');
+    const unpackedCli = join(stagingDir, 'node_modules', '@squad', 'cli');
 
     for (const rel of [
       'dist/index.js',
@@ -113,11 +113,11 @@ describe('Squad 2.0 npm pack clean-install and v1.1.0 → 2.0 upgrade/rollback s
     expect(existsSync(join(unpackedCli, '.squad'))).toBe(false);
   });
 
-  it('resolves @bradygaster/squad-sdk/client, /clients, and /backend from the packed artifact', () => {
+  it('resolves @squad/sdk/client, /clients, and /backend from the packed artifact', () => {
     const script = [
-      'const client = await import("@bradygaster/squad-sdk/client");',
-      'const clients = await import("@bradygaster/squad-sdk/clients");',
-      'const backend = await import("@bradygaster/squad-sdk/backend");',
+      'const client = await import("@squad/sdk/client");',
+      'const clients = await import("@squad/sdk/clients");',
+      'const backend = await import("@squad/sdk/backend");',
       'if (client.installClients !== clients.installClients) throw new Error("alias mismatch");',
       'if (backend.BACKEND_CONTRACT_STAGE !== "experimental") throw new Error("unexpected stage");',
       'console.log(JSON.stringify({ clients: client.CLIENT_IDS, stage: backend.BACKEND_CONTRACT_STAGE }));',
@@ -244,7 +244,7 @@ describe('Squad 2.0 npm pack clean-install and v1.1.0 → 2.0 upgrade/rollback s
 
       // 4. Byte-preserving rollback via uninstallClients from the packed SDK
       const rollbackScript = [
-        'import { uninstallClients, CLIENT_IDS } from "@bradygaster/squad-sdk/client";',
+        'import { uninstallClients, CLIENT_IDS } from "@squad/sdk/client";',
         `const res = uninstallClients(CLIENT_IDS, { root: ${JSON.stringify(v110Repo)}, mcp: { command: "squad", args: ["state-mcp"] } });`,
         'if (res.some(r => r.action === "error")) throw new Error(JSON.stringify(res));',
       ].join(' ');

@@ -19,12 +19,12 @@ import {
   checkGitSyncHooks,
   checkSquadStateBridge,
   checkHistoryArchiveIntegrity,
-} from '@bradygaster/squad-cli/commands/doctor';
-import type { DoctorCheck } from '@bradygaster/squad-cli/commands/doctor';
-import { clearResolveSquadCache } from '@bradygaster/squad-sdk/resolution';
-import { FSStorageProvider, OrphanBranchBackend } from '@bradygaster/squad-sdk';
+} from '@squad/cli/commands/doctor';
+import type { DoctorCheck } from '@squad/cli/commands/doctor';
+import { clearResolveSquadCache } from '@squad/sdk/resolution';
+import { FSStorageProvider, OrphanBranchBackend } from '@squad/sdk';
 import { getPackageVersion } from '../../packages/squad-cli/src/cli/core/version.js';
-import { ensureCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
+import { ensureCastingRegistryPair } from '@squad/sdk/casting';
 
 const TEST_ROOT = join(process.cwd(), `.test-doctor-${randomBytes(4).toString('hex')}`);
 const TEST_PROFILE = join(process.cwd(), `.test-doctor-profile-${randomBytes(4).toString('hex')}`);
@@ -292,7 +292,7 @@ describe('squad doctor', () => {
 
     const check = await checkSquadStateBridge(TEST_ROOT);
     expect(check.status).toBe('fail');
-    expect(check.message).toContain(`@bradygaster/squad-cli@${getPackageVersion()}`);
+    expect(check.message).toContain(`@squad/cli@${getPackageVersion()}`);
     expect(check.message).toContain('dist-tag');
   });
 

@@ -221,7 +221,7 @@ describe('Claude plugin: launcher', () => {
   it("prefers the project's installed CLI over PATH and npx", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-plugin-'));
     try {
-      const entry = path.join(dir, 'node_modules', '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js');
+      const entry = path.join(dir, 'node_modules', '@squad', 'cli', 'dist', 'cli-entry.js');
       fs.mkdirSync(path.dirname(entry), { recursive: true });
       fs.writeFileSync(entry, 'console.log("local:" + process.argv.slice(2).join("|"));\n');
       const r = run({ CLAUDE_PROJECT_DIR: dir }, os.tmpdir());
@@ -250,16 +250,16 @@ describe('Claude plugin: launcher', () => {
     }
     /** A global install: <prefix>/lib/node_modules/<pkg>/bin/squad, linked from bin/squad. */
     function globalCli(version: string) {
-      const pkg = path.join(dir, 'lib', 'node_modules', '@bradygaster', 'squad-cli');
+      const pkg = path.join(dir, 'lib', 'node_modules', '@squad', 'cli');
       stub(path.join(pkg, 'bin', 'squad'), `global@${version}`);
-      fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
+      fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@squad/cli', version }));
       fs.symlinkSync(path.join(pkg, 'bin', 'squad'), path.join(bin, 'squad'));
     }
     const go = (env: Record<string, string> = {}) => run({ PATH: `${bin}:/usr/bin:/bin`, SQUAD_ALLOW_NPX: '1', ...env }, dir).stdout.trim();
 
     it('falls through an older squad on PATH to npx of the plugin version', () => {
       globalCli('2.0.0-preview.3');
-      expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
+      expect(go()).toBe(`npx:-y @squad/cli@${committedVersion} one two words`);
     });
 
     it('runs npx only when SQUAD_ALLOW_NPX is set; otherwise fails with install instructions', () => {
@@ -270,7 +270,7 @@ describe('Claude plugin: launcher', () => {
         const r = run(env, dir);
         expect(r.status, String(allow)).toBe(1);
         expect(r.stdout).toBe(''); // npx never ran
-        expect(r.stderr).toContain(`npm install -g @bradygaster/squad-cli@${committedVersion}`);
+        expect(r.stderr).toContain(`npm install -g @squad/cli@${committedVersion}`);
         expect(r.stderr).toContain('SQUAD_ALLOW_NPX=1');
       }
       for (const allow of ['1', 'true']) expect(go({ SQUAD_ALLOW_NPX: allow })).toMatch(/^npx:/);
@@ -290,18 +290,18 @@ describe('Claude plugin: launcher', () => {
       stub(path.join(bundleDir, 'squad'), `bundle@preview.3`);
       fs.writeFileSync(path.join(bundleDir, 'BUNDLE-INFO.json'), JSON.stringify({ squadVersion: '2.0.0-preview.3' }));
       fs.symlinkSync(path.join(bundleDir, 'squad'), path.join(bin, 'squad'));
-      expect(go()).toBe(`npx:-y @bradygaster/squad-cli@${committedVersion} one two words`);
+      expect(go()).toBe(`npx:-y @squad/cli@${committedVersion} one two words`);
       // A bundle at or past the plugin version is used.
       fs.writeFileSync(path.join(bundleDir, 'BUNDLE-INFO.json'), JSON.stringify({ squadVersion: committedVersion }));
       expect(go()).toBe(`bundle@preview.3:one two words`);
     });
 
     it("skips an older project install, and orders prereleases by semver", () => {
-      const pkg = path.join(dir, 'node_modules', '@bradygaster', 'squad-cli');
+      const pkg = path.join(dir, 'node_modules', '@squad', 'cli');
       fs.mkdirSync(path.join(pkg, 'dist'), { recursive: true });
       fs.writeFileSync(path.join(pkg, 'dist', 'cli-entry.js'), 'console.log("local")\n');
       const local = (version: string) => {
-        fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
+        fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@squad/cli', version }));
         return go({ CLAUDE_PROJECT_DIR: dir });
       };
       const [core, pre = ''] = committedVersion.split('-');

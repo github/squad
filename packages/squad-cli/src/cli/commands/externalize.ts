@@ -16,7 +16,7 @@
 
 import path from 'node:path';
 import { writeFileSync } from 'node:fs';
-import { FSStorageProvider, resolveExternalStateDir, deriveProjectKey } from '@bradygaster/squad-sdk';
+import { FSStorageProvider, resolveExternalStateDir, deriveProjectKey } from '@squad/sdk';
 import { fatal } from '../core/errors.js';
 
 const storage = new FSStorageProvider();

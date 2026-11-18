@@ -5,7 +5,7 @@ import {
   type UsageLedgerReadResult,
   type UsageLedgerRecord,
   type UsageLedgerTurnStart,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 import { fatal } from '../core/errors.js';
 
 interface CostArgs {

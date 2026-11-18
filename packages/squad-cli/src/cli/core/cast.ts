@@ -4,13 +4,13 @@
  */
 
 import { join } from 'node:path';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import {
   getRoleById,
   generateCharterFromRole,
   addAgentToConfig,
   syncTeamCapabilities,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 import {
   CastingEngine,
   acquireCastingRegistryLockAsync,
@@ -21,7 +21,7 @@ import {
   reconcileAgentProvenanceRegistry,
   type CastMember as EngineCastMember,
   type AgentRole as EngineAgentRole,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 import { getTemplatesDir } from './templates.js';
 import { hasCopilot, insertCopilotSection } from './team-md.js';
 

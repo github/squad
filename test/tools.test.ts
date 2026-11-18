@@ -10,10 +10,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ToolRegistry, defineTool, sanitizeArgs, isMutableStateKey, type RouteRequest, type DecisionRecord, type MemoryEntry } from '@bradygaster/squad-sdk/tools';
-import { SessionPool, EventBus } from '@bradygaster/squad-sdk/client';
-import type { FanOutDependencies } from '@bradygaster/squad-sdk/coordinator';
-import type { AgentCharter } from '@bradygaster/squad-sdk/agents';
+import { ToolRegistry, defineTool, sanitizeArgs, isMutableStateKey, type RouteRequest, type DecisionRecord, type MemoryEntry } from '@squad/sdk/tools';
+import { SessionPool, EventBus } from '@squad/sdk/client';
+import type { FanOutDependencies } from '@squad/sdk/coordinator';
+import type { AgentCharter } from '@squad/sdk/agents';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';

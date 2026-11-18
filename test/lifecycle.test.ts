@@ -15,10 +15,10 @@ import {
   readHistory,
   shadowExists,
   deleteHistoryShadow,
-} from '@bradygaster/squad-sdk/agents';
-import { SquadClientWithPool } from '@bradygaster/squad-sdk/client';
-import { EventBus } from '@bradygaster/squad-sdk/runtime/event-bus';
-import { MODELS } from '@bradygaster/squad-sdk';
+} from '@squad/sdk/agents';
+import { SquadClientWithPool } from '@squad/sdk/client';
+import { EventBus } from '@squad/sdk/runtime/event-bus';
+import { MODELS } from '@squad/sdk';
 
 describe('Agent Lifecycle Manager', () => {
   let tempDir: string;

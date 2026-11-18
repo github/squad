@@ -12,15 +12,15 @@ import {
   DEFAULT_CLAIM_TTL_MS,
   NoopClaimProvider,
   claimTimingError,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 import type {
   ClaimRecord,
   ExecutorIdentity,
   FinishOutcome,
   WorkClaimProvider,
   WorkKey,
-} from '@bradygaster/squad-sdk/ralph/claims';
-import { getRemoteUrl, parseAzureDevOpsRemote, parseGitHubRemote } from '@bradygaster/squad-sdk/platform';
+} from '@squad/sdk/ralph/claims';
+import { getRemoteUrl, parseAzureDevOpsRemote, parseGitHubRemote } from '@squad/sdk/platform';
 import type { WatchContext } from './types.js';
 import type { WatchClaimsConfig } from './config.js';
 import type { AgentSpawnResult } from './agent-spawn.js';
@@ -95,7 +95,7 @@ export async function createWatchClaimProvider(
   if (!config || config.provider === 'none') {
     return new NoopClaimProvider({ identity: opts.identity });
   }
-  const { GitRefClaimProvider } = await import('@bradygaster/squad-sdk/ralph/claims-git');
+  const { GitRefClaimProvider } = await import('@squad/sdk/ralph/claims-git');
   return new GitRefClaimProvider({
     identity: opts.identity,
     cwd: opts.teamRoot,

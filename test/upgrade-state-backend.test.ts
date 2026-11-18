@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { migrateStateBackend, ensureOrphanBranch, liftInitMutableStateOntoOrphan } from '../packages/squad-cli/src/cli/commands/migrate-backend.js';
-import { LocalMemoryStore, FSStorageProvider } from '@bradygaster/squad-sdk';
+import { LocalMemoryStore, FSStorageProvider } from '@squad/sdk';
 import { OrphanBranchBackend } from '../packages/squad-sdk/src/state-backend.js';
 import { createStateMcpToolRegistry } from '../packages/squad-cli/src/cli/commands/state-mcp.js';
 

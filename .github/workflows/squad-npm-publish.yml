@@ -340,9 +340,9 @@ jobs:
           [ -n "$NODE_AUTH_TOKEN" ] || { echo "::error::NPM_TOKEN is not configured"; exit 1; }
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
           if [ "$SDK_STATE" = present ]; then
-            npm dist-tag add "@bradygaster/squad-sdk@${VERSION}" "$STAGING_TAG"
+            npm dist-tag add "@squad/sdk@${VERSION}" "$STAGING_TAG"
           elif [ "$SDK_STATE" = missing ]; then
-            npm publish "$PACKS_DIR/bradygaster-squad-sdk-${VERSION}.tgz" --ignore-scripts --access public --provenance --tag "$STAGING_TAG"
+            npm publish "$PACKS_DIR/squad-sdk-${VERSION}.tgz" --ignore-scripts --access public --provenance --tag "$STAGING_TAG"
           else
             echo "::error::SDK registry state must be present or missing, got '$SDK_STATE'"; exit 1
           fi
@@ -357,9 +357,9 @@ jobs:
           [ -n "$NODE_AUTH_TOKEN" ] || { echo "::error::NPM_TOKEN is not configured"; exit 1; }
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
           if [ "$CLI_STATE" = present ]; then
-            npm dist-tag add "@bradygaster/squad-cli@${VERSION}" "$STAGING_TAG"
+            npm dist-tag add "@squad/cli@${VERSION}" "$STAGING_TAG"
           elif [ "$CLI_STATE" = missing ]; then
-            npm publish "$PACKS_DIR/bradygaster-squad-cli-${VERSION}.tgz" --ignore-scripts --access public --provenance --tag "$STAGING_TAG"
+            npm publish "$PACKS_DIR/squad-cli-${VERSION}.tgz" --ignore-scripts --access public --provenance --tag "$STAGING_TAG"
           else
             echo "::error::CLI registry state must be present or missing, got '$CLI_STATE'"; exit 1
           fi
@@ -375,7 +375,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          npm dist-tag add "@bradygaster/squad-sdk@${VERSION}" "$DIST_TAG"
+          npm dist-tag add "@squad/sdk@${VERSION}" "$DIST_TAG"
 
       - name: Promote CLI to the primary channel
         if: steps.existing.outputs.set_cli_primary == 'true'
@@ -384,7 +384,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          npm dist-tag add "@bradygaster/squad-cli@${VERSION}" "$DIST_TAG"
+          npm dist-tag add "@squad/cli@${VERSION}" "$DIST_TAG"
 
       - name: Verify primary channel
         run: node scripts/release/npm-pair-verify.mjs --version "$VERSION" --tag "$DIST_TAG" --local-packs "$PACKS_DIR/local-packs.json" --out "$RECON_DIR/verify-${DIST_TAG}.json" --max-wait-seconds 900
@@ -396,7 +396,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          npm dist-tag add "@bradygaster/squad-sdk@${VERSION}" preview
+          npm dist-tag add "@squad/sdk@${VERSION}" preview
 
       - name: Add preview alias to CLI
         if: steps.existing.outputs.set_cli_preview == 'true'
@@ -405,7 +405,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          npm dist-tag add "@bradygaster/squad-cli@${VERSION}" preview
+          npm dist-tag add "@squad/cli@${VERSION}" preview
 
       - name: Verify preview alias
         if: inputs.add_preview_alias && inputs.dist_tag != 'preview'
@@ -434,7 +434,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          if npm dist-tag rm @bradygaster/squad-sdk "$STAGING_TAG"; then
+          if npm dist-tag rm @squad/sdk "$STAGING_TAG"; then
             echo "outcome=success" >> "$GITHUB_OUTPUT"
           else
             status=$?
@@ -450,7 +450,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          if npm dist-tag rm @bradygaster/squad-cli "$STAGING_TAG"; then
+          if npm dist-tag rm @squad/cli "$STAGING_TAG"; then
             echo "outcome=success" >> "$GITHUB_OUTPUT"
           else
             status=$?
@@ -642,7 +642,7 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          node scripts/promote-insider-tag.mjs @bradygaster/squad-sdk "$NEW_VERSION"
+          node scripts/promote-insider-tag.mjs @squad/sdk "$NEW_VERSION"
       - name: Promote CLI insider dist-tag
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -650,4 +650,4 @@ jobs:
         run: |
           set -euo pipefail
           node "$RELEASE_SCRIPTS_ROOT/assert-publish-identity.mjs" --source-sha "$SOURCE_SHA" --dispatch-sha "${{ github.sha }}" --workflow-sha "${{ github.workflow_sha }}" --tag "$TAG" --evidence-dir "$PACKS_DIR"
-          node scripts/promote-insider-tag.mjs @bradygaster/squad-cli "$NEW_VERSION"
+          node scripts/promote-insider-tag.mjs @squad/cli "$NEW_VERSION"

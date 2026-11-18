@@ -4,7 +4,7 @@
 # works on runners that cannot reach registry.npmjs.org — self-hosted agents
 # behind a corporate firewall, locked-down build machines, air-gapped mirrors.
 #
-# This is the npm-free replacement for the `npx @bradygaster/squad-cli init`
+# This is the npm-free replacement for the `npx @squad/cli init`
 # step in the gh-aw activation job (see the limitation documented in #1587,
 # and the RFC in #1593).
 #

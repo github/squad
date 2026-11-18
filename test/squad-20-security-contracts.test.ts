@@ -2,8 +2,8 @@
  * Squad 2.0 security & isolation contract suite.
  * Spec: docs/proposals/squad-2.0-security-and-isolation.md
  *
- * Every test here exercises SHIPPED product code (`@bradygaster/squad-sdk/backend`,
- * `@bradygaster/squad-sdk/client`, `squad-cli/core/backend-mcp`). Properties the proposal lists
+ * Every test here exercises SHIPPED product code (`@squad/sdk/backend`,
+ * `@squad/sdk/client`, `squad-cli/core/backend-mcp`). Properties the proposal lists
  * under "Future work / not implemented" have no test here on purpose: a test that only proves
  * its own fixture is not evidence.
  */
@@ -161,7 +161,7 @@ describe('G1 path containment: client projections (resolveInsideRoot)', () => {
 // ---------- G2: MCP config merge ----------
 
 describe('G2 MCP config merge (mergeMcpServer / installClients)', () => {
-  const launch = { command: 'npx', args: ['-y', '@bradygaster/squad-cli', 'state-mcp'] };
+  const launch = { command: 'npx', args: ['-y', '@squad/cli', 'state-mcp'] };
   const ctx = (): ClientContext => ({ root, mcp: launch });
 
   it('preserves unrelated servers and top-level keys', () => {

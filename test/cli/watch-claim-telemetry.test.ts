@@ -15,7 +15,7 @@ import {
   type ClaimRecord,
   type ExecutorIdentity,
   type WorkClaimProvider,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 
 interface SpyCounter { add: Mock }
 const instruments = new Map<string, SpyCounter>();
@@ -27,7 +27,7 @@ const spyMeter = {
   }),
 };
 
-vi.mock('@bradygaster/squad-sdk', async (importOriginal) => ({
+vi.mock('@squad/sdk', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getMeter: () => spyMeter,
 }));

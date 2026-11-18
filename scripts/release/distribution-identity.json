@@ -1,0 +1,25 @@
+{
+  "$comment": "Single source of truth for Squad's published distribution identities. `current` is what this tree builds and publishes; `legacy` lists retired identities that existing installs and generated configs may still reference. To change an identity, edit `current` (moving the old value into `legacy`) and run `node scripts/rename-distribution-identity.mjs --write --from <old>` for each renamed entry. See docs/src/content/docs/get-started/package-rename.md.",
+  "npm": {
+    "cli": {
+      "current": "@squad/cli",
+      "legacy": ["@bradygaster/squad-cli"]
+    },
+    "sdk": {
+      "current": "@squad/sdk",
+      "legacy": ["@bradygaster/squad-sdk"]
+    }
+  },
+  "homebrew": {
+    "tap": {
+      "current": "bradygaster/homebrew-squad",
+      "legacy": []
+    }
+  },
+  "winget": {
+    "identifier": {
+      "current": "bradygaster.Squad",
+      "legacy": []
+    }
+  }
+}

@@ -188,7 +188,7 @@ gate G7.
 ### Contract
 
 The SDK module is `packages/squad-sdk/src/ralph/claims.ts`, exported as
-`@bradygaster/squad-sdk/ralph/claims`. The Git provider is `GitRefClaimProvider`
+`@squad/sdk/ralph/claims`. The Git provider is `GitRefClaimProvider`
 in `ralph/claims-git.ts`, with an injectable `GitTransport` and clock. Watch
 receives the provider through `WatchContext.claims` and the identity through
 `WatchContext.executor`; `PlatformAdapter` is unchanged.

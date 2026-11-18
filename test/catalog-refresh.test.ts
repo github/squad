@@ -15,8 +15,8 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globSync } from 'node:fs';
-import { MODEL_CATALOG, DEFAULT_FALLBACK_CHAINS } from '@bradygaster/squad-sdk/config';
-import { MODELS } from '@bradygaster/squad-sdk/runtime/constants';
+import { MODEL_CATALOG, DEFAULT_FALLBACK_CHAINS } from '@squad/sdk/config';
+import { MODELS } from '@squad/sdk/runtime/constants';
 
 /**
  * Model IDs verified as NOT picker-reachable via the copilot-cli models API
