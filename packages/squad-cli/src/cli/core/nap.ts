@@ -10,7 +10,7 @@ import {
   FSStorageProvider,
   findHeadingLineIndices,
   isCommittableDestination,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 const storage = new FSStorageProvider();
 

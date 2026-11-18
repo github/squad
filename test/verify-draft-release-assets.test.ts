@@ -25,11 +25,11 @@ function fixture() {
     writeFileSync(path.join(draftAssetsDir, filename), content);
   }
   const sdk = {
-    filename: `bradygaster-squad-sdk-${VERSION}.tgz`,
+    filename: `squad-sdk-${VERSION}.tgz`,
     sha256: sha256('sdk'),
   };
   const cli = {
-    filename: `bradygaster-squad-cli-${VERSION}.tgz`,
+    filename: `squad-cli-${VERSION}.tgz`,
     sha256: sha256('cli'),
   };
   const checksums = [
@@ -43,8 +43,8 @@ function fixture() {
   writeFileSync(path.join(draftAssetsDir, 'SHA256SUMS.txt'), checksums);
   writeFileSync(packEvidencePath, JSON.stringify({
     packages: {
-      '@bradygaster/squad-sdk': sdk,
-      '@bradygaster/squad-cli': cli,
+      '@squad/sdk': sdk,
+      '@squad/cli': cli,
     },
   }));
   return {
@@ -117,9 +117,9 @@ describe('draft release asset verification', () => {
 
   it('rejects missing, extra, and mismatched npm checksum bindings', () => {
     for (const mutate of [
-      (text: string) => text.replace(/^.+bradygaster-squad-cli.+\n/m, ''),
+      (text: string) => text.replace(/^.+squad-cli.+\n/m, ''),
       (text: string) => `${text}${'a'.repeat(64)}  unexpected.tgz\n`,
-      (text: string) => text.replace(/^[0-9a-f]{64}(  bradygaster-squad-sdk)/m, `${'f'.repeat(64)}$1`),
+      (text: string) => text.replace(/^[0-9a-f]{64}(  squad-sdk)/m, `${'f'.repeat(64)}$1`),
     ]) {
       const item = fixture();
       try {

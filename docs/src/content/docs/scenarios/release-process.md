@@ -19,8 +19,8 @@ CLI versions in lockstep:
 ```bash
 VERSION=2.0.0-preview.4
 npm version "$VERSION" --workspaces --include-workspace-root --no-git-tag-version
-npm pkg set "dependencies.@bradygaster/squad-sdk=>=$VERSION" \
-  --workspace @bradygaster/squad-cli
+npm pkg set "dependencies.@squad/sdk=>=$VERSION" \
+  --workspace @squad/cli
 npm install --package-lock-only
 ```
 
@@ -112,8 +112,8 @@ dependency floor while developing on `dev`.
 Install the preview from npm with:
 
 ```bash
-npm install -g @bradygaster/squad-cli@insider   # canonical self-upgrade channel
-npm install -g @bradygaster/squad-cli@preview   # compatibility alias
+npm install -g @squad/cli@insider   # canonical self-upgrade channel
+npm install -g @squad/cli@preview   # compatibility alias
 ```
 
 Homebrew and WinGet are intentionally unavailable for preview.4.
@@ -224,17 +224,17 @@ Those paths remain on `dev`; no force push or staging branch is needed.
 For preview (both tags must point at the version for both packages):
 
 ```bash
-npm view @bradygaster/squad-sdk dist-tags.insider
-npm view @bradygaster/squad-cli dist-tags.insider
-npm view @bradygaster/squad-sdk dist-tags.preview
-npm view @bradygaster/squad-cli dist-tags.preview
+npm view @squad/sdk dist-tags.insider
+npm view @squad/cli dist-tags.insider
+npm view @squad/sdk dist-tags.preview
+npm view @squad/cli dist-tags.preview
 ```
 
 For stable:
 
 ```bash
-npm view @bradygaster/squad-sdk dist-tags.latest
-npm view @bradygaster/squad-cli dist-tags.latest
+npm view @squad/sdk dist-tags.latest
+npm view @squad/cli dist-tags.latest
 ```
 
 The values must equal the release version, and the `npm-publish-reconciliation-*`
@@ -282,7 +282,7 @@ Open a normal PR to `dev` that sets the next development version, for example:
 ```bash
 NEXT_VERSION=1.3.0-preview.1
 npm version "$NEXT_VERSION" --workspaces --include-workspace-root --no-git-tag-version
-npm pkg set "dependencies.@bradygaster/squad-sdk=>=$NEXT_VERSION" \
-  --workspace @bradygaster/squad-cli
+npm pkg set "dependencies.@squad/sdk=>=$NEXT_VERSION" \
+  --workspace @squad/cli
 npm install --package-lock-only
 ```

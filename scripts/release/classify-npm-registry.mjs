@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PACKAGE_KEYS = [
-  ['sdk', '@bradygaster/squad-sdk'],
-  ['cli', '@bradygaster/squad-cli'],
+  ['sdk', '@squad/sdk'],
+  ['cli', '@squad/cli'],
 ];
 
 export function classifyRegistryVersion({

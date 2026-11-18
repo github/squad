@@ -14,16 +14,16 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { tmpdir } from 'os';
-import { runInit } from '@bradygaster/squad-cli/core/init';
+import { runInit } from '@squad/cli/core/init';
 import {
   runUpgrade,
   ensureGitattributes,
   ensureDirectories,
-} from '@bradygaster/squad-cli/core/upgrade';
+} from '@squad/cli/core/upgrade';
 import {
   commitCastingRegistryPair,
   readCastingRegistryPair,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 
 const TEST_ROOT = join(
   tmpdir(),

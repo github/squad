@@ -9,8 +9,8 @@
  * issue numbers, hostnames, machine ids, or actors.
  */
 
-import { getMeter } from '@bradygaster/squad-sdk';
-import type { FinishOutcome, WorkClaimProvider } from '@bradygaster/squad-sdk/ralph/claims';
+import { getMeter } from '@squad/sdk';
+import type { FinishOutcome, WorkClaimProvider } from '@squad/sdk/ralph/claims';
 import {
   cloneClaimCounters,
   emptyClaimCounters,

@@ -4,9 +4,9 @@
  */
 
 import path from 'node:path';
-import { FSStorageProvider, exportToRepo, parseRepoString } from '@bradygaster/squad-sdk';
-import { readCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
-import type { RepoSpec } from '@bradygaster/squad-sdk';
+import { FSStorageProvider, exportToRepo, parseRepoString } from '@squad/sdk';
+import { readCastingRegistryPair } from '@squad/sdk/casting';
+import type { RepoSpec } from '@squad/sdk';
 import { effectiveSquadDir } from '../core/effective-squad-dir.js';
 import { success, warn, info } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';

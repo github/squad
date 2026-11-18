@@ -12,9 +12,9 @@ import { resolve } from 'node:path';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { TerminalHarness } from './acceptance/harness.js';
-import { parseInput } from '@bradygaster/squad-cli/shell/router';
-import { isInitNoColor } from '@bradygaster/squad-cli/core/init';
-import { loadWelcomeData } from '@bradygaster/squad-cli/shell/lifecycle';
+import { parseInput } from '@squad/cli/shell/router';
+import { isInitNoColor } from '@squad/cli/core/init';
+import { loadWelcomeData } from '@squad/cli/shell/lifecycle';
 import { withGhostRetry } from '../packages/squad-cli/src/cli/shell/index.js';
 
 // ============================================================================

@@ -196,7 +196,7 @@ describe('upgrade-matrix.json integrity', () => {
       if (p.source === 'npm') {
         expect('registry' in p.artifacts, `${p.version}: npm producer needs artifacts.registry`).toBe(true);
         const reg = (p.artifacts as { registry: Record<string, RegistryArtifact> }).registry;
-        for (const name of ['@bradygaster/squad-cli', '@bradygaster/squad-sdk']) {
+        for (const name of ['@squad/cli', '@squad/sdk']) {
           const a = reg[name];
           expect(a, `${p.version}: missing pinned ${name}`).toBeDefined();
           expect(a!.version, `${p.version}: ${name} must be pinned to the exact producer version`).toBe(p.version);
@@ -602,7 +602,7 @@ async function npmCmd(args: string[], cwd: string, env: NodeJS.ProcessEnv): Prom
 }
 
 /**
- * npm producer: fetch the exact pinned tarballs of @bradygaster/squad-cli and @bradygaster/squad-sdk
+ * npm producer: fetch the exact pinned tarballs of @squad/cli and @squad/sdk
  * (`npm pack`, through whatever registry npm is configured for), verify sha1 + sha512 against the
  * fixture (mismatch → FAIL, not skip), then install both tarballs into an isolated prefix so the old
  * CLI runs against the SDK version it shipped with — never a floating `>=` resolution.
@@ -610,7 +610,7 @@ async function npmCmd(args: string[], cwd: string, env: NodeJS.ProcessEnv): Prom
 async function resolveNpmProducer(spec: ProducerSpec): Promise<Producer> {
   const reg = (spec.artifacts as { registry: Record<string, RegistryArtifact> }).registry;
   const dir = path.join(CACHE_ROOT, 'producers', `npm-${spec.version}`);
-  const entry = path.join(dir, 'node_modules', '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js');
+  const entry = path.join(dir, 'node_modules', '@squad', 'cli', 'dist', 'cli-entry.js');
   const registry = process.env['NPM_CONFIG_REGISTRY'] ?? process.env['npm_config_registry'];
   const provenance = Object.entries(reg).map(([n, a]) => `${n}@${a.version} ${a.integrity}`).join('; ');
   const verifiedMarker = path.join(dir, '.verified');
@@ -643,10 +643,10 @@ async function resolveNpmProducer(spec: ProducerSpec): Promise<Producer> {
       rmrf(dir);
       return { spec, exec: null, skipReason: `npm install of the verified ${spec.version} tarballs failed: ${tail(installed.stderr || installed.stdout, 2) || `exit ${installed.code}`}` };
     }
-    const sdkVersion = readJson<{ version: string }>(path.join(dir, 'node_modules', '@bradygaster', 'squad-sdk', 'package.json'))?.version;
-    if (sdkVersion !== reg['@bradygaster/squad-sdk']!.version) {
+    const sdkVersion = readJson<{ version: string }>(path.join(dir, 'node_modules', '@squad', 'sdk', 'package.json'))?.version;
+    if (sdkVersion !== reg['@squad/sdk']!.version) {
       rmrf(dir);
-      return { spec, exec: null, failReason: `installed @bradygaster/squad-sdk@${sdkVersion ?? '?'} instead of the pinned ${reg['@bradygaster/squad-sdk']!.version}` };
+      return { spec, exec: null, failReason: `installed @squad/sdk@${sdkVersion ?? '?'} instead of the pinned ${reg['@squad/sdk']!.version}` };
     }
     fs.writeFileSync(verifiedMarker, provenance + '\n');
   }
@@ -740,13 +740,13 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
       fs.renameSync(path.join(tmp, 'package'), dest);
       rmrf(tmp);
     };
-    unpack(pack(sdkDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-sdk'));
-    unpack(pack(cliDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-cli'));
+    unpack(pack(sdkDir), path.join(staging, 'node_modules', '@squad', 'sdk'));
+    unpack(pack(cliDir), path.join(staging, 'node_modules', '@squad', 'cli'));
     fs.writeFileSync(path.join(staging, 'package.json'), JSON.stringify({ name: 'squad-upgrade-matrix-consumer', private: true, type: 'module' }, null, 2) + '\n');
-    newVersion = (readJson<{ version: string }>(path.join(staging, 'node_modules', '@bradygaster', 'squad-cli', 'package.json')))!.version;
+    newVersion = (readJson<{ version: string }>(path.join(staging, 'node_modules', '@squad', 'cli', 'package.json')))!.version;
     newCli = {
       file: process.execPath,
-      args: [path.join(staging, 'node_modules', '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js')],
+      args: [path.join(staging, 'node_modules', '@squad', 'cli', 'dist', 'cli-entry.js')],
       env: { NODE_PATH: [path.join(staging, 'node_modules'), path.join(ROOT, 'node_modules')].join(path.delimiter) },
     };
 
@@ -1137,7 +1137,7 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
     s.notes.push(`plain upgrade changed ${delta.length} working-tree path(s), all Squad-owned: ${delta.length <= 6 ? delta.join(', ') : `${delta.slice(0, 4).join(', ')} … (+${delta.length - 4})`}${branchBefore ? `; squad-state blobs for ${Object.keys(branchSeeded).length} seeded path(s) identical` : ''}`);
 
     const castingScript = [
-      'import { readCastingRegistryPair } from "@bradygaster/squad-sdk/casting";',
+      'import { readCastingRegistryPair } from "@squad/sdk/casting";',
       `const pair = readCastingRegistryPair(${JSON.stringify(path.join(project, '.squad', 'casting'))});`,
       'const reg = pair.registry; const agents = reg && reg.agents ? Object.keys(reg.agents) : [];',
       'if (!reg || typeof reg.revision !== "number" || !pair.history) throw new Error("registry/history pair invalid: " + JSON.stringify({ hasRegistry: !!reg, revision: reg && reg.revision, hasHistory: !!pair.history }));',
@@ -1231,7 +1231,7 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
     // installed into shared MCP configs are removed, (b) remove every host projection and every
     // Squad-owned entry from host configs, and (c) leave .squad/ user state untouched.
     const uninstallScript = [
-      'import { uninstallClients, CLIENT_IDS } from "@bradygaster/squad-sdk/client";',
+      'import { uninstallClients, CLIENT_IDS } from "@squad/sdk/client";',
       `const res = uninstallClients(CLIENT_IDS, { root: ${JSON.stringify(project)}, mcp: { command: "squad", args: ["state-mcp"] } });`,
       'const errors = res.filter(r => r.action === "error"); if (errors.length) throw new Error(JSON.stringify(errors));',
     ].join(' ');

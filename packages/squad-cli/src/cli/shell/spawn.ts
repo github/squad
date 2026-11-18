@@ -4,10 +4,10 @@
  * Creates SDK sessions via SquadClient, sends the task, and streams the response.
  */
 
-import { resolveSquad } from '@bradygaster/squad-sdk/resolution';
-import { SquadClient } from '@bradygaster/squad-sdk/client';
-import type { SquadSession } from '@bradygaster/squad-sdk/client';
-import { SquadState, FSStorageProvider } from '@bradygaster/squad-sdk';
+import { resolveSquad } from '@squad/sdk/resolution';
+import { SquadClient } from '@squad/sdk/client';
+import type { SquadSession } from '@squad/sdk/client';
+import { SquadState, FSStorageProvider } from '@squad/sdk';
 import { SessionRegistry } from './sessions.js';
 import { dirname } from 'node:path';
 

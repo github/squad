@@ -13,7 +13,7 @@ The Teams adapter (`teams-graph` channel) requires interactive OAuth authenticat
 ### Before (v0.9.x — synchronous)
 
 ```typescript
-import { createCommunicationAdapter } from '@bradygaster/squad-sdk';
+import { createCommunicationAdapter } from '@squad/sdk';
 
 const adapter = createCommunicationAdapter(repoRoot);
 await adapter.postUpdate({ title: 'Hello', body: 'World' });
@@ -22,7 +22,7 @@ await adapter.postUpdate({ title: 'Hello', body: 'World' });
 ### After (v0.10.x — async)
 
 ```typescript
-import { createCommunicationAdapter } from '@bradygaster/squad-sdk';
+import { createCommunicationAdapter } from '@squad/sdk';
 
 const adapter = await createCommunicationAdapter(repoRoot);
 await adapter.postUpdate({ title: 'Hello', body: 'World' });

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveSquadState } from '@bradygaster/squad-sdk';
+import { resolveSquadState } from '@squad/sdk';
 import {
   ALL_CONTENT_PART_TYPES,
   BACKEND_PROTOCOL_VERSION,
@@ -18,7 +18,7 @@ import {
   type BackendMessage,
   type ProtocolHello,
   type SquadBackend,
-} from '@bradygaster/squad-sdk/backend';
+} from '@squad/sdk/backend';
 
 /**
  * MCP TRANSPORT ADAPTER over `SquadBackend`. MCP is only a local bridge for

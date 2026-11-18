@@ -371,7 +371,7 @@ jobs:
                 sub(/^run:[[:space:]]*/, "", command)
                 if (command ~ /(^|&&|\|\||;)[[:space:]]*((if|then)[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+)*npm[[:space:]][^#;&|]*publish([[:space:]]|$)/ &&
                     command !~ /(^|[[:space:]])(-w|--workspace)(=|[[:space:]]|$)/ &&
-                    command !~ /npm publish "\$PACKS_DIR\/bradygaster-squad-(sdk|cli)-\$\{VERSION\}\.tgz"/) {
+                    command !~ /npm publish "\$PACKS_DIR\/(squad-sdk-\$\{VERSION\}\.tgz|squad-cli-\$\{VERSION\}\.tgz)"/) {
                   print NR ":" $0
                 }
               }

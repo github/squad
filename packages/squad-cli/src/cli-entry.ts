@@ -89,8 +89,8 @@ function _handleTopLevelSignal(signal: 'SIGINT' | 'SIGTERM'): void {
 process.on('SIGINT', () => _handleTopLevelSignal('SIGINT'));
 process.on('SIGTERM', () => _handleTopLevelSignal('SIGTERM'));
 
-import { FSStorageProvider, resolveSquadState } from '@bradygaster/squad-sdk';
-import type { SquadStateContext, StateBackendType } from '@bradygaster/squad-sdk';
+import { FSStorageProvider, resolveSquadState } from '@squad/sdk';
+import type { SquadStateContext, StateBackendType } from '@squad/sdk';
 import path from 'node:path';
 import { fatal, fatalNoSquad, SquadError } from './cli/core/errors.js';
 import { BOLD, RESET, DIM, RED, GREEN, YELLOW } from './cli/core/output.js';
@@ -101,7 +101,7 @@ import { printCommandHelp, printGenericCommandHelp } from './cli/core/command-he
 
 // Lazy-load squad-sdk to avoid triggering @github/copilot-sdk import on Node 24+
 // (Issue: copilot-sdk has broken ESM imports - vscode-jsonrpc/node without .js extension)
-const lazySquadSdk = () => import('@bradygaster/squad-sdk');
+const lazySquadSdk = () => import('@squad/sdk');
 const lazyRunShell = () => import('./cli/shell/index.js');
 
 // Use local version resolver instead of importing VERSION from squad-sdk
@@ -304,8 +304,8 @@ async function main(): Promise<void> {
     console.log(`  ${BOLD}--economy${RESET}      Activate economy mode for this session (cheaper models)`);
     console.log(`  ${BOLD}--team-root${RESET}    Override team root path for resolution`);
     console.log(`\nInstallation:`);
-    console.log(`  npm install --save-dev @bradygaster/squad-cli`);
-    console.log(`  npm install --save-dev @bradygaster/squad-cli@insider\n`);
+    console.log(`  npm install --save-dev @squad/cli`);
+    console.log(`  npm install --save-dev @squad/cli@insider\n`);
     return;
   }
 
@@ -390,8 +390,8 @@ async function main(): Promise<void> {
     const initStateBackend = (sbIdx !== -1 && args[sbIdx + 1]) ? args[sbIdx + 1] : undefined;
     runInit(dest, { includeWorkflows: !noWorkflows, sdk, roles, stateBackend: initStateBackend, mcpFrontmatter, clients: initClients, claudePlugin: initClaudePlugin, includeVscodeDefault: !noVscodeDefault }).then(async () => {
       if (presetName) {
-        const { seedBuiltinPresets, applyPreset } = await import('@bradygaster/squad-sdk/presets');
-        const { resolvePresetsDir, ensureSquadHome } = await import('@bradygaster/squad-sdk/resolution');
+        const { seedBuiltinPresets, applyPreset } = await import('@squad/sdk/presets');
+        const { resolvePresetsDir, ensureSquadHome } = await import('@squad/sdk/resolution');
         const nodePath = await import('node:path');
 
         // Auto-initialize squad home + presets if they don't exist yet
@@ -843,7 +843,7 @@ async function main(): Promise<void> {
     if (args.includes('--init')) {
       const fileIdx = args.indexOf('--file');
       const filePath = (fileIdx !== -1 && args[fileIdx + 1]) ? args[fileIdx + 1]! : 'loop.md';
-      const { FSStorageProvider } = await import('@bradygaster/squad-sdk');
+      const { FSStorageProvider } = await import('@squad/sdk');
       const storage = new FSStorageProvider();
       const pathMod = await import('node:path');
       const absPath = pathMod.default.resolve(getSquadStartDir(), filePath);

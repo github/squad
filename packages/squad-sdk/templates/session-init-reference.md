@@ -85,7 +85,7 @@ it. Skip the npm probe.
 **Step B — npm probe (on cache miss / stale / version mismatch):**
 
 ```
-npm view @bradygaster/squad-cli dist-tags --json
+npm view @squad/cli dist-tags --json
 ```
 
 - Timeout: **5 seconds.** If the command does not respond within 5 seconds,

@@ -17,10 +17,10 @@ import {
   writeEconomyMode,
   applyEconomyMode,
   ECONOMY_MODEL_MAP,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import {
   resolveModel as sdkResolveModel,
-} from '@bradygaster/squad-sdk/agents';
+} from '@squad/sdk/agents';
 import { runEconomy } from '../packages/squad-cli/src/cli/commands/economy.js';
 
 let squadDir: string;

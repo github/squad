@@ -25,7 +25,7 @@ import {
   readModelProfile,
   writeModelProfile,
   resolveModel as adapterResolveModel,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import {
   resolveAgentModel,
   buildCatalogCategoryMap,
@@ -34,10 +34,10 @@ import {
   AgentLifecycleManager,
   type ModelResolutionOptions,
   type TaskType,
-} from '@bradygaster/squad-sdk/agents';
-import { MODELS } from '@bradygaster/squad-sdk/runtime/constants';
-import type { SquadClientWithPool } from '@bradygaster/squad-sdk/client';
-import { EventBus } from '@bradygaster/squad-sdk/runtime/event-bus';
+} from '@squad/sdk/agents';
+import { MODELS } from '@squad/sdk/runtime/constants';
+import type { SquadClientWithPool } from '@squad/sdk/client';
+import { EventBus } from '@squad/sdk/runtime/event-bus';
 
 const HF = 'hydrafusion';
 const HF_MAX = 'hydrafusion-max';

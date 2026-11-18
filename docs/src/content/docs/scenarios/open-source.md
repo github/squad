@@ -37,7 +37,7 @@ Squad helps:
 
 ```bash
 cd ~/projects/my-open-source-lib
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 

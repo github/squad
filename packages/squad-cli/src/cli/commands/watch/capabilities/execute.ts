@@ -6,8 +6,8 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { WatchCapability, WatchContext, PreflightResult, CapabilityResult } from '../types.js';
-import type { MachineCapabilities } from '@bradygaster/squad-sdk/ralph/capabilities';
-import { SquadClient, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
+import type { MachineCapabilities } from '@squad/sdk/ralph/capabilities';
+import { SquadClient, readClaudePluginMode } from '@squad/sdk/client';
 import { createVerboseLogger } from '../verbose.js';
 import { loadAgentCharter } from '../../../shell/spawn.js';
 import {
@@ -342,7 +342,7 @@ export class ExecuteCapability implements WatchCapability {
       }));
 
       // `needs:*` routing: only issues this machine can handle (no manifest = all pass)
-      const { filterByCapabilities, loadCapabilities } = await import('@bradygaster/squad-sdk/ralph/capabilities');
+      const { filterByCapabilities, loadCapabilities } = await import('@squad/sdk/ralph/capabilities');
       let capabilities: MachineCapabilities | null = null;
       try {
         capabilities = await loadCapabilities(context.teamRoot);

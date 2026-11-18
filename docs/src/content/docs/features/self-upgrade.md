@@ -26,7 +26,7 @@ Squad can upgrade itself to the latest release on its own channel, then you refr
 1. **Detects package manager** — auto-detects npm, pnpm, or yarn
 2. **Picks the channel** — a prerelease install follows `@insider`, a stable install follows `@latest`; `--insider` forces `@insider`
 3. **Guards against downgrades** — the dist-tag is resolved first; if it points at a version older than the one you run, the upgrade is refused unless you pass `--force`
-4. **Upgrades package** — runs `npm install -g @bradygaster/squad-cli@<tag>` (or pnpm/yarn equivalent)
+4. **Upgrades package** — runs `npm install -g @squad/cli@<tag>` (or pnpm/yarn equivalent)
 
 **Preview first:**
 
@@ -38,7 +38,7 @@ prints the exact command and installs nothing:
 
 ```
 Dry run — would self-upgrade via npm (insider → 2.0.0-preview.2):
-  npm install -g @bradygaster/squad-cli@insider
+  npm install -g @squad/cli@insider
 Nothing was installed. Run without --dry-run to apply.
 ```
 

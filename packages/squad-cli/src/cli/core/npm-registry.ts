@@ -20,7 +20,7 @@ export function _resetNpmRegistryCache(): void {
 }
 
 /**
- * Returns true if `@bradygaster/squad-cli@<version>` is reachable on the npm
+ * Returns true if `@squad/cli@<version>` is reachable on the npm
  * registry, false on any network failure / 404 / non-publishable response.
  *
  * Uses Node's built-in `https` so we don't pull in extra deps. Total budget
@@ -36,7 +36,7 @@ export async function isSquadCliVersionPublished(
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  const url = `https://registry.npmjs.org/@bradygaster%2Fsquad-cli/${encodeURIComponent(version)}`;
+  const url = `https://registry.npmjs.org/@squad%2Fcli/${encodeURIComponent(version)}`;
   const ok = await new Promise<boolean>((resolve) => {
     let settled = false;
     const finish = (v: boolean) => {

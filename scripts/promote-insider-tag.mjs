@@ -27,7 +27,7 @@
  * Usage:
  *   node scripts/promote-insider-tag.mjs <package> <newVersion>
  * Example:
- *   node scripts/promote-insider-tag.mjs @bradygaster/squad-cli 0.11.0
+ *   node scripts/promote-insider-tag.mjs @squad/cli 0.11.0
  *
  * Exit codes:
  *   0 - success (either promoted, or already up to date; both are no-op safe)

@@ -19,8 +19,8 @@ Squad is an npm workspace monorepo with two packages:
 
 ```
 squad/
-├── packages/squad-cli/       # CLI tool (@bradygaster/squad-cli)
-├── packages/squad-sdk/       # Runtime SDK (@bradygaster/squad-sdk)
+├── packages/squad-cli/       # CLI tool (@squad/cli)
+├── packages/squad-sdk/       # Runtime SDK (@squad/sdk)
 ├── src/                      # Legacy CLI code (migrating to packages/)
 ├── dist/                     # Compiled output
 ├── .squad/                   # Team state and agent history
@@ -70,7 +70,7 @@ git fetch upstream dev
 npm install
 ```
 
-npm workspaces automatically links local packages. `@bradygaster/squad-cli` can import from `@bradygaster/squad-sdk` without publishing.
+npm workspaces automatically links local packages. `@squad/cli` can import from `@squad/sdk` without publishing.
 
 ### 2. Build
 
@@ -231,8 +231,8 @@ Creates a file in `.changeset/` that's merged with your PR.
 
 ```markdown
 ---
-"@bradygaster/squad-sdk": patch
-"@bradygaster/squad-cli": patch
+"@squad/sdk": patch
+"@squad/cli": patch
 ---
 
 Update help text and README for npm distribution. Add squad status command to docs.

@@ -9,7 +9,7 @@ Squad ships with 5 built-in tools and a hook pipeline for policy enforcement. Th
 `ToolRegistry` manages tool definitions. Each tool has a name, JSON schema, and async handler:
 
 ```typescript
-import { ToolRegistry, defineTool } from '@bradygaster/squad-sdk';
+import { ToolRegistry, defineTool } from '@squad/sdk';
 
 const registry = new ToolRegistry();
 
@@ -51,7 +51,7 @@ The handler returns a `ToolResult` with `success` flag and `data` payload.
 `HookPipeline` intercepts tool calls at two points: before execution (`PreToolUseHook`) and after (`PostToolUseHook`). Hooks return a `HookAction`: `allow`, `block`, or `modify`.
 
 ```typescript
-import { HookPipeline, PreToolUseHook } from '@bradygaster/squad-sdk';
+import { HookPipeline, PreToolUseHook } from '@squad/sdk';
 
 const auditHook: PreToolUseHook = async (toolName, params, context) => {
   console.log(`Agent ${context.agentId} calling ${toolName}`);

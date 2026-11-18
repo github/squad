@@ -65,7 +65,7 @@ Look right? [Yes] [Add someone] [Change a role] [Browse all roles]
 ### In squad.config.ts (SDK Mode)
 
 ```typescript
-import { useRole, defineSquad } from '@bradygaster/squad-sdk';
+import { useRole, defineSquad } from '@squad/sdk';
 
 export default defineSquad({
   agents: [

@@ -4,14 +4,14 @@
  */
 
 import path from 'node:path';
-import { FSStorageProvider, importFromRepo, parseRepoString } from '@bradygaster/squad-sdk';
+import { FSStorageProvider, importFromRepo, parseRepoString } from '@squad/sdk';
 import {
   acquireCastingRegistryLock,
   commitCastingRegistryPair,
   prepareCastingRegistryPairLocked,
   validateCastingRegistryPairForCommit,
-} from '@bradygaster/squad-sdk/casting';
-import type { RepoSpec } from '@bradygaster/squad-sdk';
+} from '@squad/sdk/casting';
+import type { RepoSpec } from '@squad/sdk';
 import { detectSquadDir } from '../core/detect-squad-dir.js';
 import { success, warn, info } from '../core/output.js';
 import { fatal } from '../core/errors.js';

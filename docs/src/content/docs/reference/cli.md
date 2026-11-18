@@ -8,7 +8,7 @@ Everything you need to run Squad from the command line — commands, shell inter
 
 ```bash
 # npm (requires Node.js 22.5+)
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 
 # macOS
 brew install --cask bradygaster/squad/squad
@@ -424,9 +424,9 @@ The doctor always exits cleanly (no error code) because it's a diagnostic tool, 
 
 ```bash
 squad --version                              # Check version
-npm install -g @bradygaster/squad-cli@latest # Update
-npm install -g @bradygaster/squad-cli@1.2.3  # Pin version
-npm install -g @bradygaster/squad-cli@insider # Dev-channel prerelease builds
+npm install -g @squad/cli@latest # Update
+npm install -g @squad/cli@1.2.3  # Pin version
+npm install -g @squad/cli@insider # Dev-channel prerelease builds
 ```
 
 ---

@@ -15,11 +15,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade, stripAgentStamps } from '@bradygaster/squad-cli/core/upgrade';
-import { runDoctor } from '@bradygaster/squad-cli/commands/doctor';
-import { stampVersion } from '@bradygaster/squad-cli/core/version';
-import { clearResolveSquadCache, isRetiredProfileTeamRoot, resolveGlobalSquadPath, resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+import { runInit } from '@squad/cli/core/init';
+import { runUpgrade, stripAgentStamps } from '@squad/cli/core/upgrade';
+import { runDoctor } from '@squad/cli/commands/doctor';
+import { stampVersion } from '@squad/cli/core/version';
+import { clearResolveSquadCache, isRetiredProfileTeamRoot, resolveGlobalSquadPath, resolveSquadPaths } from '@squad/sdk/resolution';
 
 let tmp: string;
 let configHome: string;
@@ -247,8 +247,8 @@ describe('UM-F2: version stamps are not customizations', () => {
   });
 
   it('stripAgentStamps normalizes every stamp form the upgrader writes', () => {
-    const a = '<!-- version: 1.0.0 -->\n- **Version:** 1.0.0\nRun `Squad v1.0.0`\n  pkg: @bradygaster/squad-cli@1.0.0\n<!-- squad-cli v1.0.0 -->\nbody\n';
-    const b = '<!-- version: 2.0.0-preview.1 -->\n- **Version:** 2.0.0-preview.1\nRun `Squad v2.0.0-preview.1`\n  pkg: @bradygaster/squad-cli@2.0.0-preview.1\nbody\n';
+    const a = '<!-- version: 1.0.0 -->\n- **Version:** 1.0.0\nRun `Squad v1.0.0`\n  pkg: @squad/cli@1.0.0\n<!-- squad-cli v1.0.0 -->\nbody\n';
+    const b = '<!-- version: 2.0.0-preview.1 -->\n- **Version:** 2.0.0-preview.1\nRun `Squad v2.0.0-preview.1`\n  pkg: @squad/cli@2.0.0-preview.1\nbody\n';
     expect(stripAgentStamps(a)).toBe(stripAgentStamps(b));
     expect(stripAgentStamps(a + 'USER EDIT\n')).not.toBe(stripAgentStamps(b));
   });

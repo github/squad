@@ -625,8 +625,8 @@ describe('reusable npm publication', () => {
     expect(serialized(publishJob())).not.toContain('npm ci');
     expect(serialized(publishJob())).not.toContain(' run build');
     expect(serialized(publishJob())).not.toContain('npm pack');
-    expect(stepNamed(publishJob(), 'Stage SDK from the exact verified tarball').run).toContain('npm publish "$PACKS_DIR/bradygaster-squad-sdk-${VERSION}.tgz" --ignore-scripts');
-    expect(stepNamed(publishJob(), 'Stage CLI from the exact verified tarball').run).toContain('npm publish "$PACKS_DIR/bradygaster-squad-cli-${VERSION}.tgz" --ignore-scripts');
+    expect(stepNamed(publishJob(), 'Stage SDK from the exact verified tarball').run).toContain('npm publish "$PACKS_DIR/squad-sdk-${VERSION}.tgz" --ignore-scripts');
+    expect(stepNamed(publishJob(), 'Stage CLI from the exact verified tarball').run).toContain('npm publish "$PACKS_DIR/squad-cli-${VERSION}.tgz" --ignore-scripts');
     expect(npmPublishWorkflow.jobs.prepare.permissions).toEqual({ contents: 'read', actions: 'read' });
     expect(npmPublishWorkflow.jobs.prepare).not.toHaveProperty('env.NODE_AUTH_TOKEN');
   });
@@ -656,11 +656,11 @@ describe('reusable npm publication', () => {
     expect(classifyNpmRegistryScript).toContain('/\\bE404\\b|404 Not Found/i');
     expect(classifyNpmRegistryScript).toContain("state: 'unknown'");
     expect(classifyNpmRegistryScript).toContain("state: 'conflict'");
-    expect(stepNamed(publishJob(), order[1]).run).toContain('bradygaster-squad-sdk-${VERSION}.tgz');
-    expect(stepNamed(publishJob(), order[2]).run).toContain('bradygaster-squad-cli-${VERSION}.tgz');
+    expect(stepNamed(publishJob(), order[1]).run).toContain('squad-sdk-${VERSION}.tgz');
+    expect(stepNamed(publishJob(), order[2]).run).toContain('squad-cli-${VERSION}.tgz');
     expect(stepNamed(publishJob(), order[3]).run).toContain('--install-check');
-    expect(stepNamed(publishJob(), order[4]).run).toContain('npm dist-tag add "@bradygaster/squad-sdk@${VERSION}" "$DIST_TAG"');
-    expect(stepNamed(publishJob(), order[5]).run).toContain('npm dist-tag add "@bradygaster/squad-cli@${VERSION}" "$DIST_TAG"');
+    expect(stepNamed(publishJob(), order[4]).run).toContain('npm dist-tag add "@squad/sdk@${VERSION}" "$DIST_TAG"');
+    expect(stepNamed(publishJob(), order[5]).run).toContain('npm dist-tag add "@squad/cli@${VERSION}" "$DIST_TAG"');
     expect(stepNamed(publishJob(), 'Stage SDK from the exact verified tarball').if)
       .toBe("steps.existing.outputs.stage_pair == 'true'");
     expect(stepNamed(publishJob(), 'Stage CLI from the exact verified tarball').if)
@@ -717,8 +717,8 @@ describe('reusable npm publication', () => {
     const promotion = npmPublishWorkflow.jobs['promote-insider-tag'];
     expect(promotion.needs).toEqual(['prepare', 'publish']);
     expect(promotion.if).toBe("needs.prepare.outputs.stable_release == 'true' && needs.publish.outputs.outcome == 'COMPLETE'");
-    expect(serialized(promotion)).toContain('@bradygaster/squad-sdk');
-    expect(serialized(promotion)).toContain('@bradygaster/squad-cli');
+    expect(serialized(promotion)).toContain('@squad/sdk');
+    expect(serialized(promotion)).toContain('@squad/cli');
     expect(npmPublishWorkflow.jobs).not.toHaveProperty('promote-insider-tag-sdk');
     expect(npmPublishWorkflow.jobs).not.toHaveProperty('promote-insider-tag-cli');
   });
@@ -782,7 +782,7 @@ describe('insider publication', () => {
     expect(override.run).toContain('override-standalone-package-versions.mjs');
     expect(overrideStandaloneVersionsScript).toContain('-insider\\.');
     expect(overrideStandaloneVersionsScript).toContain('pkg.version = version');
-    expect(overrideStandaloneVersionsScript).toContain("pkg.dependencies['@bradygaster/squad-sdk'] = version");
+    expect(overrideStandaloneVersionsScript).toContain("pkg.dependencies['@squad/sdk'] = version");
   });
 });
 
@@ -796,7 +796,7 @@ describe('public installation guidance', () => {
     expect(combined).toContain('bradygaster.Squad.Insider');
     for (const [file, content] of publicCliDocs) {
       expect(content, file).not.toMatch(
-        /\bnpx\s+(?:--yes\s+|-y\s+)?(?:@bradygaster\/squad-cli|squad\b)/,
+        /\bnpx\s+(?:--yes\s+|-y\s+)?(?:@squad\/cli|squad\b)/,
       );
     }
   });
@@ -1122,7 +1122,7 @@ describe('automated package publication', () => {
       'standalone GitHub Release bundle with checksum verification',
     );
     expect(ghAwGuide).toContain('a merged Cast');
-    expect(ghAwGuide).not.toContain('Installs `@bradygaster/squad-cli`');
+    expect(ghAwGuide).not.toContain('Installs `@squad/cli`');
     expect(ghAwGuide).not.toContain('State does not persist across runs.');
     expect(ghAwGuide).not.toContain('`create-issue` safe-output has a max of 75');
   });

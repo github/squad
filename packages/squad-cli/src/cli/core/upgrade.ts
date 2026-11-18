@@ -7,9 +7,9 @@
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { FSStorageProvider, stripTeamCapabilitiesBlock, syncTeamCapabilities } from '@bradygaster/squad-sdk';
-import { clearResolveSquadCache, isRetiredProfileTeamRoot } from '@bradygaster/squad-sdk/resolution';
-import { squadRepoLauncherScript } from '@bradygaster/squad-sdk/client';
+import { FSStorageProvider, stripTeamCapabilitiesBlock, syncTeamCapabilities } from '@squad/sdk';
+import { clearResolveSquadCache, isRetiredProfileTeamRoot } from '@squad/sdk/resolution';
+import { squadRepoLauncherScript } from '@squad/sdk/client';
 import {
   backfillCastingRegistryFromTeam,
   detectHistoricalCastingSchema,
@@ -18,7 +18,7 @@ import {
   preflightCastingRegistryPair,
   repairHandwrittenCastingRegistry,
   type RepairResult,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 import { success, warn, info, dim, BOLD, RESET } from './output.js';
 import { fatal, fatalNoSquad } from './errors.js';
 import { detectSquadDir } from './detect-squad-dir.js';
@@ -26,6 +26,13 @@ import { TEMPLATE_MANIFEST, getTemplatesDir } from './templates.js';
 import { runMigrations } from './migrations.js';
 import { scrubEmails } from './email-scrub.js';
 import { getPackageVersion, stampVersion, readInstalledVersion } from './version.js';
+import {
+  CLI_PACKAGE_NAME,
+  KNOWN_CLI_NAME_PATTERN,
+  getInstalledCliPackageName,
+  isLegacyCliPackageName,
+  registryPackagePath,
+} from './package-identity.js';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
 import { copyManagedFile, syncCopilotInstructionsFile, writeManagedText } from './managed-file.js';
 export { resolveSquadStateMcpSpec } from './mcp-spec.js';
@@ -79,7 +86,7 @@ export function isLocalOrUnpublishedVersion(version: string): boolean {
 
 function buildMcpServerSpecs(isGitHub: boolean, cliVersion?: string): McpServerSpec[] {
   // Pin the squad-cli package to the currently-installed CLI version so that
-  // `npx -y @bradygaster/squad-cli state-mcp` does NOT silently resolve to the
+  // `npx -y @squad/cli state-mcp` does NOT silently resolve to the
   // npm `latest` dist-tag (which may predate the `state-mcp` command and thus
   // expose zero tools to Copilot — see MCP-BRIDGE-BROKEN root cause).
   //
@@ -88,9 +95,9 @@ function buildMcpServerSpecs(isGitHub: boolean, cliVersion?: string): McpServerS
   // string that breaks npx resolution at session start.
   let pkgSpec: string;
   if (!cliVersion || isLocalOrUnpublishedVersion(cliVersion)) {
-    pkgSpec = '@bradygaster/squad-cli@insider';
+    pkgSpec = `${CLI_PACKAGE_NAME}@insider`;
   } else {
-    pkgSpec = `@bradygaster/squad-cli@${cliVersion}`;
+    pkgSpec = `${CLI_PACKAGE_NAME}@${cliVersion}`;
   }
   const servers: McpServerSpec[] = [
     {
@@ -336,7 +343,7 @@ export function stripAgentStamps(s: string): string {
     .replace(/<!-- version: [^>]+ -->/g, '<!-- version: X -->')
     .replace(/- \*\*Version:\*\* \S+/g, '- **Version:** X')
     .replace(/`Squad v[^`]+`/g, '`Squad vX`')
-    .replace(/@bradygaster\/squad-cli@[^\s"'\]]+/g, '@bradygaster/squad-cli@X');
+    .replace(new RegExp(`(?:${KNOWN_CLI_NAME_PATTERN})@[^\\s"'\\]]+`, 'g'), `${CLI_PACKAGE_NAME}@X`);
 }
 
 function writeAgentTemplate(agentSrc: string, agentDest: string, cliVersion: string, mcpConfigMode: McpConfigMode, isGitHub: boolean, options?: { dryRun?: boolean; squadDir?: string }): void {
@@ -1865,6 +1872,8 @@ export interface SelfUpgradeOptions {
   currentVersion?: string;
   /** Override the dist-tag → version lookup; defaults to the public npm registry. */
   resolveTagVersion?: SelfUpgradeTagResolver;
+  /** Package name the running CLI was installed as; defaults to the nearest package.json name. */
+  installedPackageName?: string;
 }
 
 export interface SelfUpgradeResult {
@@ -1890,14 +1899,23 @@ export function detectSelfUpgradeTag(currentVersion: string): SelfUpgradeTag {
   return 'latest';
 }
 
-/** The exact command `selfUpgradeCli` runs for a package manager and dist-tag. */
-export function selfUpgradeCommand(packageManager: SelfUpgradePackageManager, insiderOrTag: boolean | SelfUpgradeTag): string {
+/**
+ * The exact command `selfUpgradeCli` runs for a package manager and dist-tag. An install made
+ * under a retired package name is removed first: both packages own the `squad` bin, so
+ * installing the current name next to it would fail.
+ */
+export function selfUpgradeCommand(
+  packageManager: SelfUpgradePackageManager,
+  insiderOrTag: boolean | SelfUpgradeTag,
+  installedPackageName: string = CLI_PACKAGE_NAME,
+): string {
   const tag: SelfUpgradeTag = typeof insiderOrTag === 'boolean' ? (insiderOrTag ? 'insider' : 'latest') : insiderOrTag;
-  const pkg = `@bradygaster/squad-cli@${tag}`;
+  const pkg = `${CLI_PACKAGE_NAME}@${tag}`;
+  const legacy = isLegacyCliPackageName(installedPackageName) ? installedPackageName : null;
   switch (packageManager) {
-    case 'pnpm': return `pnpm add -g ${pkg}`;
-    case 'yarn': return `yarn global add ${pkg}`;
-    default: return `npm install -g ${pkg}`;
+    case 'pnpm': return `${legacy ? `pnpm remove -g ${legacy} && ` : ''}pnpm add -g ${pkg}`;
+    case 'yarn': return `${legacy ? `yarn global remove ${legacy} && ` : ''}yarn global add ${pkg}`;
+    default: return `${legacy ? `npm uninstall -g ${legacy} && ` : ''}npm install -g ${pkg}`;
   }
 }
 
@@ -1906,7 +1924,7 @@ export async function resolveSelfUpgradeTagVersion(tag: SelfUpgradeTag): Promise
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch('https://registry.npmjs.org/-/package/@bradygaster%2Fsquad-cli/dist-tags', { signal: controller.signal });
+    const res = await fetch(`https://registry.npmjs.org/-/package/${registryPackagePath(CLI_PACKAGE_NAME)}/dist-tags`, { signal: controller.signal });
     clearTimeout(timer);
     if (!res.ok) return null;
     const tags = await res.json() as Record<string, string>;
@@ -1946,7 +1964,7 @@ export async function selfUpgradeCli(options: SelfUpgradeOptions = {}): Promise<
   const pm = options.packageManager ?? detectPackageManager();
   const currentVersion = options.currentVersion ?? getPackageVersion();
   const tag: SelfUpgradeTag = options.insider ? 'insider' : detectSelfUpgradeTag(currentVersion);
-  const cmd = selfUpgradeCommand(pm, tag);
+  const cmd = selfUpgradeCommand(pm, tag, options.installedPackageName ?? getInstalledCliPackageName());
   const resolve = options.resolveTagVersion ?? resolveSelfUpgradeTagVersion;
   const targetVersion = await resolve(tag);
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateConfigDetailed,
   DEFAULT_CONFIG as RUNTIME_DEFAULT_CONFIG,
-} from '@bradygaster/squad-sdk/runtime';
+} from '@squad/sdk/runtime';
 import {
   SquadConfig,
   AgentConfig,
@@ -16,7 +16,7 @@ import {
   GitHubAgentSource,
   MarketplaceAgentSource,
   AgentRegistry,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 
 describe('Configuration Schema', () => {
   describe('DEFAULT_CONFIG', () => {

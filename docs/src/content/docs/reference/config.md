@@ -18,7 +18,7 @@ import {
   defineTeam,
   defineAgent,
   defineRouting,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 export default defineSquad({
   version: '1.0.0',

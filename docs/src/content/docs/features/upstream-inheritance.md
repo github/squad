@@ -302,7 +302,7 @@ Read and parse `upstream.json` from a squad directory.
 
 **Example:**
 ```typescript
-import { readUpstreamConfig } from '@bradygaster/squad-sdk';
+import { readUpstreamConfig } from '@squad/sdk';
 
 const config = readUpstreamConfig('.squad');
 if (config) {
@@ -325,7 +325,7 @@ For each upstream:
 
 **Example:**
 ```typescript
-import { resolveUpstreams } from '@bradygaster/squad-sdk';
+import { resolveUpstreams } from '@squad/sdk';
 
 const resolution = resolveUpstreams('.squad');
 if (resolution) {

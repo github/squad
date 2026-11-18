@@ -51,8 +51,8 @@ const SDK_SRC = ${JSON.stringify(SDK_SRC)};
 const isFile = (p) => fs.existsSync(p) && fs.statSync(p).isFile();
 const hit = (f) => ({ url: pathToFileURL(f).href, shortCircuit: true });
 export async function resolve(spec, ctx, next) {
-  if (spec === '@bradygaster/squad-sdk') return hit(path.join(SDK_SRC, 'index.ts'));
-  const m = /^@bradygaster\\/squad-sdk\\/(.+)$/.exec(spec);
+  if (spec === '@squad/sdk') return hit(path.join(SDK_SRC, 'index.ts'));
+  const m = /^@squad\\/sdk\\/(.+)$/.exec(spec);
   if (m) for (const c of [m[1] + '/index.ts', m[1] + '.ts']) if (isFile(path.join(SDK_SRC, c))) return hit(path.join(SDK_SRC, c));
   if ((spec.startsWith('./') || spec.startsWith('../')) && spec.endsWith('.js') && ctx.parentURL && ctx.parentURL.startsWith('file:')) {
     const f = fileURLToPath(new URL(spec.slice(0, -3) + '.ts', ctx.parentURL));

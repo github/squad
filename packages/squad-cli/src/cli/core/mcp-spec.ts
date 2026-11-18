@@ -22,13 +22,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CLI_PACKAGE_NAME } from './package-identity.js';
 import {
   resolveInsideRoot,
   SQUAD_REPO_LAUNCHER_MARKER,
   SQUAD_REPO_LAUNCHER_PATH,
   squadRepoLauncher,
   squadRepoLauncherArgs,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 
 export interface SquadStateMcpSpec {
   command: string;
@@ -46,7 +47,7 @@ export interface SquadStateMcpSpec {
   };
 }
 
-const PACKAGE_NAME = '@bradygaster/squad-cli';
+const PACKAGE_NAME = CLI_PACKAGE_NAME;
 
 /** Retained as the shared projection hook; direct local specs stay direct. */
 export function projectSquadStateMcpSpec(

@@ -40,7 +40,7 @@ describe('resolveSquadStateMcpSpec', () => {
     expect(spec.command).toBe('npx');
     expect(spec.args).toEqual([
       '-y',
-      '@bradygaster/squad-cli@0.9.6-preview.42',
+      '@squad/cli@0.9.6-preview.42',
       'state-mcp',
     ]);
   });
@@ -51,11 +51,11 @@ describe('resolveSquadStateMcpSpec', () => {
       localEntryCheck: () => null,
     });
     expect(spec.source).toBe('pinned');
-    expect(spec.args[1]).toBe('@bradygaster/squad-cli@0.0.0');
+    expect(spec.args[1]).toBe('@squad/cli@0.0.0');
   });
 
   it('uses the installed cli entry directly without npx or cmd wrappers', async () => {
-    const entry = path.resolve('node_modules/@bradygaster/squad-cli/dist/cli-entry.js');
+    const entry = path.resolve('node_modules/@squad/cli/dist/cli-entry.js');
     const spec = await resolveSquadStateMcpSpec('2.0.0-preview.1', {
       standaloneCheck: () => null,
       localEntryCheck: () => entry,
@@ -66,7 +66,7 @@ describe('resolveSquadStateMcpSpec', () => {
       source: 'local-entry',
       fallback: {
         command: 'npx',
-        args: ['-y', '@bradygaster/squad-cli@2.0.0-preview.1', 'state-mcp'],
+        args: ['-y', '@squad/cli@2.0.0-preview.1', 'state-mcp'],
       },
     });
   });
@@ -186,9 +186,9 @@ describe('project MCP launch portability', () => {
     expect(projectSquadStateMcpSpec(local, platform)).toEqual(local);
     expect(local.command).toBe('C:\\example\\bundle\\squad.exe');
     expect(projectSquadStateMcpSpec({
-      command: 'npx', args: ['-y', '@bradygaster/squad-cli@1.0.1', 'state-mcp'], source: 'pinned',
+      command: 'npx', args: ['-y', '@squad/cli@1.0.1', 'state-mcp'], source: 'pinned',
     }, platform)).toEqual({
-      command: 'npx', args: ['-y', '@bradygaster/squad-cli@1.0.1', 'state-mcp'], source: 'pinned',
+      command: 'npx', args: ['-y', '@squad/cli@1.0.1', 'state-mcp'], source: 'pinned',
     });
   });
 

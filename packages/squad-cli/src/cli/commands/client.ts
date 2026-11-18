@@ -18,7 +18,7 @@ import {
   projectClients,
   type ClientId,
   type ProjectionFile,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 import { linkedTeamDir, readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
 import { detectSquadDir } from '../core/detect-squad-dir.js';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from '../core/mcp-spec.js';

@@ -291,7 +291,7 @@ if (isMain) {
     for (const [, name] of PACKAGE_KEYS) {
       if (packed.packages?.[name]?.integrity) local[name] = { integrity: packed.packages[name].integrity };
     }
-    version ??= packed.packages?.['@bradygaster/squad-cli']?.manifest?.version;
+    version ??= packed.packages?.['@squad/cli']?.manifest?.version;
   }
   if (cliTarball || sdkTarball) {
     if (!cliTarball || !sdkTarball) throw new Error('--cli-tarball and --sdk-tarball must be supplied together');
@@ -300,8 +300,8 @@ if (isMain) {
     if (cliVersion !== sdkVersion) throw new Error(`CLI tarball version ${cliVersion} != SDK tarball version ${sdkVersion}`);
     if (version && version !== cliVersion) throw new Error(`requested version ${version} != tarball version ${cliVersion}`);
     version = cliVersion;
-    local['@bradygaster/squad-cli'] = { integrity: tarballIntegrity(cliTarball) };
-    local['@bradygaster/squad-sdk'] = { integrity: tarballIntegrity(sdkTarball) };
+    local['@squad/cli'] = { integrity: tarballIntegrity(cliTarball) };
+    local['@squad/sdk'] = { integrity: tarballIntegrity(sdkTarball) };
   }
   if (!version) throw new Error('Missing --version, --pack-evidence, or exact tarball pair');
 

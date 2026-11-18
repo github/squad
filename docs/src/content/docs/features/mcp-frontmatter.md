@@ -51,7 +51,7 @@ And `.copilot/mcp-config.json` separately contains:
   "mcpServers": {
     "squad_state": {
       "command": "npx",
-      "args": ["-y", "@bradygaster/squad-cli@latest", "state-mcp"],
+      "args": ["-y", "@squad/cli@latest", "state-mcp"],
       "tools": ["*"]
     }
   }
@@ -69,7 +69,7 @@ tools: ["*"]
 mcpServers:
   squad_state:
     command: npx
-    args: ["-y", "@bradygaster/squad-cli@latest", "state-mcp"]
+    args: ["-y", "@squad/cli@latest", "state-mcp"]
     tools: ["*"]
 ---
 ```

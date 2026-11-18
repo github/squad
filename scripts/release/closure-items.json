@@ -139,7 +139,7 @@
       ],
       "anchor": "--client",
       "sourceEvidence": "`squad-cli/src/cli-entry.ts`",
-      "lockingTests": "`clients.ts: imports from @bradygaster/squad-sdk/client, merges repeated --client flags…`; Brady `2. every --client help line fits 80 columns`"
+      "lockingTests": "`clients.ts: imports from @squad/sdk/client, merges repeated --client flags…`; Brady `2. every --client help line fits 80 columns`"
     },
     {
       "id": "2238-T09",

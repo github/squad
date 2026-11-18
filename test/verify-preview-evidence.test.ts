@@ -20,23 +20,22 @@ function fixture() {
   const cliPackageJson = path.join(root, 'cli-package.json');
   const sdkPackageJson = path.join(root, 'sdk-package.json');
   writeFileSync(cliPackageJson, JSON.stringify({
-    name: '@bradygaster/squad-cli',
+    name: '@squad/cli',
     version: VERSION,
-    dependencies: { '@bradygaster/squad-sdk': VERSION },
+    dependencies: { '@squad/sdk': VERSION },
   }));
-  writeFileSync(sdkPackageJson, JSON.stringify({ name: '@bradygaster/squad-sdk', version: VERSION }));
+  writeFileSync(sdkPackageJson, JSON.stringify({ name: '@squad/sdk', version: VERSION }));
 
   const packages: Record<string, Record<string, unknown>> = {};
   const manifestPackages: Record<string, Record<string, unknown>> = {};
-  for (const [name, shortName] of [
-    ['@bradygaster/squad-cli', 'cli'],
-    ['@bradygaster/squad-sdk', 'sdk'],
+  for (const [name, filename] of [
+    ['@squad/cli', `squad-cli-${VERSION}.tgz`],
+    ['@squad/sdk', `squad-sdk-${VERSION}.tgz`],
   ]) {
-    const filename = `bradygaster-squad-${shortName}-${VERSION}.tgz`;
     const bytes = Buffer.from(`${name} exact tarball bytes`);
     const digest = sha256(bytes);
     writeFileSync(path.join(evidenceDir, filename), bytes);
-    const sdkDependency = name === '@bradygaster/squad-cli' ? VERSION : null;
+    const sdkDependency = name === '@squad/cli' ? VERSION : null;
     packages[name] = { name, filename, sha256: digest, manifest: { name, version: VERSION, sdkDependency } };
     manifestPackages[name] = { version: VERSION, sdkDependency, tarball: { filename, sha256: digest } };
   }
@@ -58,8 +57,8 @@ function fixture() {
     evidenceDir,
     cliPackageJson,
     sdkPackageJson,
-    cliSha256: pack.packages['@bradygaster/squad-cli'].sha256,
-    sdkSha256: pack.packages['@bradygaster/squad-sdk'].sha256,
+    cliSha256: pack.packages['@squad/cli'].sha256,
+    sdkSha256: pack.packages['@squad/sdk'].sha256,
   };
 }
 

@@ -104,7 +104,7 @@ See [State Backends → Atomic Create-if-Absent](/features/state-backends/#atomi
 Implement the `StorageProvider` interface to plug in any backend. Here's a skeleton:
 
 ```typescript
-import type { StorageProvider, StorageStats } from '@bradygaster/squad-sdk';
+import type { StorageProvider, StorageStats } from '@squad/sdk';
 
 export class MyCustomStorageProvider implements StorageProvider {
   async read(filePath: string): Promise<string | undefined> {
@@ -186,7 +186,7 @@ export class MyCustomStorageProvider implements StorageProvider {
 Pass it to the runtime:
 
 ```typescript
-import { SquadClient } from '@bradygaster/squad-sdk';
+import { SquadClient } from '@squad/sdk';
 
 const client = new SquadClient({
   storageProvider: new MyCustomStorageProvider(),

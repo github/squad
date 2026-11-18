@@ -25,6 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const LEGACY_SDK_NAMES = JSON.parse(readFileSync(new URL('./distribution-identity.json', import.meta.url), 'utf8')).npm.sdk.legacy;
 const ROOT = path.resolve(HERE, '..', '..');
 const SCHEMA_VERSION = 'squad-2.0-verification-manifest/v2';
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -130,7 +131,7 @@ export function buildManifest(opts) {
   const recon = evidenceDir && existsSync(path.join(evidenceDir, 'test-reconciliation.json')) ? readJson(path.join(evidenceDir, 'test-reconciliation.json')) : null;
   const pkgEntry = (p, name) => {
     const t = pack?.packages?.[name];
-    return { name: p.name, version: p.version, exportsCount: Object.keys(p.exports ?? {}).length, sdkDependency: p.dependencies?.['@bradygaster/squad-sdk'] ?? null, tarball: t ? { filename: t.filename, bytes: t.bytes, sha256: t.sha256, integrity: t.integrity, fileCount: t.fileCount, exportTargetsMissing: t.exportTargets.missing.length, privacyHits: t.privacy.hits.length, privacyAllowlisted: t.privacy.allowlisted.length } : null };
+    return { name: p.name, version: p.version, exportsCount: Object.keys(p.exports ?? {}).length, sdkDependency: p.dependencies?.['@squad/sdk'] ?? null, tarball: t ? { filename: t.filename, bytes: t.bytes, sha256: t.sha256, integrity: t.integrity, fileCount: t.fileCount, exportTargetsMissing: t.exportTargets.missing.length, privacyHits: t.privacy.hits.length, privacyAllowlisted: t.privacy.allowlisted.length } : null };
   };
 
   const citedRun = inputs.stack.citedCiRun;
@@ -156,7 +157,7 @@ export function buildManifest(opts) {
       citedRun: { id: citedRun.id, url: citedRun.url, headSha: citedRun.headSha, matchesTarget: citedRun.headSha === sha, conclusion: opts.citedConclusion ?? null, consoleSummary: citedRun.consoleSummary },
       thisRun: process.env.GITHUB_RUN_ID ? { id: process.env.GITHUB_RUN_ID, url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, workflow: process.env.GITHUB_WORKFLOW ?? '', attempt: process.env.GITHUB_RUN_ATTEMPT ?? '1' } : null,
     },
-    packages: { '@bradygaster/squad-sdk': pkgEntry(sdk, '@bradygaster/squad-sdk'), '@bradygaster/squad-cli': pkgEntry(cli, '@bradygaster/squad-cli') },
+    packages: { '@squad/sdk': pkgEntry(sdk, '@squad/sdk'), '@squad/cli': pkgEntry(cli, '@squad/cli') },
     lockfiles: { files: lockReport.files.length, registryEntries: lockReport.entries, violations: lockReport.violations.length, deniedPatterns: lockReport.deniedPatterns, ok: lockReport.ok, externalNpmCi: npmCi },
     tests: recon ? { source: 'vitest JSON report of this run (scripts/release/test-reconciliation.mjs)', platform: recon.summary.platform, numTotalTests: recon.summary.numTotalTests, byStatus: recon.summary.byStatus, byCategory: recon.summary.byCategory, countsSum: recon.summary.countsSum, unlistedTests: recon.summary.unlistedTests, skippedFiles: recon.summary.skippedFiles, reconciliationFile: 'test-reconciliation.json' }
       : { source: `console summary of cited CI run ${citedRun.id} (no vitest JSON report available to this generator)`, numTotalTests: citedRun.consoleSummary.testsTotal, byStatus: { passed: citedRun.consoleSummary.testsPassed, xfail: citedRun.consoleSummary.expectedFailures, skipped: citedRun.consoleSummary.testsSkipped, todo: citedRun.consoleSummary.todos }, byCategory: {}, countsSum: citedRun.consoleSummary.testsPassed + citedRun.consoleSummary.expectedFailures + citedRun.consoleSummary.testsSkipped + citedRun.consoleSummary.todos === citedRun.consoleSummary.testsTotal, unlistedTests: citedRun.consoleSummary.testsTotal - (citedRun.consoleSummary.testsPassed + citedRun.consoleSummary.expectedFailures + citedRun.consoleSummary.testsSkipped + citedRun.consoleSummary.todos), skippedFiles: [], reconciliationFile: null },
@@ -166,7 +167,7 @@ export function buildManifest(opts) {
       citedCiRun: { url: citedRun.url, headSha: citedRun.headSha, matchesTarget: citedRun.headSha === sha, conclusion: opts.citedConclusion ?? null },
       regressionTests: { titlesCited: items.reduce((a, i) => a + i.regressionTests.length, 0), titlesDefinedInTree: items.reduce((a, i) => a + i.regressionTests.filter((t) => t.definedIn).length, 0), titlesExecutedInReport: items.reduce((a, i) => a + i.regressionTests.filter((t) => t.executedInCitedReport === true).length, 0), reportAvailable: reportTitles !== null },
     },
-    comparison: { baselineManifest: opts.baseline ? path.basename(opts.baseline) : null, baselineCommit, diffStat, firstParentCommits: firstParent, closureItemsBefore: baselineCarried, closureItemsCarriedNow: closure.carried, packageVersions: baseline ? { before: baseline.packages?.['@bradygaster/squad-sdk']?.version ?? baseline.packages?.['squad-sdk']?.version ?? null, now: sdk.version } : null, verdict: baselineCarried !== null ? `${closure.carried}/${closure.trackedItems} closure items carried at ${sha.slice(0, 8)} (baseline recorded ${baselineCarried}); ${closure.contentEvidencePresent} with code-level evidence, ${closure.presenceOnly} presence-only.` : null },
+    comparison: { baselineManifest: opts.baseline ? path.basename(opts.baseline) : null, baselineCommit, diffStat, firstParentCommits: firstParent, closureItemsBefore: baselineCarried, closureItemsCarriedNow: closure.carried, packageVersions: baseline ? { before: [sdk.name, ...LEGACY_SDK_NAMES, 'squad-sdk'].map((n) => baseline.packages?.[n]?.version).find(Boolean) ?? null, now: sdk.version } : null, verdict: baselineCarried !== null ? `${closure.carried}/${closure.trackedItems} closure items carried at ${sha.slice(0, 8)} (baseline recorded ${baselineCarried}); ${closure.contentEvidencePresent} with code-level evidence, ${closure.presenceOnly} presence-only.` : null },
     artifacts: ['pack-evidence.json', 'test-reconciliation.json', 'npm-ci.json', 'lockfile-registry.json', 'policy-gates.json', 'provenance.json', 'manifest.schema.json'].filter((f) => f === 'provenance.json' || f === 'manifest.schema.json' || (evidenceDir && existsSync(path.join(evidenceDir, f)))),
   };
   return manifest;

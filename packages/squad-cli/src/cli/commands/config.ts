@@ -27,9 +27,9 @@ import {
   writeAgentContextTierOverrides,
   VALID_CONTEXT_TIERS,
   MODEL_CATALOG,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import { fatal, fatalNoSquad } from '../core/errors.js';
-import { resolveSquad } from '@bradygaster/squad-sdk/resolution';
+import { resolveSquad } from '@squad/sdk/resolution';
 import { BOLD, RESET, GREEN, DIM, RED, YELLOW } from '../core/output.js';
 
 // The SDK resolver is the only squad locator: it stops at the repository root and never

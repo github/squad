@@ -4,8 +4,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const mode = process.argv[2];
 const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
 const packages = lock.packages ?? {};
+const identity = JSON.parse(readFileSync(new URL('./distribution-identity.json', import.meta.url), 'utf8'));
+const workspaceNames = [identity.npm.cli, identity.npm.sdk].flatMap((entry) => [entry.current, ...entry.legacy]);
 const stale = Object.keys(packages).filter((key) =>
-  key.includes('/node_modules/@bradygaster/squad-')
+  workspaceNames.some((name) => key.endsWith(`/node_modules/${name}`))
   && packages[key].resolved?.startsWith('https://'));
 
 if (mode === 'fix') {
@@ -31,8 +33,8 @@ if (mode === 'fix') {
   if (new Set([root.version, sdk.version, cli.version]).size !== 1) {
     throw new Error('Root, SDK, and CLI versions must match.');
   }
-  const dependency = cli.dependencies?.['@bradygaster/squad-sdk'];
-  const lockDependency = packages['packages/squad-cli']?.dependencies?.['@bradygaster/squad-sdk'];
+  const dependency = cli.dependencies?.['@squad/sdk'];
+  const lockDependency = packages['packages/squad-cli']?.dependencies?.['@squad/sdk'];
   if (sdk.version.includes('-')) {
     const expected = `>=${sdk.version}`;
     if (dependency !== expected || lockDependency !== expected) {

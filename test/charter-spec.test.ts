@@ -19,7 +19,7 @@ import {
   type CharterCapability,
   type CharterDiagnostic,
   type ParsedCharter,
-} from '@bradygaster/squad-sdk/parsers';
+} from '@squad/sdk/parsers';
 
 type ValidationApi = 'conformance';
 type SerializationMode = 'canonical' | 'legacy' | 'preserve';

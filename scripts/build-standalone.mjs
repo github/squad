@@ -165,8 +165,8 @@ function installApp(appDir, tarballs, version, includeOptional) {
       private: true,
       type: 'module',
       dependencies: {
-        '@bradygaster/squad-cli': `file:${path.basename(tarballs['squad-cli'])}`,
-        '@bradygaster/squad-sdk': `file:${path.basename(tarballs['squad-sdk'])}`,
+        '@squad/cli': `file:${path.basename(tarballs['squad-cli'])}`,
+        '@squad/sdk': `file:${path.basename(tarballs['squad-sdk'])}`,
       },
     }, null, 2)}\n`,
   );
@@ -314,7 +314,7 @@ function vendorRuntime(bundleDir, platform, arch, version, stagingDir) {
   return ext;
 }
 
-const CLI_ENTRY = 'app/node_modules/@bradygaster/squad-cli/dist/cli-entry.js';
+const CLI_ENTRY = 'app/node_modules/@squad/cli/dist/cli-entry.js';
 
 /**
  * Script embedded into the Windows `squad.exe` single executable.

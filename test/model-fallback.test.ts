@@ -12,13 +12,13 @@ import {
   ModelRegistry,
   MODEL_CATALOG,
   DEFAULT_FALLBACK_CHAINS,
-} from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/config';
 import {
   resolveAgentModel,
   ModelFallbackExecutor,
   type ModelResolutionOptions,
-} from '@bradygaster/squad-sdk/agents';
-import { MODELS } from '@bradygaster/squad-sdk/runtime/constants';
+} from '@squad/sdk/agents';
+import { MODELS } from '@squad/sdk/runtime/constants';
 
 // ============================================================================
 // Cross-tier fallback: standard chain tries all models in order

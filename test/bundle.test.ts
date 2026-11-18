@@ -15,7 +15,7 @@ import {
   getBundleTargets,
   validateBundleOutput,
   type BundleConfig,
-} from '@bradygaster/squad-sdk/build';
+} from '@squad/sdk/build';
 
 import {
   generatePackageJson,
@@ -23,7 +23,7 @@ import {
   getPublishFiles,
   getDefaultExports,
   type NpmPackageConfig,
-} from '@bradygaster/squad-sdk/build';
+} from '@squad/sdk/build';
 
 import {
   generateInstallScript,
@@ -32,7 +32,7 @@ import {
   generateNpxEntryPoint,
   getDefaultDistConfig,
   type GitHubDistConfig,
-} from '@bradygaster/squad-sdk/build';
+} from '@squad/sdk/build';
 
 // ─── M4-1: Bundle strategy ──────────────────────────────────────────────
 
@@ -410,7 +410,7 @@ describe('github-dist', () => {
       owner: 'github',
       repo: 'squad',
       binaryName: 'squad',
-      installCommandTemplate: 'npx @bradygaster/squad-cli',
+      installCommandTemplate: 'npx @squad/cli',
     };
 
     it('validates a proper version', () => {
@@ -453,12 +453,12 @@ describe('github-dist', () => {
   describe('getInstallCommand', () => {
     it('returns npx command with defaults', () => {
       const cmd = getInstallCommand();
-      expect(cmd).toBe('npx @bradygaster/squad-cli');
+      expect(cmd).toBe('npx @squad/cli');
     });
 
     it('substitutes custom owner/repo', () => {
       const cmd = getInstallCommand({ owner: 'acme', repo: 'tool' });
-      expect(cmd).toBe('npx @bradygaster/squad-cli');
+      expect(cmd).toBe('npx @squad/cli');
     });
 
     it('uses custom template', () => {

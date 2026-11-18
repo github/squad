@@ -11,7 +11,7 @@
  *   module and assert every named export the CLI relies on is defined.
  *
  * Maintenance:
- *   When a new import from @bradygaster/squad-sdk is added to squad-cli,
+ *   When a new import from @squad/sdk is added to squad-cli,
  *   add a corresponding assertion here.  The grep one-liner in the test
  *   description shows how to audit.
  *
@@ -32,12 +32,12 @@ function expectExports(mod: Record<string, unknown>, names: string[], subpath: s
   }
 }
 
-// ─── Root barrel: @bradygaster/squad-sdk ─────────────────────────────────
+// ─── Root barrel: @squad/sdk ─────────────────────────────────
 
 describe('cross-package exports — CLI → SDK', () => {
-  describe('@bradygaster/squad-sdk (root barrel)', () => {
+  describe('@squad/sdk (root barrel)', () => {
     it('exports FSStorageProvider and core runtime symbols', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
       expectExports(sdk, [
         'FSStorageProvider',
         'SquadState',
@@ -58,11 +58,11 @@ describe('cross-package exports — CLI → SDK', () => {
         'readSquadRegistry',
         'addRegistryEntry',
         'removeRegistryEntry',
-      ], '@bradygaster/squad-sdk');
+      ], '@squad/sdk');
     });
 
     it('exports role helpers', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
       expectExports(sdk, [
         'listRoles',
         'searchRoles',
@@ -70,27 +70,27 @@ describe('cross-package exports — CLI → SDK', () => {
         'getRoleById',
         'generateCharterFromRole',
         'addAgentToConfig',
-      ], '@bradygaster/squad-sdk');
+      ], '@squad/sdk');
     });
 
     it('exports init helpers', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
       expectExports(sdk, [
         'initSquad',
         'cleanupOrphanInitPrompt',
-      ], '@bradygaster/squad-sdk');
+      ], '@squad/sdk');
     });
 
     it('exports external-state helpers', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
       expectExports(sdk, [
         'resolveExternalStateDir',
         'deriveProjectKey',
-      ], '@bradygaster/squad-sdk');
+      ], '@squad/sdk');
     });
 
     it('exports cross-squad helpers', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
       expectExports(sdk, [
         'discoverSquads',
         'formatDiscoveryTable',
@@ -98,121 +98,121 @@ describe('cross-package exports — CLI → SDK', () => {
         'buildDelegationArgs',
         'loadSubSquadsConfig',
         'resolveSubSquad',
-      ], '@bradygaster/squad-sdk');
+      ], '@squad/sdk');
     });
 
     it('exports RemoteBridge', async () => {
-      const sdk = await import('@bradygaster/squad-sdk');
-      expectExports(sdk, ['RemoteBridge'], '@bradygaster/squad-sdk');
+      const sdk = await import('@squad/sdk');
+      expectExports(sdk, ['RemoteBridge'], '@squad/sdk');
     });
   });
 
   // ─── Subpath: /config ──────────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/config', () => {
+  describe('@squad/sdk/config', () => {
     it('exports config helpers used by CLI', async () => {
-      const mod = await import('@bradygaster/squad-sdk/config');
+      const mod = await import('@squad/sdk/config');
       expectExports(mod, [
         'initSquad',
         'MigrationRegistry',
         'writeEconomyMode',
         'readEconomyMode',
-      ], '@bradygaster/squad-sdk/config');
+      ], '@squad/sdk/config');
     });
   });
 
   // ─── Subpath: /config/agent-source ─────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/config/agent-source', () => {
+  describe('@squad/sdk/config/agent-source', () => {
     it('exports LocalAgentSource', async () => {
-      const mod = await import('@bradygaster/squad-sdk/config/agent-source');
-      expectExports(mod, ['LocalAgentSource'], '@bradygaster/squad-sdk/config/agent-source');
+      const mod = await import('@squad/sdk/config/agent-source');
+      expectExports(mod, ['LocalAgentSource'], '@squad/sdk/config/agent-source');
     });
   });
 
   // ─── Subpath: /resolution ──────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/resolution', () => {
+  describe('@squad/sdk/resolution', () => {
     it('exports resolution helpers', async () => {
-      const mod = await import('@bradygaster/squad-sdk/resolution');
+      const mod = await import('@squad/sdk/resolution');
       expectExports(mod, [
         'resolveSquad',
         'resolveSquadPaths',
         'resolveGlobalSquadPath',
-      ], '@bradygaster/squad-sdk/resolution');
+      ], '@squad/sdk/resolution');
     });
   });
 
   // ─── Subpath: /client ──────────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/client', () => {
+  describe('@squad/sdk/client', () => {
     it('exports SquadClient', async () => {
-      const mod = await import('@bradygaster/squad-sdk/client');
-      expectExports(mod, ['SquadClient'], '@bradygaster/squad-sdk/client');
+      const mod = await import('@squad/sdk/client');
+      expectExports(mod, ['SquadClient'], '@squad/sdk/client');
     });
   });
 
   // ─── Subpath: /adapter/errors ──────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/adapter/errors', () => {
+  describe('@squad/sdk/adapter/errors', () => {
     it('exports RateLimitError', async () => {
-      const mod = await import('@bradygaster/squad-sdk/adapter/errors');
-      expectExports(mod, ['RateLimitError'], '@bradygaster/squad-sdk/adapter/errors');
+      const mod = await import('@squad/sdk/adapter/errors');
+      expectExports(mod, ['RateLimitError'], '@squad/sdk/adapter/errors');
     });
   });
 
   // ─── Subpath: /casting ─────────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/casting', () => {
+  describe('@squad/sdk/casting', () => {
     it('exports CastingEngine', async () => {
-      const mod = await import('@bradygaster/squad-sdk/casting');
-      expectExports(mod, ['CastingEngine'], '@bradygaster/squad-sdk/casting');
+      const mod = await import('@squad/sdk/casting');
+      expectExports(mod, ['CastingEngine'], '@squad/sdk/casting');
     });
   });
 
   // ─── Subpath: /platform ────────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/platform', () => {
+  describe('@squad/sdk/platform', () => {
     it('exports createPlatformAdapter', async () => {
-      const mod = await import('@bradygaster/squad-sdk/platform');
-      expectExports(mod, ['createPlatformAdapter'], '@bradygaster/squad-sdk/platform');
+      const mod = await import('@squad/sdk/platform');
+      expectExports(mod, ['createPlatformAdapter'], '@squad/sdk/platform');
     });
   });
 
   // ─── Subpath: /ralph ───────────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/ralph', () => {
+  describe('@squad/sdk/ralph', () => {
     it('exports RalphMonitor', async () => {
-      const mod = await import('@bradygaster/squad-sdk/ralph');
-      expectExports(mod, ['RalphMonitor'], '@bradygaster/squad-sdk/ralph');
+      const mod = await import('@squad/sdk/ralph');
+      expectExports(mod, ['RalphMonitor'], '@squad/sdk/ralph');
     });
   });
 
-  describe('@bradygaster/squad-sdk/ralph/triage', () => {
+  describe('@squad/sdk/ralph/triage', () => {
     it('exports triage helpers', async () => {
-      const mod = await import('@bradygaster/squad-sdk/ralph/triage');
+      const mod = await import('@squad/sdk/ralph/triage');
       expectExports(mod, [
         'parseRoster',
         'parseRoutingRules',
         'parseModuleOwnership',
         'triageIssue',
-      ], '@bradygaster/squad-sdk/ralph/triage');
+      ], '@squad/sdk/ralph/triage');
     });
   });
 
-  describe('@bradygaster/squad-sdk/ralph/rate-limiting', () => {
+  describe('@squad/sdk/ralph/rate-limiting', () => {
     it('exports rate-limiting helpers', async () => {
-      const mod = await import('@bradygaster/squad-sdk/ralph/rate-limiting');
+      const mod = await import('@squad/sdk/ralph/rate-limiting');
       expectExports(mod, [
         'PredictiveCircuitBreaker',
         'getTrafficLight',
-      ], '@bradygaster/squad-sdk/ralph/rate-limiting');
+      ], '@squad/sdk/ralph/rate-limiting');
     });
   });
 
-  describe('@bradygaster/squad-sdk/ralph/claims', () => {
+  describe('@squad/sdk/ralph/claims', () => {
     it('exports the work claim contract', async () => {
-      const mod = await import('@bradygaster/squad-sdk/ralph/claims');
+      const mod = await import('@squad/sdk/ralph/claims');
       expectExports(mod, [
         'workKeyToString',
         'resolveExecutorIdentity',
@@ -221,13 +221,13 @@ describe('cross-package exports — CLI → SDK', () => {
         'InMemoryClaimStore',
         'DEFAULT_CLAIM_TTL_MS',
         'DEFAULT_CLAIM_SKEW_MARGIN_MS',
-      ], '@bradygaster/squad-sdk/ralph/claims');
+      ], '@squad/sdk/ralph/claims');
     });
   });
 
-  describe('@bradygaster/squad-sdk/ralph/claims-git', () => {
+  describe('@squad/sdk/ralph/claims-git', () => {
     it('exports the Git-ref claim provider', async () => {
-      const mod = await import('@bradygaster/squad-sdk/ralph/claims-git');
+      const mod = await import('@squad/sdk/ralph/claims-git');
       expectExports(mod, [
         'GitRefClaimProvider',
         'GitClaimUnavailableError',
@@ -236,16 +236,16 @@ describe('cross-package exports — CLI → SDK', () => {
         'decodeClaimRecord',
         'DEFAULT_CLAIM_REF_PREFIX',
         'FALLBACK_CLAIM_REF_PREFIX',
-      ], '@bradygaster/squad-sdk/ralph/claims-git');
+      ], '@squad/sdk/ralph/claims-git');
     });
   });
 
   // ─── Subpath: /runtime/* ───────────────────────────────────────────────
 
-  describe('@bradygaster/squad-sdk/runtime/event-bus', () => {
+  describe('@squad/sdk/runtime/event-bus', () => {
     it('exports EventBus', async () => {
-      const mod = await import('@bradygaster/squad-sdk/runtime/event-bus');
-      expectExports(mod, ['EventBus'], '@bradygaster/squad-sdk/runtime/event-bus');
+      const mod = await import('@squad/sdk/runtime/event-bus');
+      expectExports(mod, ['EventBus'], '@squad/sdk/runtime/event-bus');
     });
   });
 
@@ -259,7 +259,7 @@ describe('cross-package exports — CLI → SDK', () => {
       // In CI / installed scenarios, find it under node_modules.
       const candidates = [
         resolve(process.cwd(), 'packages', 'squad-sdk'),
-        resolve(process.cwd(), 'node_modules', '@bradygaster', 'squad-sdk'),
+        resolve(process.cwd(), 'node_modules', '@squad', 'sdk'),
       ];
       const sdkRoot = candidates.find(
         (p) => existsSync(resolve(p, 'package.json')),

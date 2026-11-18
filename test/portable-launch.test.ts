@@ -16,7 +16,7 @@ import {
   squadRepoLauncher,
   squadRepoLauncherArgs,
   SQUAD_REPO_LAUNCHER_MARKER,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 import {
   committedSquadStateMcpSpec,
   isTransientCliEntry,
@@ -27,7 +27,7 @@ import {
 } from '../packages/squad-cli/src/cli/core/mcp-spec.js';
 import { checkPortableSquadLaunch } from '../packages/squad-cli/src/cli/commands/doctor.js';
 
-const fallback = { command: 'npx' as const, args: ['-y', '@bradygaster/squad-cli@9.9.9', 'state-mcp'] };
+const fallback = { command: 'npx' as const, args: ['-y', '@squad/cli@9.9.9', 'state-mcp'] };
 const localEntry: SquadStateMcpSpec = {
   command: '/opt/node/bin/node',
   args: ['/home/someone/squad/dist/cli-entry.js', 'state-mcp'],
@@ -102,16 +102,16 @@ describe('committed spec (#2462)', () => {
 
   it('keeps exact-version npx for a CLI running from a package runner cache (Copilot review)', () => {
     for (const entry of [
-      '/home/u/.npm/_npx/0a1b2c/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
-      'C:\\Users\\u\\AppData\\Local\\npm-cache\\_npx\\0a1b\\node_modules\\@bradygaster\\squad-cli\\dist\\cli-entry.js',
-      '/home/u/.cache/pnpm/dlx/abc/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
-      '/tmp/xfs-1a2b3c/dlx-5555/node_modules/@bradygaster/squad-cli/dist/cli-entry.js',
+      '/home/u/.npm/_npx/0a1b2c/node_modules/@squad/cli/dist/cli-entry.js',
+      'C:\\Users\\u\\AppData\\Local\\npm-cache\\_npx\\0a1b\\node_modules\\@squad\\cli\\dist\\cli-entry.js',
+      '/home/u/.cache/pnpm/dlx/abc/node_modules/@squad/cli/dist/cli-entry.js',
+      '/tmp/xfs-1a2b3c/dlx-5555/node_modules/@squad/cli/dist/cli-entry.js',
     ]) {
       expect(isTransientCliEntry(entry), entry).toBe(true);
       expect(committedSquadStateMcpSpec({ ...localEntry, args: [entry, 'state-mcp'] }, '.squad'))
         .toEqual({ command: 'npx', args: fallback.args, source: 'pinned' });
     }
-    expect(isTransientCliEntry('/usr/local/lib/node_modules/@bradygaster/squad-cli/dist/cli-entry.js')).toBe(false);
+    expect(isTransientCliEntry('/usr/local/lib/node_modules/@squad/cli/dist/cli-entry.js')).toBe(false);
     expect(isTransientCliEntry('/home/u/src/dlxtools/squad/dist/cli-entry.js')).toBe(false);
   });
 
@@ -176,11 +176,11 @@ describe('Claude hooks through the repository launcher (#2462)', () => {
 });
 
 describe('the repository launcher script (#2462)', () => {
-  /** A fake CLI that prints its argv, at `<dir>/node_modules/@bradygaster/squad-cli`. */
+  /** A fake CLI that prints its argv, at `<dir>/node_modules/@squad/cli`. */
   function fakeCli(dir: string, version: string): void {
-    const pkg = path.join(dir, 'node_modules', '@bradygaster', 'squad-cli');
+    const pkg = path.join(dir, 'node_modules', '@squad', 'cli');
     fs.mkdirSync(path.join(pkg, 'dist'), { recursive: true });
-    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@bradygaster/squad-cli', version }));
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@squad/cli', version }));
     fs.writeFileSync(path.join(pkg, 'dist', 'cli-entry.js'), `console.log('fake ${version}', JSON.stringify(process.argv.slice(2)));\n`);
   }
 
@@ -264,7 +264,7 @@ describe('the repository launcher script (#2462)', () => {
     const out = run(['state-mcp']);
     expect(out.status).toBe(1);
     expect(out.stderr).toContain('no Squad CLI 2.0.0 or newer found');
-    expect(out.stderr).toContain('npm install -g @bradygaster/squad-cli@2.0.0');
+    expect(out.stderr).toContain('npm install -g @squad/cli@2.0.0');
   });
 
   it('falls back to the CLI recorded on this machine, and skips an older one', async () => {
@@ -272,7 +272,7 @@ describe('the repository launcher script (#2462)', () => {
     const other = path.join(root, 'other-machine-dir');
     fakeCli(other, '2.0.2');
     const home = path.join(root, 'squad-home');
-    const entry = path.join(other, 'node_modules', '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js');
+    const entry = path.join(other, 'node_modules', '@squad', 'cli', 'dist', 'cli-entry.js');
     recordSquadCli(entry, '2.0.2', { SQUAD_HOME: home });
     expect(JSON.parse(fs.readFileSync(path.join(home, 'cli.json'), 'utf8'))).toEqual({ entry, version: '2.0.2' });
     expect(run(['state-mcp'], { SQUAD_HOME: home }).stdout.trim()).toBe('fake 2.0.2 ["state-mcp"]');

@@ -416,7 +416,7 @@ import {
   parseCharterMarkdown,
   serializeCharter,
   validateCharterConformance,
-} from '@bradygaster/squad-sdk/parsers';
+} from '@squad/sdk/parsers';
 
 const validation = validateCharterConformance(markdown, {
   profile: 'squad-charter/v0.1',

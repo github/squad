@@ -12,14 +12,14 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+// Single source for the verified-tarball allowance, derived from scripts/release/distribution-identity.json.
+import { VERIFIED_TARBALL } from '../scripts/release/policy-gates.mjs';
 
 // ─── Core lint function (mirrors CI shell logic) ────────────────────────
 
 const NPM_PUBLISH_COMMAND =
   /(?:^|&&|\|\||;)\s*(?:(?:if|then)\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*npm\s+[^#;&|]*\bpublish\b[^#;&|]*/;
 const WORKSPACE_FLAG = /(?:^|\s)(?:-w|--workspace)(?:=|\s|$)/;
-const VERIFIED_TARBALL =
-  /npm\s+publish\s+"\$PACKS_DIR\/bradygaster-squad-(?:sdk|cli)-\$\{VERSION\}\.tgz"(?:\s|$)/;
 
 /**
  * Returns true if the line contains a workspace-scoped npm publish
@@ -65,8 +65,8 @@ describe('publish-policy lint logic', () => {
       'npm --workspace packages/squad-cli publish --tag insider',
       'cd packages/sdk && npm --workspace=packages/squad-sdk publish',
       'run: npm publish --workspace packages/squad-cli',
-      'npm publish "$PACKS_DIR/bradygaster-squad-sdk-${VERSION}.tgz" --ignore-scripts --access public --provenance',
-      'npm publish "$PACKS_DIR/bradygaster-squad-cli-${VERSION}.tgz" --ignore-scripts --access public --provenance',
+      'npm publish "$PACKS_DIR/squad-sdk-${VERSION}.tgz" --ignore-scripts --access public --provenance',
+      'npm publish "$PACKS_DIR/squad-cli-${VERSION}.tgz" --ignore-scripts --access public --provenance',
     ];
 
     for (const line of goodLines) {
@@ -194,14 +194,14 @@ describe('publish-policy: release recovery after staging cleanup failure', () =>
       /if: success\(\) && steps\.existing\.outputs\.stage_pair == 'true'/,
     );
     expect(sdkCleanup).toMatch(
-      /assert-publish-identity\.mjs[\s\S]*?if npm dist-tag rm @bradygaster\/squad-sdk[\s\S]*?outcome=failure[\s\S]*?exit_code=\$status/,
+      /assert-publish-identity\.mjs[\s\S]*?if npm dist-tag rm @squad\/sdk[\s\S]*?outcome=failure[\s\S]*?exit_code=\$status/,
     );
     expect(cliCleanup).toMatch(/id: remove-cli-staging-tag/);
     expect(cliCleanup).toMatch(
       /if: success\(\) && steps\.existing\.outputs\.stage_pair == 'true'/,
     );
     expect(cliCleanup).toMatch(
-      /assert-publish-identity\.mjs[\s\S]*?if npm dist-tag rm @bradygaster\/squad-cli[\s\S]*?outcome=failure[\s\S]*?exit_code=\$status/,
+      /assert-publish-identity\.mjs[\s\S]*?if npm dist-tag rm @squad\/cli[\s\S]*?outcome=failure[\s\S]*?exit_code=\$status/,
     );
     expect(cleanupEvidence).toMatch(
       /SDK_CLEANUP_OUTCOME: \$\{\{ steps\.remove-sdk-staging-tag\.outputs\.outcome[\s\S]*?CLI_CLEANUP_OUTCOME: \$\{\{ steps\.remove-cli-staging-tag\.outputs\.outcome[\s\S]*?staging-tag-cleanup\.json[\s\S]*?::warning::Could not remove/,

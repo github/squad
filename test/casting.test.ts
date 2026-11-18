@@ -12,7 +12,7 @@ import {
   type CastMember,
   type AgentRole,
   type UniverseId,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 
 const castingRoots: string[] = [];
 
@@ -259,7 +259,7 @@ describe('CastingEngine', () => {
 
 describe('CastingRegistry (legacy)', () => {
   it('should be importable for backward compat', async () => {
-    const { CastingRegistry } = await import('@bradygaster/squad-sdk/casting');
+    const { CastingRegistry } = await import('@squad/sdk/casting');
     const reg = new CastingRegistry({ castingDir: '.squad/casting' });
     expect(reg.getAllEntries()).toEqual([]);
     expect(reg.getByRole('lead')).toBeUndefined();
@@ -301,7 +301,7 @@ describe('CastingRegistry (legacy)', () => {
   ])('fails closed on a $name', async ({ write, expected }) => {
     const dir = castingDir();
     write(dir);
-    const { CastingRegistry } = await import('@bradygaster/squad-sdk/casting');
+    const { CastingRegistry } = await import('@squad/sdk/casting');
     await expect(new CastingRegistry({ castingDir: dir }).load()).rejects.toThrow(expected);
   });
 });

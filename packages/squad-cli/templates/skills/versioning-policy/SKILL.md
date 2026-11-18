@@ -8,8 +8,8 @@ source: "earned (PR #640 workspace resolution incident and automated release cha
 
 ## Context
 
-Squad publishes `@bradygaster/squad-sdk` and
-`@bradygaster/squad-cli` from one npm workspace. Their versions and the root
+Squad publishes `@squad/sdk` and
+`@squad/cli` from one npm workspace. Their versions and the root
 version move together. A mismatched prerelease dependency can make npm silently
 resolve an older registry SDK instead of the local workspace.
 
@@ -52,8 +52,8 @@ For every committed preview version, set both the CLI manifest and lockfile
 dependency floor to that exact preview:
 
 ```bash
-npm pkg set "dependencies.@bradygaster/squad-sdk=>=$VERSION" \
-  --workspace @bradygaster/squad-cli
+npm pkg set "dependencies.@squad/sdk=>=$VERSION" \
+  --workspace @squad/cli
 npm install --package-lock-only
 ```
 

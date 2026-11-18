@@ -1954,7 +1954,7 @@ describe('gh-aw: compiled workflow shell input security contract', () => {
     expect(compiled).toContain('SQUAD_CLI_VERSION: ${{ steps.squad-cli.outputs.version }}');
     expect(compiled).toContain('squad health --json');
     expect(compiled).not.toContain('npm install --global');
-    expect(compiled).not.toContain('npx --yes "@bradygaster/squad-cli@');
+    expect(compiled).not.toContain('npx --yes "@squad/cli@');
   }, 20000);
 
   it('emits no attacker-controlled event text in any compiled run: block', () => {
@@ -3622,7 +3622,7 @@ describe('gh-aw: shared bootstrap health-before-dispatch contract (#1605)', () =
     expect(sharedContent).not.toContain('squad-release');
     expect(sharedContent).toContain('SQUAD_CLI_VERSION: ${{ steps.squad-cli.outputs.version }}');
     expect(sharedContent).not.toContain('npm install --global');
-    expect(sharedContent).not.toContain('npx --yes "@bradygaster/squad-cli@');
+    expect(sharedContent).not.toContain('npx --yes "@squad/cli@');
   });
 
   it('continue-on-error on the restore step does not shield health failure from stopping dispatch', () => {

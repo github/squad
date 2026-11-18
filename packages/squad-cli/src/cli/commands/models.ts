@@ -23,7 +23,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { MODEL_CATALOG, type ModelInfo, type GitHubModelCategory } from '@bradygaster/squad-sdk/config';
+import { MODEL_CATALOG, type ModelInfo, type GitHubModelCategory } from '@squad/sdk/config';
 import { BOLD, RESET, GREEN, DIM, YELLOW } from '../core/output.js';
 
 const execFileAsync = promisify(execFile);

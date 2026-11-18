@@ -14,7 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { addSquadStateGitignoreBlock, FSStorageProvider } from '@bradygaster/squad-sdk';
+import { addSquadStateGitignoreBlock, FSStorageProvider } from '@squad/sdk';
 
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';

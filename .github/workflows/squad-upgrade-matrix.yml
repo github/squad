@@ -203,7 +203,7 @@ jobs:
           target_version="$(node -p 'require("./preview-tarball-matrix-results/registry-preflight.json").version')"
           test "$target_version" = "$SQUAD_PREVIEW_EXPECTED_VERSION"
           registry_state="$(node -p 'require("./preview-tarball-matrix-results/registry-preflight.json").aggregate.versionState')"
-          insider_version="$(node -p 'require("./preview-tarball-matrix-results/registry-preflight.json").packages["@bradygaster/squad-cli"].distTags.values.insider || ""')"
+          insider_version="$(node -p 'require("./preview-tarball-matrix-results/registry-preflight.json").packages["@squad/cli"].distTags.values.insider || ""')"
           echo "SQUAD_PREVIEW_TARGET_REGISTRY_STATE=$registry_state" >> "$GITHUB_ENV"
           echo "SQUAD_PREVIEW_INSIDER_VERSION=$insider_version" >> "$GITHUB_ENV"
       - name: Run exact preview-tarball matrix

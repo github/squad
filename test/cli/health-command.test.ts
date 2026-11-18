@@ -23,7 +23,7 @@ const { mockResolveStateBackend, mockVerifyStateBackend } = vi.hoisted(() => ({
   mockVerifyStateBackend: vi.fn(),
 }));
 
-vi.mock('@bradygaster/squad-sdk', async () => {
+vi.mock('@squad/sdk', async () => {
   const fs = await import('node:fs');
   const pathModule = await import('node:path');
   return {

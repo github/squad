@@ -1145,7 +1145,7 @@ describe('PR review round 4: reclaimer death and outbox write-through', () => {
 });
 
 describe('Layer 3 review recommendations & bug fixes', () => {
-  it('marks /backend as experimental and does not re-export backend symbols from root @bradygaster/squad-sdk', async () => {
+  it('marks /backend as experimental and does not re-export backend symbols from root @squad/sdk', async () => {
     expect(BACKEND_CONTRACT_STAGE).toBe('experimental');
     const rootSdk = await import('../packages/squad-sdk/src/index.js');
     expect(rootSdk).not.toHaveProperty('createSquadBackend');

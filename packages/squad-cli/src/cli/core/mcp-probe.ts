@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import { getSquadStateUserConfigKeys } from './mcp-root.js';
 
 const storage = new FSStorageProvider();

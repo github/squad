@@ -18,7 +18,7 @@ const result = (status: number | null, stdout = '', stderr = '') => ({ status, s
 describe('read-only registry preflight', () => {
   it('records only explicit package, tag-ref, and release absence responses as absent', () => {
     expect(classifyPackageVersion({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       version: VERSION,
       registry: REGISTRY,
       spawn: () => result(1, '', 'npm error code E404\n404 Not Found'),
@@ -41,13 +41,13 @@ describe('read-only registry preflight', () => {
 
   it('records TLS, git transport, and malformed responses as UNKNOWN', () => {
     expect(classifyPackageVersion({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       version: VERSION,
       registry: REGISTRY,
       spawn: () => result(1, '', 'ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE'),
     }).state).toBe('UNKNOWN');
     expect(readDistTags({
-      name: '@bradygaster/squad-cli',
+      name: '@squad/cli',
       registry: REGISTRY,
       spawn: () => result(0, '{broken'),
     })).toMatchObject({
@@ -97,7 +97,7 @@ describe('read-only registry preflight', () => {
         githubRef: { state: '404', ref: `refs/tags/v${VERSION}` },
       });
       expect(evidence.githubRelease.state).toBe('404');
-      for (const name of ['@bradygaster/squad-cli', '@bradygaster/squad-sdk']) {
+      for (const name of ['@squad/cli', '@squad/sdk']) {
         expect(evidence.packages[name].version.state).toBe('404');
         expect(evidence.packages[name].distTags.values).toEqual({
           insider: '2.0.0-preview.3',

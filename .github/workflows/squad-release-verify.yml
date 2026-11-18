@@ -43,10 +43,10 @@ on:
         description: 'Name of the uploaded evidence artifact'
         value: ${{ jobs.verify.outputs.evidence_artifact }}
       sdk_sha256:
-        description: 'sha256 of the packed @bradygaster/squad-sdk tarball'
+        description: 'sha256 of the packed @squad/sdk tarball'
         value: ${{ jobs.verify.outputs.sdk_sha256 }}
       cli_sha256:
-        description: 'sha256 of the packed @bradygaster/squad-cli tarball'
+        description: 'sha256 of the packed @squad/cli tarball'
         value: ${{ jobs.verify.outputs.cli_sha256 }}
   pull_request:
     branches: [dev, main]

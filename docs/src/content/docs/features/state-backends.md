@@ -145,7 +145,7 @@ import {
   resolveSquadState,
   resolveStateBackend,
   type StateBackend,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 // Option 1: Full context resolution (recommended)
 // Resolves paths + backend from config + CLI override in one call
 const ctx = resolveSquadState(process.cwd(), 'two-layer');
@@ -216,7 +216,7 @@ Neither error is success-shaped. A conflict or uncertainty always surfaces as a 
 import {
   StateKeyConflictError,
   StateBackendUncertaintyError,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 try {
   backend.createIfAbsent('sessions/retro-2024-12.md', '# Retro\n');
@@ -293,7 +293,7 @@ The check-then-write pattern above has a TOCTOU race; `createIfAbsent` closes it
 
 `createIfAbsent` and the `squad_state_create_if_absent` MCP tool ship in the
 first release containing this changeset. Consumers must upgrade both
-`@bradygaster/squad-sdk` and `@bradygaster/squad-cli` to that release, add
+`@squad/sdk` and `@squad/cli` to that release, add
 `squad_state_create_if_absent` to their MCP tool allowlist, and restart the
 state MCP server before the tool appears in `tools/list`.
 

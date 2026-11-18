@@ -454,16 +454,16 @@ immediately and report the failure — do **not** attempt workarounds or mark
 scenarios as SKIPPED.
 
 0. **Clean stale SDK before building.** Before running `npm run build`, remove any
-   stale published copy of `@bradygaster/squad-sdk` that may have been installed
+   stale published copy of `@squad/sdk` that may have been installed
    into `packages/squad-cli/node_modules/`. This local copy shadows the workspace
    symlink in the root `node_modules/` and causes TypeScript to see the published
    version instead of the local source. Run from the repo root:
    ```powershell
-   $stale = "packages\squad-cli\node_modules\@bradygaster\squad-sdk"
+   $stale = "packages\squad-cli\node_modules\@squad\sdk"
    if (Test-Path $stale) { Remove-Item -Recurse -Force $stale; Write-Host "Cleaned stale SDK" }
    ```
    This is safe to run unconditionally — if the path doesn't exist, the command is
-   a no-op. The root `node_modules\@bradygaster\squad-sdk` workspace symlink remains
+   a no-op. The root `node_modules\@squad\sdk` workspace symlink remains
    intact and npm will use it automatically.
 1. **Build must succeed.** Run `npm run build` from the repo root. A build
    failure blocks all scenarios; report `BUILD_FAILED` and stop.

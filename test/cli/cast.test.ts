@@ -67,7 +67,7 @@ describe('squad cast', () => {
     // Suppress console output during test
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCast } = await import('@squad/cli/commands/cast');
     await runCast(TEST_ROOT);
 
     // If the bug were present (passing paths.teamDir = .squad/ to LocalAgentSource),
@@ -88,7 +88,7 @@ describe('squad cast', () => {
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCast } = await import('@squad/cli/commands/cast');
     await runCast(TEST_ROOT);
 
     const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
@@ -108,7 +108,7 @@ describe('squad cast', () => {
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCast } = await import('@squad/cli/commands/cast');
     await runCast(nestedDir);
 
     const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
@@ -140,7 +140,7 @@ describe('squad cast', () => {
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCast } = await import('@squad/cli/commands/cast');
     await runCast(projectRoot);
 
     const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
@@ -167,7 +167,7 @@ describe('squad cast', () => {
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCast } = await import('@squad/cli/commands/cast');
     await runCast(projectRoot);
 
     const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
@@ -207,7 +207,7 @@ describe('squad cast', () => {
 
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      const { runCast } = await import('@bradygaster/squad-cli/commands/cast');
+      const { runCast } = await import('@squad/cli/commands/cast');
       await runCast(TEST_ROOT);
 
       const output = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
@@ -231,7 +231,7 @@ describe('squad cast', () => {
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const { runCastAdd, runCast } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCastAdd, runCast } = await import('@squad/cli/commands/cast');
     const created = await runCastAdd(TEST_ROOT, { name: 'Probe', role: 'developer' });
 
     expect(created.agentId).toBe('probe');
@@ -296,7 +296,7 @@ describe('squad cast', () => {
     it('lists the built-ins once, outside ## Members, after casting members into an init roster', async () => {
       const sq = await scaffoldInitShape(INIT_TEAM_MD);
       vi.spyOn(console, 'log').mockImplementation(() => {});
-      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      const { runCastAdd } = await import('@squad/cli/commands/cast');
       await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
       await runCastAdd(TEST_ROOT, { name: 'Tally', role: 'Tester' });
 
@@ -324,7 +324,7 @@ describe('squad cast', () => {
         INIT_TEAM_MD.replace('|------|------|---------|--------|\n', `|------|------|---------|--------|\n${allRows}\n`),
       );
       vi.spyOn(console, 'log').mockImplementation(() => {});
-      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      const { runCastAdd } = await import('@squad/cli/commands/cast');
       await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
 
       const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
@@ -340,7 +340,7 @@ describe('squad cast', () => {
         INIT_TEAM_MD.replace('|------|------|---------|--------|\n', '|------|------|---------|--------|\n| Ralph | Work Monitor | — | 🔄 Monitor |\n'),
       );
       vi.spyOn(console, 'log').mockImplementation(() => {});
-      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      const { runCastAdd } = await import('@squad/cli/commands/cast');
       await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
 
       const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
@@ -352,7 +352,7 @@ describe('squad cast', () => {
     it('adds rows only for built-ins whose charter exists', async () => {
       const sq = await scaffoldInitShape(INIT_TEAM_MD, ['scribe']);
       vi.spyOn(console, 'log').mockImplementation(() => {});
-      const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+      const { runCastAdd } = await import('@squad/cli/commands/cast');
       await runCastAdd(TEST_ROOT, { name: 'Penny', role: 'Lead' });
 
       const teamMd = await readFile(join(sq, 'team.md'), 'utf-8');
@@ -363,7 +363,7 @@ describe('squad cast', () => {
 
   it('rejects missing --name or --role with SquadError (#2191)', async () => {
     await scaffold(TEST_ROOT);
-    const { runCastAdd } = await import('@bradygaster/squad-cli/commands/cast');
+    const { runCastAdd } = await import('@squad/cli/commands/cast');
 
     await expect(runCastAdd(TEST_ROOT, { name: 'Probe', role: '' })).rejects.toThrow(
       /Usage: squad cast --name <name> --role <role>/,

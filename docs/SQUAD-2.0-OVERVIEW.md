@@ -20,7 +20,7 @@ Squad 2.0 decouples the client host, the conversation backend, and the execution
 flowchart LR
     user[Developer] --> client
 
-    subgraph CP[Client Plane\n@bradygaster/squad-sdk/client]
+    subgraph CP[Client Plane\n@squad/sdk/client]
       client[Host-native adapter\nCopilot / Claude / Kiro / OpenCode / Cursor / Codex / Antigravity]
       projection[HostProjection\nagent files + MCP config + rules]
       caps[ClientCapabilities\ncapability tokens + dispatch]
@@ -28,7 +28,7 @@ flowchart LR
       client --> caps
     end
 
-    subgraph BP[Control / Broker Plane\n@bradygaster/squad-sdk/backend]
+    subgraph BP[Control / Broker Plane\n@squad/sdk/backend]
       backend[SquadBackend / IConversationBackend]
       log[Durable ordered event log\nBackendEnvelope + monotonic seq]
       auth[Capability negotiation\nclient ∩ backend ∩ policy]
@@ -52,9 +52,9 @@ flowchart LR
     backend --> harness
 ```
 
-### Plane 1: Client Plane (`@bradygaster/squad-sdk/client`)
+### Plane 1: Client Plane (`@squad/sdk/client`)
 
-`@bradygaster/squad-sdk/client` (with `@bradygaster/squad-sdk/clients` retained as a deprecated alias) projects the Squad coordinator into each host's native configuration without owning routing, durable state, or authorization:
+`@squad/sdk/client` (with `@squad/sdk/clients` retained as a deprecated alias) projects the Squad coordinator into each host's native configuration without owning routing, durable state, or authorization:
 
 | Host (`ClientId`) | Generated files |
 |---|---|
@@ -68,9 +68,9 @@ flowchart LR
 
 Persisted `clients[]` in `.squad/config.json` contains only canonical slugs validated by `normalizeClientIds()` and `assertPortableClients()`.
 
-### Plane 2: Control / Broker Plane (`@bradygaster/squad-sdk/backend`)
+### Plane 2: Control / Broker Plane (`@squad/sdk/backend`)
 
-> **Experimental Preview — Bring Your Own Server:** `@bradygaster/squad-sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
+> **Experimental Preview — Bring Your Own Server:** `@squad/sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
 
 `SquadBackend` / `IConversationBackend` defines the conversation contract:
 

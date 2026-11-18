@@ -12,8 +12,8 @@
 
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
-import { isSafeUpstreamName } from '@bradygaster/squad-sdk/upstream';
+import { FSStorageProvider } from '@squad/sdk';
+import { isSafeUpstreamName } from '@squad/sdk/upstream';
 
 const storage = new FSStorageProvider();
 import { success, warn, info } from '../core/output.js';
@@ -95,7 +95,7 @@ function assertSafeGitSource(source: string): void {
     fatal(`Refusing git upstream source "${redactGitSource(source)}": ${reason}.`);
   }
 }
-import type { UpstreamConfig, UpstreamSource } from '@bradygaster/squad-sdk';
+import type { UpstreamConfig, UpstreamSource } from '@squad/sdk';
 
 function readUpstreams(upstreamFile: string): UpstreamConfig {
   if (!storage.existsSync(upstreamFile)) return { upstreams: [] };

@@ -7,7 +7,7 @@ ls .squad/.scratch/
 
 **Try this to create a scratch file:**
 ```typescript
-import { scratchFile } from '@bradygaster/squad-sdk';
+import { scratchFile } from '@squad/sdk';
 
 const promptPath = scratchFile(squadRoot, 'coordinator-prompt', '.txt', promptContent);
 ```
@@ -39,7 +39,7 @@ This polluted the working directory and risked accidental commits. Scratch dir s
 Resolves and creates the scratch directory.
 
 ```typescript
-import { scratchDir } from '@bradygaster/squad-sdk';
+import { scratchDir } from '@squad/sdk';
 
 const scratchPath = scratchDir('/path/to/repo');
 // Returns: /path/to/repo/.squad/.scratch
@@ -58,7 +58,7 @@ const scratchPath = scratchDir('/path/to/repo');
 Creates a named temp file in scratch dir.
 
 ```typescript
-import { scratchFile } from '@bradygaster/squad-sdk';
+import { scratchFile } from '@squad/sdk';
 
 const promptPath = scratchFile(
   '/path/to/repo',

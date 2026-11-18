@@ -28,7 +28,7 @@ You don't have to start from scratch. You don't have to rewrite anything. Instal
 
 ```bash
 cd ~/projects/halfway-done-app
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 

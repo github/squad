@@ -5,8 +5,8 @@
  * main loop stays thin and each feature is testable in isolation.
  */
 
-import type { PlatformAdapter } from '@bradygaster/squad-sdk/platform';
-import type { ExecutorIdentity, WorkClaimProvider } from '@bradygaster/squad-sdk/ralph/claims';
+import type { PlatformAdapter } from '@squad/sdk/platform';
+import type { ExecutorIdentity, WorkClaimProvider } from '@squad/sdk/ralph/claims';
 import type { WatchClaimMetrics } from './claim-metrics.js';
 
 /** Phase within a single watch round. */

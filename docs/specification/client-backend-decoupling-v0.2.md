@@ -11,7 +11,7 @@
 **Claimable capabilities:** None
 
 **Implementation status:** The contract in this draft is implemented as the
-experimental `@bradygaster/squad-sdk/backend` subpath (`LocalSquadBackend`,
+experimental `@squad/sdk/backend` subpath (`LocalSquadBackend`,
 `DurableHttpSquadBackend`, `DefaultHarnessRegistry`) and bridged over MCP by
 `squad state-mcp --experimental-backend`. Two execution harnesses ship:
 `claude-agent-sdk` (`ClaudeAgentSdkHarness`), registered by the MCP bridge by
@@ -98,7 +98,7 @@ portable conversation protocol.
 
 The broker contract lives in one SDK module,
 `packages/squad-sdk/src/backend/types.ts`, exported from
-`@bradygaster/squad-sdk/backend` (stage: `experimental`). That file is the
+`@squad/sdk/backend` (stage: `experimental`). That file is the
 source of truth; the excerpts below are copied from it and trimmed to the
 members a client author needs.
 

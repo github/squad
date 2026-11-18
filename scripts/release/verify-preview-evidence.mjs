@@ -5,8 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PACKAGES = [
-  ['@bradygaster/squad-cli', 'cli'],
-  ['@bradygaster/squad-sdk', 'sdk'],
+  ['@squad/cli', 'cli'],
+  ['@squad/sdk', 'sdk'],
 ];
 
 function sha256(bytes) {
@@ -36,12 +36,12 @@ export function verifyPreviewEvidence(options) {
   requireEqual(required(options, 'evidenceArtifact'), expectedArtifact, 'evidence artifact name');
 
   const sourceManifests = {
-    '@bradygaster/squad-cli': readJson(required(options, 'cliPackageJson')),
-    '@bradygaster/squad-sdk': readJson(required(options, 'sdkPackageJson')),
+    '@squad/cli': readJson(required(options, 'cliPackageJson')),
+    '@squad/sdk': readJson(required(options, 'sdkPackageJson')),
   };
-  const expectedVersion = sourceManifests['@bradygaster/squad-cli'].version;
-  requireEqual(sourceManifests['@bradygaster/squad-sdk'].version, expectedVersion, 'target source package versions');
-  const sourceSdkDependency = sourceManifests['@bradygaster/squad-cli'].dependencies?.['@bradygaster/squad-sdk'];
+  const expectedVersion = sourceManifests['@squad/cli'].version;
+  requireEqual(sourceManifests['@squad/sdk'].version, expectedVersion, 'target source package versions');
+  const sourceSdkDependency = sourceManifests['@squad/cli'].dependencies?.['@squad/sdk'];
   if (![expectedVersion, `>=${expectedVersion}`].includes(sourceSdkDependency)) {
     throw new Error(`target source CLI SDK dependency: expected ${expectedVersion} or >=${expectedVersion}, got ${sourceSdkDependency ?? '<missing>'}`);
   }
@@ -78,7 +78,7 @@ export function verifyPreviewEvidence(options) {
     requireEqual(packed.manifest?.name, name, `${name} packed manifest name`);
     requireEqual(packed.manifest?.version, expectedVersion, `${name} packed version`);
     requireEqual(manifested.version, expectedVersion, `${name} verification manifest version`);
-    if (name === '@bradygaster/squad-cli') {
+    if (name === '@squad/cli') {
       requireEqual(packed.manifest?.sdkDependency, expectedVersion, `${name} packed SDK dependency`);
       requireEqual(manifested.sdkDependency, sourceSdkDependency, `${name} verification manifest SDK dependency`);
     }

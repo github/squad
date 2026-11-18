@@ -6,7 +6,7 @@ name: Squad Release
 # verification bundle (squad-release-verify.yml) pass at that SHA.
 #
 # Preview releases (X.Y.Z-preview.N from dev) publish to the npm `insider` dist-tag by default
-# because `squad upgrade --self --insider` resolves `@bradygaster/squad-cli@insider`; `preview`
+# because `squad upgrade --self --insider` resolves `@squad/cli@insider`; `preview`
 # is added as a compatibility alias once both packages verify. Both are inputs so the channel
 # decision is a one-line change at dispatch time.
 #

@@ -1,4 +1,4 @@
-# @bradygaster/squad-sdk
+# @squad/sdk
 
 **Programmable multi-agent runtime for GitHub Copilot.** Build AI teams that persist, learn, and coordinate — with real governance, not vibes.
 
@@ -11,7 +11,7 @@
 ## Install
 
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 ---
@@ -97,8 +97,8 @@ The lead routes a task to DevRel. A new session is created, context is passed, a
 > **Wiring requirement:** `squad_route` creates sessions via `spawnParallel`, which requires fan-out dependencies. Pass a `fanOutDepsGetter` as the 5th argument to `new ToolRegistry(...)`:
 >
 > ```typescript
-> import { ToolRegistry } from '@bradygaster/squad-sdk/tools';
-> import type { FanOutDependencies } from '@bradygaster/squad-sdk/coordinator';
+> import { ToolRegistry } from '@squad/sdk/tools';
+> import type { FanOutDependencies } from '@squad/sdk/coordinator';
 >
 > const fanOutDeps: FanOutDependencies = {
 >   compileCharter: async (name) => { /* load agent charter */ },
@@ -249,7 +249,7 @@ Squad separates I/O from business logic. All persistent storage — sessions, st
 Implement the `StorageProvider` interface:
 
 ```typescript
-import type { StorageProvider } from '@bradygaster/squad-sdk';
+import type { StorageProvider } from '@squad/sdk';
 
 export class MyCloudStorageProvider implements StorageProvider {
   async read(filePath: string): Promise<string | undefined> {
@@ -355,7 +355,7 @@ When agents complete work, record decisions, or hit errors — Ralph knows. If a
 ## Links
 
 - **Repository:** [github.com/github/squad](https://github.com/github/squad)
-- **CLI package:** [@bradygaster/squad-cli](https://www.npmjs.com/package/@bradygaster/squad-cli)
+- **CLI package:** [@squad/cli](https://www.npmjs.com/package/@squad/cli)
 - **Issues:** [github.com/github/squad/issues](https://github.com/github/squad/issues)
 
 ---

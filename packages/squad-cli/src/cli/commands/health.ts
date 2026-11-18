@@ -14,13 +14,13 @@ import {
   verifyStateBackend,
   type StateBackend,
   type StateBackendType,
-} from '@bradygaster/squad-sdk';
-import { parseCharterMarkdown } from '@bradygaster/squad-sdk/agents';
-import { readCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk';
+import { parseCharterMarkdown } from '@squad/sdk/agents';
+import { readCastingRegistryPair } from '@squad/sdk/casting';
 import {
   parseRoutingRulesMarkdown,
   parseTeamMarkdown,
-} from '@bradygaster/squad-sdk/parsers';
+} from '@squad/sdk/parsers';
 import { effectiveSquadDir } from '../core/effective-squad-dir.js';
 import { getPackageVersion } from '../core/version.js';
 

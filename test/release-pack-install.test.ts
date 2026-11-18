@@ -2,7 +2,7 @@
  * Release gate: self-upgrade shaped install of the EXACT packed tarballs into an isolated global
  * prefix (`npm install -g --prefix <tmp>`), never the real global prefix.
  *
- * `selfUpgradeCli` runs `npm install -g @bradygaster/squad-cli@<tag>`; the only difference here is
+ * `selfUpgradeCli` runs `npm install -g @squad/cli@<tag>`; the only difference here is
  * that the package specs are the tarballs produced by scripts/release/pack-evidence.mjs, so the
  * test proves the pair (CLI tarball + SDK tarball it depends on) installs, exposes the `squad` bin
  * and reports the release version, without touching the registry for the Squad packages.
@@ -24,8 +24,8 @@ describe('release gate: isolated-prefix install of the packed CLI + SDK pair', (
   it.skipIf(!ENABLED)('npm install -g --prefix <isolated> <sdk.tgz> <cli.tgz> yields the release version and the squad bin', () => {
     expect(existsSync(EVIDENCE_DIR), `SQUAD_RELEASE_EVIDENCE_DIR=${EVIDENCE_DIR} must exist`).toBe(true);
     const tarballs = readdirSync(EVIDENCE_DIR).filter((f) => f.endsWith('.tgz'));
-    const sdk = tarballs.find((f) => f.startsWith('bradygaster-squad-sdk-'));
-    const cli = tarballs.find((f) => f.startsWith('bradygaster-squad-cli-'));
+    const sdk = tarballs.find((f) => f.startsWith('squad-sdk-'));
+    const cli = tarballs.find((f) => f.startsWith('squad-cli-'));
     expect(sdk, 'SDK tarball present').toBeDefined();
     expect(cli, 'CLI tarball present').toBeDefined();
     const expectedVersion = JSON.parse(readFileSync(join(process.cwd(), 'packages', 'squad-cli', 'package.json'), 'utf8')).version as string;
@@ -40,16 +40,16 @@ describe('release gate: isolated-prefix install of the packed CLI + SDK pair', (
       execFileSync(npm, ['install', '-g', '--prefix', prefix, '--no-audit', '--no-fund', '--ignore-scripts', join(EVIDENCE_DIR, sdk!), join(EVIDENCE_DIR, cli!)], { env, stdio: 'inherit', shell: process.platform === 'win32' });
 
       const modules = process.platform === 'win32' ? join(prefix, 'node_modules') : join(prefix, 'lib', 'node_modules');
-      const cliPkg = JSON.parse(readFileSync(join(modules, '@bradygaster', 'squad-cli', 'package.json'), 'utf8'));
+      const cliPkg = JSON.parse(readFileSync(join(modules, '@squad', 'cli', 'package.json'), 'utf8'));
       expect(cliPkg.version).toBe(expectedVersion);
       // The SDK must be the packed one (hoisted or nested), at the same release version.
-      const sdkCandidates = [join(modules, '@bradygaster', 'squad-sdk', 'package.json'), join(modules, '@bradygaster', 'squad-cli', 'node_modules', '@bradygaster', 'squad-sdk', 'package.json')].filter(existsSync);
+      const sdkCandidates = [join(modules, '@squad', 'sdk', 'package.json'), join(modules, '@squad', 'cli', 'node_modules', '@squad', 'sdk', 'package.json')].filter(existsSync);
       expect(sdkCandidates.length, 'packed SDK installed').toBeGreaterThan(0);
       expect(JSON.parse(readFileSync(sdkCandidates[0]!, 'utf8')).version).toBe(expectedVersion);
 
       const bin = process.platform === 'win32' ? join(prefix, 'squad.cmd') : join(prefix, 'bin', 'squad');
       expect(existsSync(bin), `global bin shim ${bin}`).toBe(true);
-      const out = execFileSync(process.execPath, [join(modules, '@bradygaster', 'squad-cli', 'dist', 'cli-entry.js'), '--version'], { env, encoding: 'utf8' });
+      const out = execFileSync(process.execPath, [join(modules, '@squad', 'cli', 'dist', 'cli-entry.js'), '--version'], { env, encoding: 'utf8' });
       expect(out).toContain(expectedVersion);
     } finally {
       rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });

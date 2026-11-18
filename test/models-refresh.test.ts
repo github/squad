@@ -17,7 +17,7 @@ import {
   normalizeDisplayName,
   type RefreshDeps,
 } from '../packages/squad-cli/src/cli/commands/models.js';
-import type { ModelInfo } from '@bradygaster/squad-sdk/config';
+import type { ModelInfo } from '@squad/sdk/config';
 
 const SEED: ModelInfo[] = [
   { id: 'claude-sonnet-4.6', tier: 'standard', provider: 'anthropic', family: 'claude', githubCategory: 'versatile' },

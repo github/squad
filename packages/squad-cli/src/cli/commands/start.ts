@@ -13,11 +13,11 @@ import path from 'node:path';
 // createReadStream retained — streaming not in StorageProvider scope
 import { createReadStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { FSStorageProvider, RemoteBridge } from '@bradygaster/squad-sdk';
+import { FSStorageProvider, RemoteBridge } from '@squad/sdk';
 import { withAdditionalMcpConfig } from '../core/copilot-invocation.js';
 
 const storage = new FSStorageProvider();
-import type { RemoteBridgeConfig } from '@bradygaster/squad-sdk';
+import type { RemoteBridgeConfig } from '@squad/sdk';
 import {
   isDevtunnelAvailable,
   createTunnel,

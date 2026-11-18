@@ -12,9 +12,9 @@ import {
   normalizeToolNameForCopilot,
   normalizeToolsInConfig,
   SquadClient,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 import { CopilotClient } from '@github/copilot-sdk';
-import type { SquadSessionConfig, SquadTool } from '@bradygaster/squad-sdk/adapter';
+import type { SquadSessionConfig, SquadTool } from '@squad/sdk/adapter';
 
 // ---------------------------------------------------------------------------
 // Mock CopilotClient — mirrors adapter-client.test.ts stub

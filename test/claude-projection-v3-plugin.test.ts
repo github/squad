@@ -353,7 +353,7 @@ describe('Claude projection v3: plugin mode install', () => {
       fs.mkdirSync(abs('bin'));
       fs.mkdirSync(abs('project'));
       write('global/squad.CMD', 'this shim must not execute');
-      write('global/node_modules/@bradygaster/squad-cli/dist/cli-entry.js', 'console.log(JSON.stringify(process.argv.slice(2)))');
+      write('global/node_modules/@squad/cli/dist/cli-entry.js', 'console.log(JSON.stringify(process.argv.slice(2)))');
       const args = ['two words', 'literal&token', 'literal"quote'];
       const run = () => spawnSync(process.execPath, [abs('scripts/squad.mjs'), ...args], {
         cwd: root, encoding: 'utf8', env: { PATH: abs('global'), PATHEXT: '.CMD', CLAUDE_PROJECT_DIR: abs('project'), SQUAD_ALLOW_NPX: '1', SQUAD_HOME: abs('no-squad-home') },

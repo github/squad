@@ -51,7 +51,7 @@ Choose the install method for your platform:
 
 | Method | Command |
 |--------|---------|
-| npm (all platforms, Node.js 22.5+) | `npm install -g @bradygaster/squad-cli` |
+| npm (all platforms, Node.js 22.5+) | `npm install -g @squad/cli` |
 | Homebrew (macOS) | `brew install --cask bradygaster/squad/squad` |
 | WinGet (Windows) | `winget install --id bradygaster.Squad --exact` |
 | Install script (macOS/Linux, no npm) | See [Standalone Install](https://github.github.com/squad/docs/features/standalone-install/) |
@@ -59,6 +59,11 @@ Choose the install method for your platform:
 Preview and insider builds are available as `squad-preview` and
 `squad-insider` Homebrew casks, or as `bradygaster.Squad.Preview` and
 `bradygaster.Squad.Insider` WinGet packages.
+
+> **Upgrading from `@bradygaster/squad-cli`?** The npm packages are now
+> `@squad/cli` and `@squad/sdk`. Run `npm uninstall -g @bradygaster/squad-cli`
+> before installing `@squad/cli`; see the
+> [Package Rename guide](https://github.github.com/squad/docs/get-started/package-rename/).
 
 Direct archives for macOS, Linux, and Windows are also available from
 [GitHub Releases](https://github.com/github/squad/releases/latest).
@@ -121,7 +126,7 @@ Use the same channel you installed from:
 
 | Installed with | Update command |
 |----------------|----------------|
-| npm | `npm install -g @bradygaster/squad-cli@latest` |
+| npm | `npm install -g @squad/cli@latest` |
 | Homebrew | `brew upgrade --cask squad` |
 | WinGet | `winget upgrade --id bradygaster.Squad --exact` |
 | Install script | Re-run the [install script](https://github.github.com/squad/docs/features/standalone-install/#macos-and-linux) |
@@ -504,7 +509,7 @@ Prefer TypeScript? You can define your team in code instead of markdown. Create 
 
 ```typescript
 // squad.config.ts
-import { defineSquad, defineTeam, defineAgent } from '@bradygaster/squad-sdk';
+import { defineSquad, defineTeam, defineAgent } from '@squad/sdk';
 
 export default defineSquad({
   team: defineTeam({ name: 'Platform Squad', members: ['@edie', '@mcmanus'] }),
@@ -522,8 +527,8 @@ Run `squad build` to generate all the markdown. See the [SDK-First Mode Guide](d
 ## Monorepo Development
 
 Squad is a monorepo with two packages:
-- **`@bradygaster/squad-sdk`** — Core runtime and library for programmable agent orchestration
-- **`@bradygaster/squad-cli`** — Command-line interface that depends on the SDK
+- **`@squad/sdk`** — Core runtime and library for programmable agent orchestration
+- **`@squad/cli`** — Command-line interface that depends on the SDK
 
 ### Building
 
@@ -583,7 +588,7 @@ The SDK provides programmatic control over agent orchestration — custom tools,
 - [Extensibility guide](docs/src/content/docs/guide/extensibility.md)
 - [Samples](samples/README.md) — eight working examples from beginner to advanced
 
-For SDK installation: `npm install @bradygaster/squad-sdk`
+For SDK installation: `npm install @squad/sdk`
 
 ---
 

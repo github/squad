@@ -3,10 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade } from '@bradygaster/squad-cli/core/upgrade';
-import { getPackageVersion } from '@bradygaster/squad-cli/core/version';
-import { _setCastingDurabilityHooksForTesting, readCastingRegistryPair } from '@bradygaster/squad-sdk/casting';
+import { runInit } from '@squad/cli/core/init';
+import { runUpgrade } from '@squad/cli/core/upgrade';
+import { getPackageVersion } from '@squad/cli/core/version';
+import { _setCastingDurabilityHooksForTesting, readCastingRegistryPair } from '@squad/sdk/casting';
 
 const registryRaw = readFileSync(join(process.cwd(), 'test', 'fixtures', 'casting-legacy', 'registry.json'), 'utf8');
 const historyRaw = readFileSync(join(process.cwd(), 'test', 'fixtures', 'casting-legacy', 'history.json'), 'utf8');

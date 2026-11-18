@@ -1667,7 +1667,7 @@ or acceptance. Reconciliation similarly retries its lifecycle update idempotentl
 
 ### Reading activation records with the SDK
 
-The public `@bradygaster/squad-sdk/casting` subpath exports
+The public `@squad/sdk/casting` subpath exports
 `selectActivationRecord(records, registry, context)`. It is a synchronous reader,
 not a GitHub API verifier. Supply `ActivationRecord` entries with the exact comment
 `id` and `body`, the independently frozen `AgentProvenanceRegistry`, and an
@@ -1697,7 +1697,7 @@ import {
   type ActivationSelectionContext,
   type AgentProvenanceRegistry,
   type SelectedActivationRecord,
-} from '@bradygaster/squad-sdk/casting';
+} from '@squad/sdk/casting';
 
 function inspectActivation(
   records: readonly ActivationRecord[],

@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { runInit } from '@bradygaster/squad-cli/core/init';
+import { runInit } from '@squad/cli/core/init';
 import {
   runUpgrade,
   ensureGitignore,
@@ -22,9 +22,9 @@ import {
   selfUpgradeCli,
   detectSelfUpgradeTag,
   planUpgradeFiles,
-} from '@bradygaster/squad-cli/core/upgrade';
+} from '@squad/cli/core/upgrade';
 import { getTemplatesDir } from '../../packages/squad-cli/src/cli/core/templates.js';
-import { getPackageVersion } from '@bradygaster/squad-cli/core/version';
+import { getPackageVersion } from '@squad/cli/core/version';
 import {
   readShippedManifest,
   writeVerifiedBackup,
@@ -405,8 +405,8 @@ describe('squad upgrade --self: dry-run installs nothing, follows the installed 
     expect(exec).not.toHaveBeenCalled();
     expect(result.performed).toBe(false);
     expect(result.tag).toBe('insider');
-    expect(result.command).toBe('npm install -g @bradygaster/squad-cli@insider');
-    expect(logs.join('\n')).toContain('npm install -g @bradygaster/squad-cli@insider');
+    expect(result.command).toBe('npm install -g @squad/cli@insider');
+    expect(logs.join('\n')).toContain('npm install -g @squad/cli@insider');
     expect(logs.join('\n')).toMatch(/Nothing was installed/);
   });
 
@@ -417,7 +417,7 @@ describe('squad upgrade --self: dry-run installs nothing, follows the installed 
       resolveTagVersion: async (tag) => (tag === 'insider' ? '2.0.0-preview.2' : '1.1.0'),
     });
     expect(result.tag).toBe('insider');
-    expect(exec).toHaveBeenCalledWith('npm install -g @bradygaster/squad-cli@insider', { stdio: 'inherit' });
+    expect(exec).toHaveBeenCalledWith('npm install -g @squad/cli@insider', { stdio: 'inherit' });
     expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('@latest'), expect.anything());
   });
 
@@ -426,7 +426,7 @@ describe('squad upgrade --self: dry-run installs nothing, follows the installed 
     const result = await selfUpgradeCli({ packageManager: 'pnpm', exec, currentVersion: '1.0.1', resolveTagVersion: async () => '1.1.0' });
     expect(result.tag).toBe('latest');
     expect(result.targetVersion).toBe('1.1.0');
-    expect(exec).toHaveBeenCalledWith('pnpm add -g @bradygaster/squad-cli@latest', { stdio: 'inherit' });
+    expect(exec).toHaveBeenCalledWith('pnpm add -g @squad/cli@latest', { stdio: 'inherit' });
   });
 
   it('refuses a downgrade (resolved target older than installed) and runs nothing', async () => {

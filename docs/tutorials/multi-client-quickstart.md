@@ -2,7 +2,7 @@
 
 > **Canonical Published Guide:** See [Using Squad across clients](../src/content/docs/scenarios/using-squad-across-clients.md) and [Squad 2.0 architecture](../src/content/docs/concepts/squad-2-0-architecture.md) on the published Astro docs site for the complete multi-client guide and architecture reference.
 
-The `--client` flag on `squad init` and `squad upgrade` (backed by `@bradygaster/squad-sdk/client`; `@bradygaster/squad-sdk/clients` is a deprecated alias) projects native coordinator and MCP files for all **7 supported hosts**: GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex, and Google Antigravity (`copilot|claude|kiro|opencode|cursor|codex|antigravity|all`).
+The `--client` flag on `squad init` and `squad upgrade` (backed by `@squad/sdk/client`; `@squad/sdk/clients` is a deprecated alias) projects native coordinator and MCP files for all **7 supported hosts**: GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex, and Google Antigravity (`copilot|claude|kiro|opencode|cursor|codex|antigravity|all`).
 
 ## Host projection summary
 
@@ -83,10 +83,10 @@ npx squad init --client all
 npx squad upgrade --client copilot,claude,cursor,codex,antigravity
 ```
 
-`.squad/config.json` stores only portable canonical slugs in `clients[]` (enforced by `normalizeClientIds()` and `assertPortableClients()` in `@bradygaster/squad-sdk/client`), and shared JSON/TOML MCP configs are merged additively without overwriting existing servers.
+`.squad/config.json` stores only portable canonical slugs in `clients[]` (enforced by `normalizeClientIds()` and `assertPortableClients()` in `@squad/sdk/client`), and shared JSON/TOML MCP configs are merged additively without overwriting existing servers.
 
 ```ts
-import { installClients, parseClients } from '@bradygaster/squad-sdk/client';
+import { installClients, parseClients } from '@squad/sdk/client';
 
 installClients(parseClients('claude,cursor,codex'), {
   root: process.cwd(),

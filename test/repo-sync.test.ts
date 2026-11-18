@@ -8,8 +8,8 @@ import {
   importFromRepo,
   parseRepoString,
   validateRepoPath,
-} from '@bradygaster/squad-sdk/sharing';
-import type { RepoSyncOperations } from '@bradygaster/squad-sdk/sharing';
+} from '@squad/sdk/sharing';
+import type { RepoSyncOperations } from '@squad/sdk/sharing';
 
 // ── Mock operations ────────────────────────────────────────────────
 

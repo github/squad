@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { FSStorageProvider } from '@bradygaster/squad-sdk';
+import { FSStorageProvider } from '@squad/sdk';
 import {
   InMemoryClaimProvider,
   InMemoryClaimStore,
@@ -21,7 +21,7 @@ import {
   type FinishOutcome,
   type WorkClaimProvider,
   type WorkKey,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 import { ExecuteCapability } from '../../packages/squad-cli/src/cli/commands/watch/capabilities/execute.js';
 import { FleetDispatchCapability } from '../../packages/squad-cli/src/cli/commands/watch/capabilities/fleet-dispatch.js';
 import type { WatchContext } from '../../packages/squad-cli/src/cli/commands/watch/types.js';

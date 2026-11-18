@@ -21,13 +21,13 @@ Squad 2.0 separates three concerns that were coupled in Squad 1.x:
 
 ```mermaid
 flowchart LR
-    subgraph CP[Client Plane\n@bradygaster/squad-sdk/client]
+    subgraph CP[Client Plane\n@squad/sdk/client]
       c1[HostProjection workspace files]
       c2[ClientCapabilities tokens]
       c3[ClientAdapter + coordinator dispatch]
     end
 
-    subgraph BP[Control / Broker Plane\n@bradygaster/squad-sdk/backend]
+    subgraph BP[Control / Broker Plane\n@squad/sdk/backend]
       b1[SquadBackend / IConversationBackend]
       b2[BackendEnvelope + monotonic seq]
       b3[Cursor resume + approvals + cancelRun]
@@ -42,9 +42,9 @@ flowchart LR
     CP --> BP --> EP
 ```
 
-### Plane 1: Client Plane (`@bradygaster/squad-sdk/client`)
+### Plane 1: Client Plane (`@squad/sdk/client`)
 
-The client plane lives in `@bradygaster/squad-sdk/client` (with `@bradygaster/squad-sdk/clients` kept as a deprecated alias). It owns host bootstrap, workspace file projection (`HostProjection`), capability declaration, and coordinator dispatch translation — never durable sequencing or authorization.
+The client plane lives in `@squad/sdk/client` (with `@squad/sdk/clients` kept as a deprecated alias). It owns host bootstrap, workspace file projection (`HostProjection`), capability declaration, and coordinator dispatch translation — never durable sequencing or authorization.
 
 | Host (`ClientId`) | Generated workspace projection | Coordinator dispatch primitive |
 |---|---|---|
@@ -58,7 +58,7 @@ The client plane lives in `@bradygaster/squad-sdk/client` (with `@bradygaster/sq
 
 #### Host capability matrix (`CAPABILITY_TOKENS_BY_HOST`)
 
-Each host adapter declares canonical capability tokens (`@bradygaster/squad-sdk/client`). Runtime capabilities are negotiated at the broker boundary via `effectiveCapabilities = clientCapabilities ∩ backendCapabilities ∩ policyCapabilities`:
+Each host adapter declares canonical capability tokens (`@squad/sdk/client`). Runtime capabilities are negotiated at the broker boundary via `effectiveCapabilities = clientCapabilities ∩ backendCapabilities ∩ policyCapabilities`:
 
 | Host (`ClientId`) | Runtime capability tokens (`capability-matrix.json`) | Projection tokens | Transport modes |
 |---|---|---|---|
@@ -72,11 +72,11 @@ Each host adapter declares canonical capability tokens (`@bradygaster/squad-sdk/
 
 The adapter profile also defines the normalized `projectWorkspace()` view so hosts describe their root, working directory, anchor file, and MCP config consistently, while `.squad/config.json` persists only canonical portable client slugs in `clients[]`.
 
-### Plane 2: Control / Broker Plane (`@bradygaster/squad-sdk/backend`)
+### Plane 2: Control / Broker Plane (`@squad/sdk/backend`)
 
-> **Experimental Preview — Bring Your Own Server:** `@bradygaster/squad-sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
+> **Experimental Preview — Bring Your Own Server:** `@squad/sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
 
-The control plane lives in `@bradygaster/squad-sdk/backend` and owns conversation truth through `SquadBackend` / `IConversationBackend`:
+The control plane lives in `@squad/sdk/backend` and owns conversation truth through `SquadBackend` / `IConversationBackend`:
 
 - **Durable ordered event log (`BackendEnvelope`)** with per-conversation monotonic `seq` and `(runId, seq)` idempotency;
 - **Stable `runId`** independent from turn `seq`, used for `cancelRun(conversationId, runId, reason?)`;
@@ -89,7 +89,7 @@ In `squad state-mcp`, the 11 `squad_backend_*` MCP conversation tools are **opt-
 
 ### Plane 3: Execution Plane (`HarnessAdapter` SPI)
 
-The execution plane is the experimental `HarnessAdapter` SPI in `@bradygaster/squad-sdk/backend` (`submit`, `subscribe`, `cancel`, `respondApproval`, `describe`, registered via `DefaultHarnessRegistry`).
+The execution plane is the experimental `HarnessAdapter` SPI in `@squad/sdk/backend` (`submit`, `subscribe`, `cancel`, `respondApproval`, `describe`, registered via `DefaultHarnessRegistry`).
 
 Harnesses translate broker turns into concrete runtime work while the broker enforces:
 
@@ -151,7 +151,7 @@ GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex, and Google An
 ## Current scope and known limitations
 
 - **Default `squad init` / `squad upgrade` is unchanged for Copilot-only repos:** non-Copilot projections and `.gitignore` lines (`.claude/worktrees/`, `NUL`) are strictly opt-in via `--client`.
-- **Experimental `/backend` contract:** `@bradygaster/squad-sdk/backend` is exported only from the `./backend` subpath (`BACKEND_CONTRACT_STAGE = 'experimental'`). Server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending.
+- **Experimental `/backend` contract:** `@squad/sdk/backend` is exported only from the `./backend` subpath (`BACKEND_CONTRACT_STAGE = 'experimental'`). Server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending.
 - **Cooperative epochs and unsigned cursors:** in the local and HTTP client implementation, lease epochs (`X-Lease-Epoch`) are cooperative fencing tokens for ordering/takeover hygiene rather than a cryptographic security boundary, and resume cursors are opaque base64url positions.
 - **MCP bridge is transcript/event-log only by default:** `squad state-mcp` exposes the 11 `squad_backend_*` tools only when `--experimental-backend` or `SQUAD_EXPERIMENTAL_BACKEND=1` is passed, and bundles no execution `HarnessAdapter` (`executionAvailable: false`; `squad_backend_send_message` returns `unavailable` until a harness is registered).
 

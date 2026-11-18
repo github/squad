@@ -9,10 +9,10 @@ import { mkdir, mkdtemp, rm, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { tmpdir } from 'node:os';
-import { initSquad, MANIFEST_SKILL_NAMES } from '@bradygaster/squad-sdk/config';
-import { onboardAgent, addAgentToConfig } from '@bradygaster/squad-sdk/agents';
-import type { InitOptions, InitAgentSpec } from '@bradygaster/squad-sdk/config';
-import type { OnboardOptions } from '@bradygaster/squad-sdk/agents';
+import { initSquad, MANIFEST_SKILL_NAMES } from '@squad/sdk/config';
+import { onboardAgent, addAgentToConfig } from '@squad/sdk/agents';
+import type { InitOptions, InitAgentSpec } from '@squad/sdk/config';
+import type { OnboardOptions } from '@squad/sdk/agents';
 
 let TEST_ROOT: string;
 

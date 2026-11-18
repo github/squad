@@ -26,7 +26,7 @@ const features = [
 ];
 
 const steps = [
-  { title: 'Install', body: 'One global install, zero config files required.', cmd: 'npm i -g @bradygaster/squad-cli' },
+  { title: 'Install', body: 'One global install, zero config files required.', cmd: 'npm i -g @squad/cli' },
   { title: 'Initialize', body: 'Describe your project and Squad generates a team you direct.', cmd: 'squad init' },
   { title: 'Build', body: 'Talk to your team — they help you build, test, and prepare changes for review.', cmd: 'copilot --agent squad' },
 ];
@@ -74,7 +74,7 @@ const docs = [
               </div>
 
               <div class="animate-fade-up delay-300 d-none d-sm-inline-flex flex-items-center border rounded-2 color-bg-default pl-3 pr-1 py-1" style="gap: var(--base-size-12)">
-                <code class="f5">npm i -g @bradygaster/squad-cli</code>
+                <code class="f5">npm i -g @squad/cli</code>
                 <button id="copy-install" type="button" class="btn-octicon" aria-label="Copy install command">
                   <Icon name="copy" />
                 </button>
@@ -214,7 +214,7 @@ const docs = [
     const copyBtn = document.getElementById('copy-install');
     if (copyBtn) {
       copyBtn.onclick = async () => {
-        await navigator.clipboard.writeText('npm i -g @bradygaster/squad-cli');
+        await navigator.clipboard.writeText('npm i -g @squad/cli');
         const original = copyBtn.innerHTML;
         copyBtn.setAttribute('aria-label', 'Copied');
         copyBtn.innerHTML = '<svg class="octicon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg>';

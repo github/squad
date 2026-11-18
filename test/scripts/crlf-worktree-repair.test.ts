@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkWorktreeEol } from '@bradygaster/squad-cli/commands/doctor';
+import { checkWorktreeEol } from '@squad/cli/commands/doctor';
 import { listContentModified, listWorktreeCrlf } from '../../scripts/check-shebang-eol.mjs';
 import { repair } from '../../scripts/fix-crlf-worktree.mjs';
 

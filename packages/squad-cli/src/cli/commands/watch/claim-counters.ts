@@ -4,7 +4,7 @@
  * Pure — no SDK runtime imports, so `squad watch --health` stays light.
  */
 
-import type { FinishOutcome } from '@bradygaster/squad-sdk/ralph/claims';
+import type { FinishOutcome } from '@squad/sdk/ralph/claims';
 
 export interface ClaimCounters {
   /** Claims this executor won. */

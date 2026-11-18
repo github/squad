@@ -17,8 +17,8 @@ describe('verified publish evidence handoff', () => {
     mkdirSync(publishDir);
     const packages: Record<string, Record<string, unknown>> = {};
     for (const [name, filename, bytes] of [
-      ['@bradygaster/squad-sdk', 'sdk.tgz', Buffer.from('sdk')],
-      ['@bradygaster/squad-cli', 'cli.tgz', Buffer.from('cli')],
+      ['@squad/sdk', 'sdk.tgz', Buffer.from('sdk')],
+      ['@squad/cli', 'cli.tgz', Buffer.from('cli')],
     ] as const) {
       const sha256 = createHash('sha256').update(bytes).digest('hex');
       writeFileSync(path.join(evidenceDir, filename), bytes);

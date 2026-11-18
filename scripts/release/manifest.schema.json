@@ -36,10 +36,10 @@
       }
     },
     "packages": {
-      "type": "object", "additionalProperties": false, "required": ["@bradygaster/squad-sdk", "@bradygaster/squad-cli"],
+      "type": "object", "additionalProperties": false, "required": ["@squad/sdk", "@squad/cli"],
       "properties": {
-        "@bradygaster/squad-sdk": { "$ref": "#/$defs/package" },
-        "@bradygaster/squad-cli": { "$ref": "#/$defs/package" }
+        "@squad/sdk": { "$ref": "#/$defs/package" },
+        "@squad/cli": { "$ref": "#/$defs/package" }
       }
     },
     "lockfiles": {

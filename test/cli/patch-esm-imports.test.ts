@@ -15,7 +15,7 @@ import { pathToFileURL } from 'url';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomBytes } from 'crypto';
-import { ensureEsmImportsPatched } from '@bradygaster/squad-cli/core/upgrade';
+import { ensureEsmImportsPatched } from '@squad/cli/core/upgrade';
 
 const SCRIPT_URL = pathToFileURL(
   join(process.cwd(), 'packages', 'squad-cli', 'scripts', 'patch-esm-imports.mjs'),

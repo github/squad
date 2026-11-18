@@ -934,13 +934,13 @@ describe('Layer 1 review recommendations & hardening', () => {
     expect(removeTomlTable(dottedTopLevel, 'mcp_servers.squad_state')).toBe('');
   });
 
-  it('clients.ts: imports from @bradygaster/squad-sdk/client, merges repeated --client flags, preserves unknown IDs, and rejects symlinked .squad', async () => {
+  it('clients.ts: imports from @squad/sdk/client, merges repeated --client flags, preserves unknown IDs, and rejects symlinked .squad', async () => {
     const cliClientsSource = fs.readFileSync(
       path.resolve(__dirname, '../packages/squad-cli/src/cli/core/clients.ts'),
       'utf8',
     );
-    expect(cliClientsSource).toContain("from '@bradygaster/squad-sdk/client'");
-    expect(cliClientsSource).not.toContain("from '@bradygaster/squad-sdk/clients'");
+    expect(cliClientsSource).toContain("from '@squad/sdk/client'");
+    expect(cliClientsSource).not.toContain("from '@squad/sdk/clients'");
 
     // Repeated --client flags are merged
     expect(readClientFlag(['init', '--client', 'claude', '--client', 'opencode'])).toEqual(['claude', 'opencode']);

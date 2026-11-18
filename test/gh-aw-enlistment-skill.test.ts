@@ -23,7 +23,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSkillFile } from '@bradygaster/squad-sdk/skills';
+import { parseSkillFile } from '@squad/sdk/skills';
 import {
   LEGACY_OWNERSHIP_DESTINATIONS,
   LEGACY_PACKAGE_NAMES,

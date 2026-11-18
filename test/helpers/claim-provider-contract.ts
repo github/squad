@@ -22,7 +22,7 @@ import type {
   ExecutorIdentity,
   WorkClaimProvider,
   WorkKey,
-} from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims';
 
 export interface ClaimProviderHarness {
   /** A provider acting as `identity`. All providers from one harness share one backend. */

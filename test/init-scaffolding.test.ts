@@ -13,12 +13,12 @@ import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomBytes } from 'crypto';
 import { execFileSync } from 'child_process';
-import { initSquad } from '@bradygaster/squad-sdk';
-import type { InitOptions } from '@bradygaster/squad-sdk';
-import { parseAgentProvenanceRegistry } from '@bradygaster/squad-sdk/casting';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runDoctor } from '@bradygaster/squad-cli/commands/doctor';
-import type { DoctorCheck } from '@bradygaster/squad-cli/commands/doctor';
+import { initSquad } from '@squad/sdk';
+import type { InitOptions } from '@squad/sdk';
+import { parseAgentProvenanceRegistry } from '@squad/sdk/casting';
+import { runInit } from '@squad/cli/core/init';
+import { runDoctor } from '@squad/cli/commands/doctor';
+import type { DoctorCheck } from '@squad/cli/commands/doctor';
 
 // Sandbox lives in the OS temp dir, NOT inside the repository (#1796).
 // runInit()/initSquad() walk upward to find the enclosing git root when the
@@ -420,7 +420,7 @@ describe('squad.agent.md template handling (#730)', () => {
   });
 
   it('initSquad stamps only the greeting placeholder or a valid SemVer literal', async () => {
-    const { FSStorageProvider } = await import('@bradygaster/squad-sdk');
+    const { FSStorageProvider } = await import('@squad/sdk');
     const realStorage = new FSStorageProvider();
     const version = '2.3.4-beta.1+build.7';
     const preservedText = [
@@ -463,7 +463,7 @@ describe('squad.agent.md template handling (#730)', () => {
   });
 
   it('initSquad returns warning when squad.agent.md template is missing', async () => {
-    const { FSStorageProvider } = await import('@bradygaster/squad-sdk');
+    const { FSStorageProvider } = await import('@squad/sdk');
     const realStorage = new FSStorageProvider();
 
     // Create a proxy storage that hides squad.agent.md.template

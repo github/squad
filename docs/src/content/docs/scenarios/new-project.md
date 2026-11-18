@@ -26,7 +26,7 @@ git init
 ## 2. Install Squad
 
 ```bash
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 cd ~/projects/new-project
 squad init
 ```

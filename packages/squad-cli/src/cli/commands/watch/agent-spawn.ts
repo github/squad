@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WatchContext } from './types.js';
 import { withAdditionalMcpConfig } from '../../core/copilot-invocation.js';
-import { CLAUDE_PLUGIN_AGENT, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
+import { CLAUDE_PLUGIN_AGENT, readClaudePluginMode } from '@squad/sdk/client';
 
 /** True when running on Windows — used to gate `shell: true`. */
 export const IS_WINDOWS = process.platform === 'win32';

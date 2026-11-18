@@ -20,24 +20,24 @@ import {
   setVersionFetcher,
   setPackageJsonReader,
   setPackageJsonWriter,
-} from '@bradygaster/squad-cli/upgrade';
+} from '@squad/cli/upgrade';
 import type {
   UpdateInfo,
   UpgradeOptions,
   SDKUpgradeOptions,
   ReleaseChannel,
-} from '@bradygaster/squad-cli/upgrade';
-import { MigrationRegistry } from '@bradygaster/squad-sdk/config';
+} from '@squad/cli/upgrade';
+import { MigrationRegistry } from '@squad/sdk/config';
 import {
   detectCopilotEnvironment,
   getInstallInstructions,
   installFromCopilot,
-} from '@bradygaster/squad-cli/copilot-install';
+} from '@squad/cli/copilot-install';
 import type {
   CopilotEnvironment,
   InstallConfig,
   EnvironmentIndicators,
-} from '@bradygaster/squad-cli/copilot-install';
+} from '@squad/cli/copilot-install';
 
 // ============================================================================
 // Upgrade — version parsing & comparison

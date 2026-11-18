@@ -2,7 +2,7 @@
  * `squad lockout`: record reviewer-lockout transitions (governance-review v0.1 §6) in
  * `<squadDir>/governance/lockouts.json`, which the Claude Code PreToolUse hook reads.
  */
-import { resolveSquadState } from '@bradygaster/squad-sdk';
+import { resolveSquadState } from '@squad/sdk';
 import {
   LockoutError,
   approveRevision,
@@ -17,7 +17,7 @@ import {
   submitRevision,
   updateLockouts,
   type LockoutStore,
-} from '@bradygaster/squad-sdk/client';
+} from '@squad/sdk/client';
 
 const USAGE = `Usage: squad lockout <command> <subject> [options]
 

@@ -129,7 +129,7 @@ export function renderSection(matrix) {
   lines.push('');
   lines.push('## Tested upgrade paths');
   lines.push('');
-  lines.push(`Every row below is a pinned, published artifact of an older Squad release driven through \`squad init\` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (\`npm pack\` of \`@bradygaster/squad-sdk\` + \`@bradygaster/squad-cli\`) by \`test/squad-20-upgrade-matrix.test.ts\`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: \`${path.relative(ROOT, MATRIX_PATH).replace(/\\/g, '/')}\` (protocol \`${matrix.protocol}\`).`);
+  lines.push(`Every row below is a pinned, published artifact of an older Squad release driven through \`squad init\` under a given project state shape, then **upgraded** with the CLI packed from the tree under test (\`npm pack\` of \`@squad/sdk\` + \`@squad/cli\`) by \`test/squad-20-upgrade-matrix.test.ts\`. A row **passes** only when every non-xfail assertion passed; a row that carries a pinned finding is reported as **pass WITH known … failure (F<n>)**, never as a bare pass; **fail** names the failing checks; **not applicable** cells are each explained individually below (none means "not run"). Machine-readable source: \`${path.relative(ROOT, MATRIX_PATH).replace(/\\/g, '/')}\` (protocol \`${matrix.protocol}\`).`);
   lines.push('');
   lines.push('### Three different things');
   lines.push('');

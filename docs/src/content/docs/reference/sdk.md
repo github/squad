@@ -1,29 +1,29 @@
 # SDK Reference
 
-This is the curated quick reference for `@bradygaster/squad-sdk`. The SDK provides configuration builders, model selection, agent lifecycle APIs, routing, tools, storage, telemetry, and platform integrations.
+This is the curated quick reference for `@squad/sdk`. The SDK provides configuration builders, model selection, agent lifecycle APIs, routing, tools, storage, telemetry, and platform integrations.
 
 For every public type and export, see the [generated API reference](./api/).
 
 ## Install
 
 ```bash
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 ```
 
 The package uses ESM and exposes a root entrypoint plus focused subpath entrypoints:
 
 | Import path | Use for |
 |-------------|---------|
-| `@bradygaster/squad-sdk` | Resolution, configuration, builders, models, roles, storage, telemetry, and shared types |
-| `@bradygaster/squad-sdk/client` | `SquadClient`, `SquadClientWithPool`, `SessionPool`, client events, and multi-host `HostProjection` / `ClientAdapter` APIs (`@bradygaster/squad-sdk/clients` is a deprecated alias) |
-| `@bradygaster/squad-sdk/backend` | Experimental `SquadBackend` (`local`, `mcp`, `durable-http`), `HarnessAdapter`, and capability/extension helpers |
-| `@bradygaster/squad-sdk/coordinator` | `SquadCoordinator`, fan-out, and response-tier orchestration |
-| `@bradygaster/squad-sdk/tools` | `defineTool` and `ToolRegistry` |
-| `@bradygaster/squad-sdk/hooks` | `HookPipeline` and hook policy types |
-| `@bradygaster/squad-sdk/config` | Configuration schema and model registry APIs |
-| `@bradygaster/squad-sdk/casting` | Persona casting and casting history |
-| `@bradygaster/squad-sdk/platform` | GitHub, Azure DevOps, and communication adapters |
-| `@bradygaster/squad-sdk/state` | State collections and handles |
+| `@squad/sdk` | Resolution, configuration, builders, models, roles, storage, telemetry, and shared types |
+| `@squad/sdk/client` | `SquadClient`, `SquadClientWithPool`, `SessionPool`, client events, and multi-host `HostProjection` / `ClientAdapter` APIs (`@squad/sdk/clients` is a deprecated alias) |
+| `@squad/sdk/backend` | Experimental `SquadBackend` (`local`, `mcp`, `durable-http`), `HarnessAdapter`, and capability/extension helpers |
+| `@squad/sdk/coordinator` | `SquadCoordinator`, fan-out, and response-tier orchestration |
+| `@squad/sdk/tools` | `defineTool` and `ToolRegistry` |
+| `@squad/sdk/hooks` | `HookPipeline` and hook policy types |
+| `@squad/sdk/config` | Configuration schema and model registry APIs |
+| `@squad/sdk/casting` | Persona casting and casting history |
+| `@squad/sdk/platform` | GitHub, Azure DevOps, and communication adapters |
+| `@squad/sdk/state` | State collections and handles |
 
 ## Configuration
 
@@ -32,7 +32,7 @@ The package uses ESM and exposes a root entrypoint plus focused subpath entrypoi
 Create a typed configuration object with defaults and editor autocomplete.
 
 ```typescript
-import { defineConfig } from '@bradygaster/squad-sdk';
+import { defineConfig } from '@squad/sdk';
 
 export default defineConfig({
   version: '1.0.0',
@@ -79,7 +79,7 @@ The configuration schema includes:
 Load and validate Squad configuration asynchronously or synchronously.
 
 ```typescript
-import { loadConfig } from '@bradygaster/squad-sdk';
+import { loadConfig } from '@squad/sdk';
 
 const result = await loadConfig('./.squad');
 console.log(result.config.models.defaultModel);
@@ -99,7 +99,7 @@ import {
   defineRouting,
   defineSquad,
   defineTeam,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 const squad = defineSquad({
   version: '1.0.0',
@@ -131,7 +131,7 @@ Available builders are `defineTeam`, `defineAgent`, `defineBudget`, `defineDefau
 `MODELS` is the runtime source of truth for defaults and fallback chains.
 
 ```typescript
-import { MODELS } from '@bradygaster/squad-sdk';
+import { MODELS } from '@squad/sdk';
 
 MODELS.DEFAULT;                  // gpt-5.6-terra, env-overridable
 MODELS.SELECTOR_DEFAULT;         // gpt-5.6-luna
@@ -151,7 +151,7 @@ The default model can be changed with `SQUAD_DEFAULT_MODEL`. The fallback chains
 Cost ceilings are separate from quality tiers. Use `maxCategory` with `lightweight`, `versatile`, or `powerful` when automatic selection must stay within a billing category.
 
 ```typescript
-import { defineConfig } from '@bradygaster/squad-sdk';
+import { defineConfig } from '@squad/sdk';
 
 export default defineConfig({
   models: {
@@ -169,7 +169,7 @@ import {
   ensureSquadPath,
   resolveSquad,
   scratchDir,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 const projectSquad = resolveSquad();
 const ensured = ensureSquadPath();
@@ -183,7 +183,7 @@ The root package also exports project-key helpers, preset/state resolution, dire
 Import client APIs from the client subpath.
 
 ```typescript
-import { SquadClientWithPool } from '@bradygaster/squad-sdk/client';
+import { SquadClientWithPool } from '@squad/sdk/client';
 
 const squad = new SquadClientWithPool({
   pool: { maxConcurrent: 5 },
@@ -208,8 +208,8 @@ Use `SquadClient` when you need connection management without the integrated ses
 Import the coordinator from its subpath. It accepts a validated `SquadConfig` and handles direct responses, route matching, and optional fan-out.
 
 ```typescript
-import { defineConfig } from '@bradygaster/squad-sdk';
-import { SquadCoordinator } from '@bradygaster/squad-sdk/coordinator';
+import { defineConfig } from '@squad/sdk';
+import { SquadCoordinator } from '@squad/sdk/coordinator';
 
 const config = defineConfig({
   team: { name: 'Platform Squad' },
@@ -233,7 +233,7 @@ The coordinator subpath also exports `spawnParallel`, `DirectResponseHandler`, s
 ### Custom tools
 
 ```typescript
-import { defineTool, ToolRegistry } from '@bradygaster/squad-sdk/tools';
+import { defineTool, ToolRegistry } from '@squad/sdk/tools';
 
 const searchTool = defineTool<{ query: string }>({
   name: 'search_docs',
@@ -259,7 +259,7 @@ The built-in tools are `squad_route`, `squad_decide`, `squad_memory`, `squad_sta
 ### Hook pipeline
 
 ```typescript
-import { HookPipeline } from '@bradygaster/squad-sdk/hooks';
+import { HookPipeline } from '@squad/sdk/hooks';
 
 const hooks = new HookPipeline();
 hooks.addPreToolHook(async (context) => ({
@@ -273,7 +273,7 @@ Hook actions are `allow`, `block`, and `modify`. The hook package also exports p
 ## Casting and Roles
 
 ```typescript
-import { CastingEngine } from '@bradygaster/squad-sdk';
+import { CastingEngine } from '@squad/sdk';
 
 const engine = new CastingEngine({
   universes: ['The Wire'],
@@ -297,7 +297,7 @@ import {
   initSquadTelemetry,
   initializeOTel,
   shutdownOTel,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 await initializeOTel({
   endpoint: 'http://localhost:4318',
@@ -319,7 +319,7 @@ await shutdownOTel();
 `StreamingPipeline` can also track the latest context-window occupancy for each attached session. Runtime `context_usage` events are exact; regular usage events provide an estimate when a model context-window resolver is configured.
 
 ```typescript
-import { RuntimeEventBus, StreamingPipeline } from '@bradygaster/squad-sdk';
+import { RuntimeEventBus, StreamingPipeline } from '@squad/sdk';
 
 const eventBus = new RuntimeEventBus();
 const pipeline = new StreamingPipeline({
@@ -341,16 +341,16 @@ The root package also exports cost tracking, offline mode, runtime events, OpenT
 
 ## Client host adapters
 
-`@bradygaster/squad-sdk/client` (and the deprecated alias `@bradygaster/squad-sdk/clients`) projects the host-agnostic Squad coordinator into the files each AI host loads natively across all 7 supported hosts (`GitHub Copilot`, `Claude Code`, `Kiro`, `OpenCode`, `Cursor`, `OpenAI Codex`, and `Google Antigravity`).
+`@squad/sdk/client` (and the deprecated alias `@squad/sdk/clients`) projects the host-agnostic Squad coordinator into the files each AI host loads natively across all 7 supported hosts (`GitHub Copilot`, `Claude Code`, `Kiro`, `OpenCode`, `Cursor`, `OpenAI Codex`, and `Google Antigravity`).
 
 - `HostProjection` is a pure workspace projection (`project(ctx)`) for `copilot`, `claude`, `kiro`, `opencode`, `cursor`, `codex`, and `antigravity`. Get one with `getHostProjection(id)`; apply with `installClients(ids, ctx)` or remove with `uninstallClients(ids, ctx)`.
 - `createClientAdapter({ host, ctx, runtime? })` returns the spec-level `ClientAdapter` facade: `describe()`, `projectWorkspace()` and `getCapabilities()` work locally; `submit`, `subscribe`, `cancel` and `respondApproval` delegate to a bound `RuntimeBinding` and otherwise throw `AdapterUnboundError`.
 - Capabilities are canonical string tokens (`CAPABILITY_TOKENS_BY_HOST`); the boolean `ClientCapabilities` flags are a derived view, and passing conflicting flags throws. Advertised capabilities stay separate from negotiated `effectiveCapabilities` (client ∩ backend ∩ policy).
 - JSON and TOML config merges only touch Squad's own keys; `normalizeClientIds()` / `assertPortableClients()` keep `clients[]` free of credentials and paths.
 
-## Experimental backend and harness SPI (`@bradygaster/squad-sdk/backend`)
+## Experimental backend and harness SPI (`@squad/sdk/backend`)
 
-> **Experimental Preview — Bring Your Own Server:** `@bradygaster/squad-sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
+> **Experimental Preview — Bring Your Own Server:** `@squad/sdk/backend` is an experimental extension contract (`BACKEND_CONTRACT_STAGE = 'experimental'`). Squad ships the `SquadBackend` / `HarnessAdapter` interfaces, the local file/state-store backend, and the outbound `durable-http` client — it does **not** bundle a remote DurableSquad server, and server-side DurableSquad Phase 2 integration (remote durable approvals and lease-epoch coordination) is pending. Use `durable-http` when connecting to your own external or managed `/v1/conversations` server.
 
 - `createSquadBackend(options)` builds a `SquadBackend` for `kind: 'local'`, `kind: 'mcp'`, or `kind: 'durable-http'`. SDK callers using `kind: 'durable-http'` (or `new DurableHttpSquadBackend(options)`) must explicitly pass an `https://` `baseUrl` (plain `http://` is allowed only for `localhost` / `127.0.0.1` / `::1`) and, when needed, an optional bearer `token`; redirects are never followed. Neither `createSquadBackend` nor `DurableHttpSquadBackend` reads `SQUAD_BACKEND_URL` or `SQUAD_BACKEND_TOKEN` from the environment — automatic environment-variable lookup applies only to the CLI's `squad state-mcp` bridge (`createMcpBackend()`) when the experimental backend tools are enabled.
 - `SquadBackend` exposes `negotiate`, `createConversation`, `sendMessage`, `getTranscript`, `getTurn`, `readEvents`, `getApprovals`, `respondApproval`, `cancelTurn`, `cancelRun`, and `health`.

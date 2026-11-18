@@ -18,8 +18,8 @@ import {
   pruneChainToCeiling,
   ModelFallbackExecutor,
   type ResolvedModel,
-} from '@bradygaster/squad-sdk/agents';
-import type { GitHubModelCategory } from '@bradygaster/squad-sdk/config';
+} from '@squad/sdk/agents';
+import type { GitHubModelCategory } from '@squad/sdk/config';
 
 describe('cost policy — resolveModel integration', () => {
   it('AC5: implicit over-ceiling selection is downgraded deterministically', () => {

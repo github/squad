@@ -7,7 +7,7 @@ description: Step-by-step guidance for projecting one Squad team into GitHub Cop
 
 Squad 2.0 adds host-native client projections across all 7 supported hosts — GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex, and Google Antigravity (`copilot|claude|kiro|opencode|cursor|codex|antigravity|all`) — through `squad init --client ...` and `squad upgrade --client ...`.
 
-One `.squad/` team projects into multiple client hosts without changing the underlying team state or backend contract. Programmatic host projections live in `@bradygaster/squad-sdk/client` (with `@bradygaster/squad-sdk/clients` kept as a deprecated alias).
+One `.squad/` team projects into multiple client hosts without changing the underlying team state or backend contract. Programmatic host projections live in `@squad/sdk/client` (with `@squad/sdk/clients` kept as a deprecated alias).
 
 ## Quick commands
 
@@ -121,7 +121,7 @@ Squad persists only canonical client ids in `.squad/config.json`:
 }
 ```
 
-That list is projection metadata only, validated by `normalizeClientIds()` and `assertPortableClients()` from `@bradygaster/squad-sdk/client`. It never carries secrets, machine paths, URLs, thread ids, lease tokens, or checkpoint state.
+That list is projection metadata only, validated by `normalizeClientIds()` and `assertPortableClients()` from `@squad/sdk/client`. It never carries secrets, machine paths, URLs, thread ids, lease tokens, or checkpoint state.
 
 ## Why the merge behavior and rollback matter
 
@@ -130,7 +130,7 @@ Every client adapter uses additive config merging for shared JSON and TOML files
 To remove a client projection and restore shared files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.gitignore`, and shared MCP configs) byte-for-byte outside Squad's managed sections, call `uninstallClients`:
 
 ```ts
-import { uninstallClients } from '@bradygaster/squad-sdk/client';
+import { uninstallClients } from '@squad/sdk/client';
 
 uninstallClients(['claude', 'codex'], {
   root: process.cwd(),

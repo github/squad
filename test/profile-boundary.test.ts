@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { clearResolveSquadCache, isRetiredProfileTeamRoot, resolveGlobalSquadPath, resolveSquad, resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
+import { clearResolveSquadCache, isRetiredProfileTeamRoot, resolveGlobalSquadPath, resolveSquad, resolveSquadPaths } from '@squad/sdk/resolution';
 
 let tmp: string;
 let fakeHome: string;

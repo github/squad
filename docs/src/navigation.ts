@@ -132,6 +132,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { title: 'Release Process', slug: 'scenarios/release-process' },
       { title: 'Upgrading', slug: 'scenarios/upgrading' },
       { title: 'Migration Guide', slug: 'get-started/migration' },
+      { title: 'Package Rename', slug: 'get-started/package-rename' },
       { title: 'Private Repos', slug: 'scenarios/private-repos' },
       { title: 'Cross-Org Auth', slug: 'scenarios/cross-org-auth' },
       { title: 'Team Portability', slug: 'scenarios/team-portability' },

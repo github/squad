@@ -46,7 +46,7 @@ The target repo needs Squad installed before importing:
 
 ```bash
 cd ~/projects/project-beta
-npm install -g @bradygaster/squad-cli
+npm install -g @squad/cli
 squad init
 ```
 

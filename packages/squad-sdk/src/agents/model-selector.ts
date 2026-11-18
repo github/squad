@@ -255,7 +255,7 @@ function buildAvailabilityCheck(
 
 /**
  * Documented provenance-returning entry point for agent model resolution.
- * Alias of {@link resolveModel} in `@bradygaster/squad-sdk/agents`; distinct
+ * Alias of {@link resolveModel} in `@squad/sdk/agents`; distinct
  * from the root `resolveModel` export, which is a legacy adapter returning
  * only the model id.
  */

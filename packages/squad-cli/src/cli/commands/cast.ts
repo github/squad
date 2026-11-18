@@ -13,16 +13,16 @@ import {
   generateCharterFromRole,
   getRoleById,
   syncTeamCapabilities,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 import {
   acquireCastingRegistryLockAsync,
   commitCastingRegistryPair,
   prepareCastingRegistryPairLocked,
   recoverCastingRegistryTransaction,
   reconcileAgentProvenanceRegistry,
-} from '@bradygaster/squad-sdk/casting';
-import { LocalAgentSource } from '@bradygaster/squad-sdk/config/agent-source';
-import { resolveSquadPaths, resolveExternalStateDir } from '@bradygaster/squad-sdk/resolution';
+} from '@squad/sdk/casting';
+import { LocalAgentSource } from '@squad/sdk/config/agent-source';
+import { resolveSquadPaths, resolveExternalStateDir } from '@squad/sdk/resolution';
 import { BOLD, RESET, info, success } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';
 import { ensureBuiltinSupportSection } from '../core/cast.js';

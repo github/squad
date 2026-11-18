@@ -11,12 +11,12 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { teamRootIsThisProject, getDoctorMode } from '@bradygaster/squad-cli/commands/doctor';
+import { teamRootIsThisProject, getDoctorMode } from '@squad/cli/commands/doctor';
 import { runClientCommand, listClients } from '../../packages/squad-cli/src/cli/commands/client.js';
-import { runUpdateCheck, UPDATE_CHECK_MAX_CACHE_AGE_MS } from '@bradygaster/squad-cli/commands/update-check';
+import { runUpdateCheck, UPDATE_CHECK_MAX_CACHE_AGE_MS } from '@squad/cli/commands/update-check';
 import { getCachePath } from '../../packages/squad-cli/src/cli/self-update.js';
-import { readProjectLabel, runUpgrade } from '@bradygaster/squad-cli/core/upgrade';
-import { runInit } from '@bradygaster/squad-cli/core/init';
+import { readProjectLabel, runUpgrade } from '@squad/cli/core/upgrade';
+import { runInit } from '@squad/cli/core/init';
 
 describe('squad doctor mode for a relative teamRoot pointing at this project (#2299)', () => {
   let cwd: string;

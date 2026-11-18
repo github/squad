@@ -103,8 +103,8 @@ jobs:
           fi
 
           expected_sdk_dependency=">=${version}"
-          sdk_dependency="$(node -p "require('./packages/squad-cli/package.json').dependencies['@bradygaster/squad-sdk']")"
-          lock_dependency="$(node -p "require('./package-lock.json').packages['packages/squad-cli'].dependencies['@bradygaster/squad-sdk']")"
+          sdk_dependency="$(node -p "require('./packages/squad-cli/package.json').dependencies['@squad/sdk']")"
+          lock_dependency="$(node -p "require('./package-lock.json').packages['packages/squad-cli'].dependencies['@squad/sdk']")"
           if [ "${sdk_dependency}" != "${expected_sdk_dependency}" ] || [ "${lock_dependency}" != "${expected_sdk_dependency}" ]; then
             echo "::error::CLI SDK dependency floors must both be '${expected_sdk_dependency}'."
             exit 1
@@ -267,8 +267,8 @@ jobs:
               exit 1
             fi
           done
-          sdk_dependency="$(node -p "require('./packages/squad-cli/package.json').dependencies['@bradygaster/squad-sdk']")"
-          lock_dependency="$(node -p "require('./package-lock.json').packages['packages/squad-cli'].dependencies['@bradygaster/squad-sdk']")"
+          sdk_dependency="$(node -p "require('./packages/squad-cli/package.json').dependencies['@squad/sdk']")"
+          lock_dependency="$(node -p "require('./package-lock.json').packages['packages/squad-cli'].dependencies['@squad/sdk']")"
           if [[ "$sdk_dependency" == *-* ]] || [[ "$lock_dependency" == *-* ]]; then
             echo "::error::Stable promotion cannot retain a prerelease SDK dependency floor."
             exit 1

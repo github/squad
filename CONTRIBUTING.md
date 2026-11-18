@@ -40,8 +40,8 @@ Squad is an npm workspace monorepo with two packages:
 
 ```
 squad/
-├── packages/squad-cli/       # CLI tool (@bradygaster/squad-cli)
-├── packages/squad-sdk/       # Runtime SDK (@bradygaster/squad-sdk)
+├── packages/squad-cli/       # CLI tool (@squad/cli)
+├── packages/squad-sdk/       # Runtime SDK (@squad/sdk)
 ├── src/                      # Legacy CLI code (migrating to packages/)
 ├── dist/                     # Compiled output
 ├── .squad/                   # Team state and agent history
@@ -89,7 +89,7 @@ git fetch upstream dev
 npm install
 ```
 
-npm workspaces automatically links local packages. `@bradygaster/squad-cli` can import from `@bradygaster/squad-sdk` without publishing.
+npm workspaces automatically links local packages. `@squad/cli` can import from `@squad/sdk` without publishing.
 
 ### 2. Build
 
@@ -341,7 +341,7 @@ Create a file at `.changeset/your-change-name.md` with frontmatter specifying th
 
 ```markdown
 ---
-'@bradygaster/squad-cli': patch
+'@squad/cli': patch
 ---
 
 Fix help text rendering for the status command
@@ -353,8 +353,8 @@ The frontmatter lists each affected package and its semver bump type. The body i
 
 ```markdown
 ---
-"@bradygaster/squad-sdk": minor
-"@bradygaster/squad-cli": patch
+"@squad/sdk": minor
+"@squad/cli": patch
 ---
 
 Add streaming support to agent orchestration. Update CLI to display stream progress.
@@ -393,7 +393,7 @@ CI watches for drift: `scripts/check-changeset-drift.mjs` warns on PRs and fails
 - **dev** — Integration branch on `github/squad`. **All PRs from forks must target this branch**, not `main`.
 - **user/issue-slug** — Feature branches from users or agents.
 
-> **Note:** The `insider` npm tag (`@bradygaster/squad-cli@insider`) publishes from `dev` via manual workflow dispatch. There is no separate insider branch.
+> **Note:** The `insider` npm tag (`@squad/cli@insider`) publishes from `dev` via manual workflow dispatch. There is no separate insider branch.
 
 ## Continuous Integration
 

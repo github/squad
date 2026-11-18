@@ -7,9 +7,9 @@ import {
   compileCharter,
   parseCharterMarkdown,
   type CharterCompileOptions,
-} from '@bradygaster/squad-sdk/agents';
-import { resolveModel, type ModelResolutionOptions } from '@bradygaster/squad-sdk/agents';
-import { ConfigurationError } from '@bradygaster/squad-sdk/adapter/errors';
+} from '@squad/sdk/agents';
+import { resolveModel, type ModelResolutionOptions } from '@squad/sdk/agents';
+import { ConfigurationError } from '@squad/sdk/adapter/errors';
 
 describe('Charter Compilation (M1-8)', () => {
   describe('compileCharter', () => {

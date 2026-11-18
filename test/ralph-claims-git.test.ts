@@ -44,8 +44,8 @@ import {
   decodeClaimRecord,
   encodeClaimRecord,
   type GitTransport,
-} from '@bradygaster/squad-sdk/ralph/claims-git';
-import type { ClaimRecord, ExecutorIdentity, WorkClaimProvider, WorkKey } from '@bradygaster/squad-sdk/ralph/claims';
+} from '@squad/sdk/ralph/claims-git';
+import type { ClaimRecord, ExecutorIdentity, WorkClaimProvider, WorkKey } from '@squad/sdk/ralph/claims';
 import { describeClaimProviderContract, manualClock, testIdentity } from './helpers/claim-provider-contract.js';
 
 const hasGit = (() => {

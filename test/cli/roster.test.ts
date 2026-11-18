@@ -15,8 +15,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { runInit } from '@bradygaster/squad-cli/core/init';
-import { runUpgrade } from '@bradygaster/squad-cli/core/upgrade';
+import { runInit } from '@squad/cli/core/init';
+import { runUpgrade } from '@squad/cli/core/upgrade';
 import { CLIENT_IDS, type ClientContext } from '../../packages/squad-sdk/src/client/index.js';
 import { uninstallClients } from '../../packages/squad-sdk/src/client/adapters/index.js';
 import { runRosterCommand } from '../../packages/squad-cli/src/cli/commands/roster.js';

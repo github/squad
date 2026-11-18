@@ -1654,7 +1654,7 @@ export function resolveContextTier(options: {
 
 /**
  * Legacy string-returning adapter over the central model resolver
- * (`resolveModel` in `@bradygaster/squad-sdk/agents`). It reads persistent
+ * (`resolveModel` in `@squad/sdk/agents`). It reads persistent
  * `.squad/config.json` preferences and delegates precedence, the `auto`
  * sentinel, quality profiles, and economy-mode handling to the central resolver:
  *   config (agentModelOverrides, then defaultModel) > session directive >

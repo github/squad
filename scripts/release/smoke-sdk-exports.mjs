@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync('packages/squad-sdk/package.json', 'utf8'));
 const failures = [];
 let passed = 0;
 for (const [subpath, targets] of Object.entries(pkg.exports ?? {})) {
-  const importPath = subpath === '.' ? '@bradygaster/squad-sdk' : `@bradygaster/squad-sdk/${subpath.slice(2)}`;
+  const importPath = subpath === '.' ? '@squad/sdk' : `@squad/sdk/${subpath.slice(2)}`;
   const filePath = typeof targets === 'string' ? targets : (targets.import ?? targets.default);
   if (!filePath) {
     failures.push({ subpath, importPath, error: 'No import target defined' });

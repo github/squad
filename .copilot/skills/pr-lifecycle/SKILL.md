@@ -119,7 +119,7 @@ For advanced scenarios (worktrees, multi-repo coordination), see `.copilot/skill
    Or create manually at `.changeset/{descriptive-name}.md`:
    ```markdown
    ---
-   '@bradygaster/squad-cli': patch
+   '@squad/cli': patch
    ---
 
    Brief description of the change
@@ -372,7 +372,7 @@ npm run build && npm test && npm run lint
 
 # Changeset (required — touches packages/squad-sdk/src/)
 npx changeset add
-# Select: @bradygaster/squad-sdk, minor, "Add profile API"
+# Select: @squad/sdk, minor, "Add profile API"
 
 # Stage and commit
 git add packages/squad-sdk/src/profile/index.ts packages/squad-sdk/src/index.ts .changeset/

@@ -159,7 +159,7 @@ export interface ClientAdapter {
 
 The `HarnessAdapter` SPI is defined in
 `packages/squad-sdk/src/backend/types.ts` and exported from
-`@bradygaster/squad-sdk/backend`; the broker (`LocalSquadBackend`) calls it
+`@squad/sdk/backend`; the broker (`LocalSquadBackend`) calls it
 through a `HarnessRegistry`. Copied from the source of truth:
 
 ```ts
@@ -549,8 +549,8 @@ It contains:
 - `scripts/squad.mjs`, a launcher every entry above runs through, and
   `bin/squad`, which puts `squad` on the Bash tool's PATH. The launcher runs,
   in order: `SQUAD_CLI`; the project's
-  `node_modules/@bradygaster/squad-cli`; a `squad` on PATH outside the
-  plugin; `npx -y @bradygaster/squad-cli@<plugin version>`.
+  `node_modules/@squad/cli`; a `squad` on PATH outside the
+  plugin; `npx -y @squad/cli@<plugin version>`.
 
 The plugin carries no `settings.json`, so installing it at user scope does
 not change the main agent of other repositories. A repository opts in with
@@ -740,12 +740,12 @@ module and keep host projections in one sibling folder per host family.
 
 | Concern | Canonical TypeScript path |
 |---|---|
-| backend conversation contracts (experimental) | `packages/squad-sdk/src/backend/` (`@bradygaster/squad-sdk/backend`) |
+| backend conversation contracts (experimental) | `packages/squad-sdk/src/backend/` (`@squad/sdk/backend`) |
 | client and harness adapter SPI | `packages/squad-sdk/src/client/adapter-contract.ts` |
 | host projection implementations | `packages/squad-sdk/src/client/adapters/` |
 | execution harness implementations (experimental) | `packages/squad-sdk/src/backend/harnesses/` |
-| public client exports | `packages/squad-sdk/src/client/index.ts` (`@bradygaster/squad-sdk/client`) |
-| deprecated alias | `@bradygaster/squad-sdk/clients` via `src/clients/index.ts` |
+| public client exports | `packages/squad-sdk/src/client/index.ts` (`@squad/sdk/client`) |
+| deprecated alias | `@squad/sdk/clients` via `src/clients/index.ts` |
 
 This profile fixes the contract locations so backend work, client work, and
 contract validation can proceed in parallel without rediscovering file layout.

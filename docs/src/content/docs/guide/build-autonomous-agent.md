@@ -30,7 +30,7 @@ Create a new directory and initialize it with the Squad SDK dependency:
 mkdir my-autonomous-agent
 cd my-autonomous-agent
 npm init -y
-npm install @bradygaster/squad-sdk
+npm install @squad/sdk
 npm install -D typescript
 ```
 
@@ -72,7 +72,7 @@ Set `"type": "module"` in your `package.json` and add scripts:
 Use `defineAgent()` to declare each agent's name, role, and capabilities:
 
 ```ts
-import { defineAgent } from '@bradygaster/squad-sdk';
+import { defineAgent } from '@squad/sdk';
 
 const docsWriter = defineAgent({
   name: 'lori',
@@ -111,7 +111,7 @@ import {
   defineAgent,
   defineRouting,
   defineDefaults,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 export default defineSquad({
   version: '1.0.0',
@@ -167,8 +167,8 @@ Wrap your pipeline in a CLI entry point so you can invoke it from a terminal, cr
 ```ts
 #!/usr/bin/env node
 
-import { CastingEngine, CostTracker, SkillRegistry } from '@bradygaster/squad-sdk';
-import type { AgentRole, CastMember } from '@bradygaster/squad-sdk';
+import { CastingEngine, CostTracker, SkillRegistry } from '@squad/sdk';
+import type { AgentRole, CastMember } from '@squad/sdk';
 
 interface Task {
   id: string;
@@ -253,8 +253,8 @@ import {
   SkillRegistry,
   StreamingPipeline,
   selectResponseTier,
-} from '@bradygaster/squad-sdk';
-import type { CastMember, AgentRole, ResponseTier, TierContext } from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
+import type { CastMember, AgentRole, ResponseTier, TierContext } from '@squad/sdk';
 
 interface Task {
   id: string;
@@ -369,7 +369,7 @@ import {
   recordAgentSpawn,
   recordAgentDuration,
   recordTokenUsage,
-} from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
 
 // Initialize OTel (connects to Aspire dashboard if endpoint is set)
 const otelEndpoint = process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
@@ -424,8 +424,8 @@ import {
   CostTracker,
   SkillRegistry,
   StreamingPipeline,
-} from '@bradygaster/squad-sdk';
-import type { CastMember, AgentRole } from '@bradygaster/squad-sdk';
+} from '@squad/sdk';
+import type { CastMember, AgentRole } from '@squad/sdk';
 
 // Types
 interface Task {

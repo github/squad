@@ -71,8 +71,8 @@ export function verifyDraftReleaseAssets({
   const checksums = parseChecksumManifest(immutableBytes.toString('utf8'));
   const packEvidence = JSON.parse(readFileSync(packEvidencePath, 'utf8'));
   const npmEntries = [
-    packEvidence.packages?.['@bradygaster/squad-sdk'],
-    packEvidence.packages?.['@bradygaster/squad-cli'],
+    packEvidence.packages?.['@squad/sdk'],
+    packEvidence.packages?.['@squad/cli'],
   ];
   for (const entry of npmEntries) {
     if (!entry?.filename || !/^[0-9a-f]{64}$/.test(entry.sha256 ?? '')) {

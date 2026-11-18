@@ -6,7 +6,7 @@ order: 10
 
 # Container Image — Environment Variable Contract
 
-This page is the canonical reference for running `@bradygaster/squad-cli` in a container. Every environment variable, volume mount, and behavioral expectation is defined here. [Azure Container Apps](../scenarios/azure-container-apps) and [AKS deployment](../scenarios/aks-deployment) pages cross-link to this reference.
+This page is the canonical reference for running `@squad/cli` in a container. Every environment variable, volume mount, and behavioral expectation is defined here. [Azure Container Apps](../scenarios/azure-container-apps) and [AKS deployment](../scenarios/aks-deployment) pages cross-link to this reference.
 
 ---
 
@@ -108,7 +108,7 @@ COPY --from=deps --chown=squad:squad /build/node_modules ./node_modules
 COPY --chown=squad:squad .squad/ ./.squad/
 
 # Install squad-cli globally so 'squad' is on PATH
-RUN npm install -g @bradygaster/squad-cli --ignore-scripts
+RUN npm install -g @squad/cli --ignore-scripts
 
 # Drop privileges
 USER squad

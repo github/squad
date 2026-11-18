@@ -11,8 +11,8 @@ for (const file of files) {
   const pkg = JSON.parse(readFileSync(file, 'utf8'));
   pkg.version = version;
   if (file === 'packages/squad-cli/package.json' && process.env.PIN_SDK_DEPENDENCY === 'true') {
-    pkg.dependencies['@bradygaster/squad-sdk'] = version;
-    console.log(`  pinned @bradygaster/squad-sdk dep → ${version}`);
+    pkg.dependencies['@squad/sdk'] = version;
+    console.log(`  pinned @squad/sdk dep → ${version}`);
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`${file} → ${version}`);

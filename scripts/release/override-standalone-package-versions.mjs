@@ -15,7 +15,7 @@ for (const file of [
   const pkg = JSON.parse(readFileSync(file, 'utf8'));
   pkg.version = version;
   if (file === 'packages/squad-cli/package.json') {
-    pkg.dependencies['@bradygaster/squad-sdk'] = version;
+    pkg.dependencies['@squad/sdk'] = version;
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
 }
