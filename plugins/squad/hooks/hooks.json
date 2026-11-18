@@ -1,0 +1,63 @@
+{
+  "description": "Squad advisory governance hooks. They act only when .squad/config.json has \"claudeHooks\": \"advisory\", and defer to Squad hooks already in the project .claude/settings.json.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/squad.mjs\" hook claude SessionStart --plugin",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "squad|squad:squad",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/squad.mjs\" hook claude SubagentStart --plugin",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/squad.mjs\" hook claude PreToolUse --plugin",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/squad.mjs\" hook claude PostToolUse --plugin",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/squad.mjs\" hook claude Stop --plugin",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

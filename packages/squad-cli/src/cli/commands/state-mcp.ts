@@ -31,7 +31,7 @@ const SERVER_INFO = {
   version: getPackageVersion(),
 };
 
-const MCP_TOOL_ALIASES: Record<string, string> = {
+export const MCP_TOOL_ALIASES: Record<string, string> = {
   squad_decide: 'squad_decide',
   squad_state_read: 'squad_state_read',
   squad_state_write: 'squad_state_write',
@@ -325,8 +325,11 @@ export function printStateMcpHelp(): void {
     'squad_backend_* conversation tools. SQUAD_BACKEND_URL alone does not',
     'enable them; once enabled it routes the tools to a remote durable backend',
     '(https required, plain http only for localhost) with SQUAD_BACKEND_TOKEN.',
-    'No execution harness is bundled: the bridge records transcripts and',
-    'events only.',
+    'Execution uses the claude-agent-sdk harness when the optional',
+    '@anthropic-ai/claude-agent-sdk package is installed. Set',
+    'SQUAD_BACKEND_HARNESSES (comma-separated: claude-agent-sdk, copilot-sdk,',
+    'or none) to choose; without a harness the bridge records transcripts',
+    'and events only.',
     '',
   ].join('\n'));
 }

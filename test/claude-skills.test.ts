@@ -33,6 +33,17 @@ describe('Claude coordinator slimming', () => {
     expect(claude).toMatch(/never delegate the loop itself/);
   });
 
+  it('carries the casting commands inline, so a coordinator that skips the skill still uses the CLI', () => {
+    // Seen live: the model ignored "load the skill", hand-wrote charters and fought Claude Code's
+    // write protection on .claude/agents/ instead of running squad cast and squad client sync.
+    expect(claude).toContain('squad cast --name <Name> --role "<Role>"');
+    expect(claude).toContain('node .squad/squad.mjs cast');
+    expect(claude).toContain('squad client sync');
+    expect(claude).toMatch(/NEVER write or edit files under `\.claude\/` yourself/);
+    // Other hosts keep the full item; the inline summary is Claude-only.
+    expect(buildCoordinatorInstructions('kiro')).not.toContain('NEVER write or edit files under `.claude/` yourself');
+  });
+
   it('moves every item verbatim: the skill bodies match the full digest other hosts load', () => {
     const kiro = buildCoordinatorInstructions('kiro');
     for (const k of claudeCoordinatorSkills()) {
@@ -107,5 +118,34 @@ describe('Claude skills projection', () => {
     fs.rmSync(path.join(root, '.squad/templates'), { recursive: true });
     uninstallClients(['claude'], { root, mcp: MCP });
     expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
+  });
+});
+
+describe("Copilot's template Init Mode skills are not projected for Claude Code", () => {
+  it('neither project mode nor the plugin carries init-mode or coordinator-init-mode; squad-coordinator-init-mode stays', async () => {
+    const { CLAUDE_SKIPPED_TEMPLATE_SKILLS } = await import('../packages/squad-sdk/src/client/adapters/claude-skills.js');
+    expect([...CLAUDE_SKIPPED_TEMPLATE_SKILLS].sort()).toEqual(['coordinator-init-mode', 'init-mode']);
+    const pluginSkills = fs.readdirSync(path.resolve('plugins', 'squad', 'skills')).filter((d) => fs.existsSync(path.resolve('plugins', 'squad', 'skills', d, 'SKILL.md')));
+    expect(pluginSkills).toContain('squad-coordinator-init-mode');
+    expect(pluginSkills).not.toContain('init-mode');
+    expect(pluginSkills).not.toContain('coordinator-init-mode');
+
+    // Project mode: the templates are present in .squad/templates/skills but are not projected.
+    const { projectClaudeSkills } = await import('../packages/squad-sdk/src/client/adapters/claude-skills.js');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-init-skills-'));
+    try {
+      for (const name of ['init-mode', 'coordinator-init-mode', 'git-workflow']) {
+        fs.mkdirSync(path.join(root, '.squad', 'templates', 'skills', name), { recursive: true });
+        fs.writeFileSync(path.join(root, '.squad', 'templates', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: x\n---\nBody.\n`);
+      }
+      const paths = projectClaudeSkills({ root, mcp: { command: 'squad', args: ['state-mcp'] } }, '<!-- gen -->', 'gen')
+        .filter((f) => f.kind === 'managed').map((f) => f.path);
+      expect(paths).toContain('.claude/skills/git-workflow/SKILL.md');
+      expect(paths).toContain('.claude/skills/squad-coordinator-init-mode/SKILL.md');
+      expect(paths).not.toContain('.claude/skills/init-mode/SKILL.md');
+      expect(paths).not.toContain('.claude/skills/coordinator-init-mode/SKILL.md');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

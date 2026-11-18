@@ -17,8 +17,37 @@ import { CLAUDE_AGENTS_DIR, readRouting } from './claude-members.js';
 import { effectiveLocked, lockoutsFor, readLockouts, type LockoutRecord } from './lockout.js';
 import type { ClientContext, McpLaunchSpec, ProjectionFile } from './types.js';
 import { readContained } from './safe-path.js';
+import { squadRepoLauncherScript } from './repo-launcher.js';
 
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
+const PLUGIN_SETTINGS_STATE = '.claude/.squad-plugin-settings.json';
+const PLUGIN_SETTINGS_OWNER = 'Squad Claude plugin settings';
+
+interface PluginSettingsOwnership {
+  owner: typeof PLUGIN_SETTINGS_OWNER;
+  agentChanged: boolean;
+  hadAgent: boolean;
+  agent?: unknown;
+  disabledAdded: boolean;
+  hadDisabled: boolean;
+  projectMcp: boolean;
+}
+
+function isPluginSettingsOwnership(state: unknown): state is PluginSettingsOwnership {
+  return isObject(state) && state['owner'] === PLUGIN_SETTINGS_OWNER &&
+    ['agentChanged', 'hadAgent', 'disabledAdded', 'hadDisabled', 'projectMcp'].every((k) => typeof state[k] === 'boolean');
+}
+
+/** Settings and former project-MCP ownership retained across plugin-mode updates. */
+export function readClaudePluginSettingsOwnership(root: string): PluginSettingsOwnership | undefined {
+  const file = path.join(root, PLUGIN_SETTINGS_STATE);
+  if (!fs.existsSync(file)) return undefined;
+  const state: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!isPluginSettingsOwnership(state)) {
+    throw new Error(`Refusing to overwrite ${PLUGIN_SETTINGS_STATE}: not a Squad ownership record`);
+  }
+  return state;
+}
 
 export const CLAUDE_HOOK_EVENTS = ['SessionStart', 'SubagentStart', 'PreToolUse', 'PostToolUse', 'Stop'] as const;
 export type ClaudeHookEvent = (typeof CLAUDE_HOOK_EVENTS)[number];
@@ -34,8 +63,16 @@ const MATCHERS: Record<ClaudeHookEvent, string | undefined> = {
   Stop: undefined,
 };
 
+/** Hook matcher for `event`. The plugin's coordinator is `squad:squad`, so its SubagentStart matcher names both. */
+export function claudeHookMatcher(event: ClaudeHookEvent, opts: { plugin?: boolean } = {}): string | undefined {
+  if (opts.plugin && event === 'SubagentStart') return `${MATCHERS.SubagentStart}|${CLAUDE_PLUGIN_COORDINATOR}`;
+  return MATCHERS[event];
+}
+
 const HOOK_TIMEOUT_SECONDS = 15;
 const COORDINATOR = 'squad';
+/** The coordinator's `agent_type` when it comes from the Squad Claude Code plugin (namespaced `<plugin>:<agent>`). */
+export const CLAUDE_PLUGIN_COORDINATOR = 'squad:squad';
 /** Claude Code caps hook context at 10,000 characters; stay well under it. */
 const MAX_CONTEXT = 8000;
 
@@ -58,19 +95,42 @@ export function readClaudeHooksMode(squadAbs: string): ClaudeHooksMode {
 /**
  * The hook launch command: the MCP launcher with its trailing `state-mcp` replaced.
  *
- * No command allowlist on purpose. `mcp` is resolved by the running CLI from its own install
- * (standalone launcher, `node <abs>/cli-entry.js`, or `npx` with the exact package version), never
- * from repository content, and the same command is already projected into `.mcp.json` as the
- * `squad_state` server. Hooks therefore add no new executable.
+ * No command allowlist on purpose. `mcp` is resolved by the running CLI (a bare `squad`, `npx` with
+ * the exact package version, or the repository launcher `node <squad dir>/squad.mjs` that Squad
+ * writes), and the same command is already projected into `.mcp.json` as the `squad_state` server.
+ * Hooks therefore add no new executable.
+ *
+ * The repository launcher becomes a shell command through `$CLAUDE_PROJECT_DIR`, as Claude Code
+ * documents for project hooks, so it works whatever the session's working directory is (#2462).
+ * Its `args` is empty and the handler is written without one.
  */
 export function claudeHookLaunch(mcp: McpLaunchSpec, event: ClaudeHookEvent): McpLaunchSpec | null {
   if (mcp.args[mcp.args.length - 1] !== 'state-mcp') return null;
+  const launcher = repoLauncherPath(mcp);
+  if (launcher) return { command: `node "$CLAUDE_PROJECT_DIR/${launcher}" hook claude ${event}`, args: [] };
   return { command: mcp.command, args: [...mcp.args.slice(0, -1), 'hook', 'claude', event] };
 }
 
-/** A handler Squad wrote: a command hook whose arguments end in `hook claude <Event>`. */
+/** `<squad dir>/squad.mjs` when `mcp` is the repository launcher, else null. */
+function repoLauncherPath(mcp: McpLaunchSpec): string | null {
+  const script = squadRepoLauncherScript(mcp.command, mcp.args);
+  if (!script || mcp.args.indexOf(script) !== mcp.args.length - 2) return null;
+  return /^(?:[\w.-]+\/)+squad\.mjs$/.test(script) && !script.split('/').includes('..') ? script : null;
+}
+
+const REPO_LAUNCHER_HOOK = /^node "\$CLAUDE_PROJECT_DIR\/(?:[\w.-]+\/)+squad\.mjs" hook claude ([A-Za-z]+)$/;
+
+/**
+ * A handler Squad wrote: a command hook whose arguments end in `hook claude <Event>`, or the
+ * repository-launcher shell command `node "$CLAUDE_PROJECT_DIR/<squad dir>/squad.mjs" hook claude <Event>`.
+ */
 export function isSquadHookHandler(h: unknown): boolean {
-  if (!isObject(h) || h['type'] !== 'command' || !Array.isArray(h['args'])) return false;
+  if (!isObject(h) || h['type'] !== 'command') return false;
+  if (!('args' in h) && typeof h['command'] === 'string') {
+    const m = REPO_LAUNCHER_HOOK.exec(h['command']);
+    return !!m && (CLAUDE_HOOK_EVENTS as readonly unknown[]).includes(m[1]);
+  }
+  if (!Array.isArray(h['args'])) return false;
   const a = h['args'] as unknown[];
   return (
     a.length >= 3 &&
@@ -128,30 +188,239 @@ export function mergeClaudeHooks(settings: Json, mcp: McpLaunchSpec | null): Jso
     if (!launch) return stripped;
     const groups = hooks[event] ?? [];
     if (!Array.isArray(groups)) throw new Error(`Refusing to overwrite "hooks.${event}" in .claude/settings.json: expected an array`);
-    const handler = { type: 'command', command: launch.command, args: launch.args, timeout: HOOK_TIMEOUT_SECONDS };
+    const handler = launch.args.length === 0
+      ? { type: 'command', command: launch.command, timeout: HOOK_TIMEOUT_SECONDS }
+      : { type: 'command', command: launch.command, args: launch.args, timeout: HOOK_TIMEOUT_SECONDS };
     const matcher = MATCHERS[event];
     hooks[event] = [...groups, matcher ? { matcher, hooks: [handler] } : { hooks: [handler] }];
   }
   return { ...stripped, hooks };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Permission allowlist: Squad's own tools, so the coordinator's first run isn't a wall of prompts.
+// ---------------------------------------------------------------------------------------------
+
+export type ClaudePermissionsMode = 'off' | 'squad';
+
+/** `claudePermissions` from `<squadDir>/config.json`. On (`"squad"`) unless it is `"off"`. */
+export function readClaudePermissionsMode(squadAbs: string): ClaudePermissionsMode {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(squadAbs, 'config.json'), 'utf8')) as { claudePermissions?: unknown };
+    return cfg.claudePermissions === 'off' ? 'off' : 'squad';
+  } catch {
+    return 'squad';
+  }
+}
+
 /**
- * The `.claude/settings.json` entry. Emitted while hooks are on, and while the file exists (so
- * turning hooks off, or rolling Claude back, removes Squad's handlers). Never creates the file
- * just to leave it empty.
+ * The `squad_state` tools the coordinator uses, allowed one by one. Not the whole server: with
+ * `--experimental-backend` it also serves backend tools such as `squad_backend_respond_approval`,
+ * which must stay behind the user's approval. Keep in step with state-mcp's `MCP_TOOL_ALIASES`.
  */
-export function projectClaudeHooks(ctx: ClientContext): ProjectionFile[] {
+export const SQUAD_STATE_PERMISSION_TOOLS = [
+  'squad_decide', 'squad_state_read', 'squad_state_write', 'squad_state_append', 'squad_state_delete',
+  'squad_state_list', 'squad_state_create_if_absent', 'squad_state_health', 'squad_state_upstreams',
+] as const;
+/**
+ * The `squad` subcommands the coordinator runs with Bash: casting, subagent sync, recording a
+ * reviewer's rejection (it only adds a restriction) and reading lockout status. Not `assign`,
+ * `submit`, `approve` or `override`: those move a lockout toward release, and a prompt keeps an
+ * agent from clearing a lockout on its own (#2496 review).
+ */
+const SQUAD_BASH_SUBCOMMANDS = ['cast', 'client sync', 'lockout reject', 'lockout status'] as const;
+/** The plugin's `squad_state` server (`mcp__plugin_<plugin>_squad_state`); see CLAUDE_PLUGIN_MCP_PREFIX. */
+const PLUGIN_SQUAD_STATE_SERVER = 'mcp__plugin_squad_squad_state';
+
+/** A plain repository-relative directory (`.squad`, `team/.squad`): no absolute path, no `.` or `..` part. */
+function isPlainRelativeDir(dir: string): boolean {
+  const parts = dir.split('/');
+  return parts.every((p) => p !== '.' && p !== '..' && /^[\w.-]+$/.test(p));
+}
+
+/**
+ * The `permissions.allow` rules Squad adds: each `squad_state` tool the coordinator uses, and its
+ * CLI subcommands as `squad …` on PATH and, when `launcherDir` is given, through that directory's
+ * repository launcher (`node <launcherDir>/squad.mjs …`). Nothing else: no Edit, no general Bash,
+ * no other MCP tool. A `launcherDir` that isn't a plain relative directory gets no launcher rules.
+ */
+export function claudePermissionRules(launcherDir: string | null, plugin: boolean): string[] {
+  const server = plugin ? PLUGIN_SQUAD_STATE_SERVER : 'mcp__squad_state';
+  const dir = launcherDir?.replace(/\\/g, '/');
+  const launcher = dir && isPlainRelativeDir(dir) ? `node ${dir}/squad.mjs` : null;
+  return [
+    ...SQUAD_STATE_PERMISSION_TOOLS.map((t) => `${server}__${t}`),
+    ...SQUAD_BASH_SUBCOMMANDS.map((c) => `Bash(squad ${c}:*)`),
+    ...(launcher ? SQUAD_BASH_SUBCOMMANDS.map((c) => `Bash(${launcher} ${c}:*)`) : []),
+  ];
+}
+
+/**
+ * Which allow rules Squad added, so rollback and refresh remove only those. A rule the user already
+ * had is never recorded, so it stays when Squad's are removed.
+ */
+const PERMISSIONS_STATE = '.claude/.squad-permissions.json';
+const PERMISSIONS_OWNER = 'Squad Claude permissions';
+
+export function readClaudePermissionsOwnership(root: string): string[] {
+  const file = path.join(root, PERMISSIONS_STATE);
+  if (!fs.existsSync(file)) return [];
+  const state: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!isObject(state) || state['owner'] !== PERMISSIONS_OWNER || !Array.isArray(state['added']) ||
+    !state['added'].every((r) => typeof r === 'string')) {
+    throw new Error(`Refusing to overwrite ${PERMISSIONS_STATE}: not a Squad ownership record`);
+  }
+  return state['added'] as string[];
+}
+
+export interface ClaudePermissionsMerge {
+  settings: Json;
+  /** The rules now in `permissions.allow` because Squad added them. */
+  owned: string[];
+}
+
+/**
+ * Refresh Squad's allow rules. `owned` is what Squad added before: those no longer in `rules` are
+ * removed; rules missing from `allow` are appended and recorded; a rule already present that Squad
+ * did not add is the user's, left in place and not recorded. `rules` null or empty: remove Squad's
+ * only. User rules keep their order. Untouched input is returned as is.
+ */
+export function mergeClaudePermissions(settings: Json, rules: readonly string[] | null, owned: readonly string[] = []): ClaudePermissionsMerge {
+  const want = rules ?? [];
+  const perms = settings['permissions'];
+  if (perms !== undefined && !isObject(perms)) {
+    if (want.length === 0) return { settings, owned: [] };
+    throw new Error('Refusing to overwrite "permissions" in .claude/settings.json: expected a JSON object');
+  }
+  const allow = isObject(perms) ? perms['allow'] : undefined;
+  if (allow !== undefined && !Array.isArray(allow)) {
+    if (want.length === 0) return { settings, owned: [] };
+    throw new Error('Refusing to overwrite "permissions.allow" in .claude/settings.json: expected an array');
+  }
+  const ours = new Set(owned);
+  const kept = ((allow as unknown[] | undefined) ?? []).filter((r) => !(typeof r === 'string' && ours.has(r) && !want.includes(r)));
+  const nextOwned: string[] = [];
+  for (const rule of want) {
+    if (!kept.includes(rule)) {
+      kept.push(rule);
+      nextOwned.push(rule);
+    } else if (ours.has(rule)) {
+      nextOwned.push(rule);
+    }
+  }
+  const nextPerms: Json = { ...(perms ?? {}) };
+  if (kept.length > 0) nextPerms['allow'] = kept;
+  else delete nextPerms['allow'];
+  const out: Json = { ...settings };
+  if (Object.keys(nextPerms).length > 0) out['permissions'] = nextPerms;
+  else delete out['permissions'];
+  return { settings: JSON.stringify(out) === JSON.stringify(settings) ? settings : out, owned: nextOwned };
+}
+
+/** Remove the allow rules Squad added (`owned`), and `allow`/`permissions` they leave empty. */
+export function stripClaudePermissions(settings: Json, owned: readonly string[]): Json {
+  return mergeClaudePermissions(settings, null, owned).settings;
+}
+
+/**
+ * The `.claude/settings.json` entry: Squad's permission allowlist (on unless `claudePermissions` is
+ * `"off"`), its hooks while they are on, and the plugin keys in plugin mode. Emitted while any of
+ * those is on, and while the file exists (so turning one off, or rolling Claude back, removes
+ * Squad's entries).
+ */
+export function projectClaudeHooks(ctx: ClientContext, opts: { plugin?: boolean } = {}): ProjectionFile[] {
   const squadAbs = path.resolve(ctx.root, ctx.squadDir ?? '.squad');
-  const on = readClaudeHooksMode(squadAbs) === 'advisory' && claudeHookLaunch(ctx.mcp, 'Stop') !== null;
-  if (!on && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
+  const plugin = opts.plugin === true;
+  // In plugin mode the plugin registers the hooks; the project file only carries the plugin keys.
+  const on = !plugin && readClaudeHooksMode(squadAbs) === 'advisory' && claudeHookLaunch(ctx.mcp, 'Stop') !== null;
+  // Launcher rules only when the committed MCP command is Squad's own repository launcher: an
+  // unmanaged `squad.mjs` Squad refused to overwrite is never pre-approved.
+  const launcher = ctx.mcp ? repoLauncherPath(ctx.mcp) : null;
+  const rules = readClaudePermissionsMode(squadAbs) === 'squad'
+    ? claudePermissionRules(launcher ? launcher.slice(0, -'/squad.mjs'.length) : null, plugin)
+    : null;
+  let ownership = readClaudePluginSettingsOwnership(ctx.root);
+  let owned = readClaudePermissionsOwnership(ctx.root);
+  const permissionsTracked = rules !== null || owned.length > 0;
+  if (!on && !permissionsTracked && !plugin && !ownership && !fs.existsSync(path.join(ctx.root, CLAUDE_SETTINGS_PATH))) return [];
+  const coordinator = path.join(ctx.root, '.claude/agents/squad.md');
+  const projectMcp = fs.existsSync(coordinator) &&
+    fs.readFileSync(coordinator, 'utf8').includes('Generated by Squad. Managed file:');
   return [
     {
       kind: 'json',
       path: CLAUDE_SETTINGS_PATH,
-      update: (existing) => mergeClaudeHooks(existing, on ? ctx.mcp : null),
-      remove: stripClaudeHooks,
+      update: (existing) => {
+        const nextOwnership: PluginSettingsOwnership | undefined = plugin && !ownership
+          ? {
+            owner: PLUGIN_SETTINGS_OWNER,
+            agentChanged: existing['agent'] === undefined || existing['agent'] === COORDINATOR,
+            hadAgent: 'agent' in existing,
+            agent: existing['agent'],
+            disabledAdded: !Array.isArray(existing['disabledMcpjsonServers']) ||
+              !existing['disabledMcpjsonServers'].includes(PLUGIN_DISABLED_MCPJSON),
+            hadDisabled: 'disabledMcpjsonServers' in existing,
+            projectMcp,
+          }
+          : ownership;
+        const merged = mergeClaudePermissions(
+          mergeClaudePluginSettings(mergeClaudeHooks(existing, on ? ctx.mcp : null), plugin, nextOwnership),
+          rules,
+          owned,
+        );
+        ownership = nextOwnership;
+        owned = merged.owned;
+        return merged.settings;
+      },
+      remove: (existing) => stripClaudePermissions(mergeClaudePluginSettings(stripClaudeHooks(existing), false, ownership), owned),
     },
+    ...(permissionsTracked ? [{
+      kind: 'json' as const,
+      path: PERMISSIONS_STATE,
+      update: () => owned.length > 0 ? { owner: PERMISSIONS_OWNER, added: [...owned] } : {},
+      remove: () => ({}),
+    }] : []),
+    ...(plugin || ownership ? [{
+      kind: 'json' as const,
+      path: PLUGIN_SETTINGS_STATE,
+      update: () => plugin && ownership ? { ...ownership } : {},
+      remove: () => ({}),
+    }] : []),
   ];
+}
+
+/** Project `.mcp.json` servers that plugin mode turns off: the plugin serves `squad_state` instead. */
+const PLUGIN_DISABLED_MCPJSON = 'squad_state';
+
+/**
+ * Plugin-mode keys in `.claude/settings.json` (Claude projection v3). With `on`, `agent` starts the
+ * plugin's coordinator (unless the user chose another agent) and `disabledMcpjsonServers` turns off
+ * the project `.mcp.json` copy of `squad_state`, which would otherwise prompt for approval and
+ * duplicate the plugin's tools. Cleanup restores only values recorded as changed by plugin mode.
+ */
+export function mergeClaudePluginSettings(settings: Json, on: boolean, ownership?: PluginSettingsOwnership): Json {
+  if (!on && !ownership) return settings;
+  const out: Json = { ...settings };
+  const disabled = out['disabledMcpjsonServers'];
+  if (disabled !== undefined && !Array.isArray(disabled)) {
+    throw new Error('Refusing to overwrite "disabledMcpjsonServers" in .claude/settings.json: expected an array');
+  }
+  const list = (disabled as unknown[] | undefined) ?? [];
+  if (on) {
+    if (out['agent'] === undefined || out['agent'] === COORDINATOR) out['agent'] = CLAUDE_PLUGIN_COORDINATOR;
+    if (!list.includes(PLUGIN_DISABLED_MCPJSON)) out['disabledMcpjsonServers'] = [...list, PLUGIN_DISABLED_MCPJSON];
+    return out;
+  }
+  if (ownership?.agentChanged && out['agent'] === CLAUDE_PLUGIN_COORDINATOR) {
+    if (ownership.hadAgent) out['agent'] = ownership.agent;
+    else delete out['agent'];
+  }
+  if (ownership?.disabledAdded && list.includes(PLUGIN_DISABLED_MCPJSON)) {
+    const rest = list.filter((s) => s !== PLUGIN_DISABLED_MCPJSON);
+    if (rest.length > 0 || ownership.hadDisabled) out['disabledMcpjsonServers'] = rest;
+    else delete out['disabledMcpjsonServers'];
+  }
+  return JSON.stringify(out) === JSON.stringify(settings) ? settings : out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -167,6 +436,12 @@ export interface ClaudeHookEnv {
   projectAbs: string;
   /** Squad CLI version, for the health line. */
   version: string;
+  /**
+   * `plugin`: the handler was registered by the Squad Claude Code plugin (`--plugin`). It defers to
+   * Squad handlers in the project's `.claude/settings.json`, so a repo on the project projection
+   * with the plugin installed gets each advisory once.
+   */
+  source?: 'project' | 'plugin';
 }
 
 /** Claude Code hook output (the subset Squad uses). `null`: print nothing. */
@@ -320,10 +595,29 @@ function sessionContext(env: ClaudeHookEnv, now: number): { additionalContext?: 
   return { additionalContext: cap(lines.join('\n')) };
 }
 
+/** True when the project's `.claude/settings.json` carries Squad's own hook handlers. */
+export function projectHasSquadHooks(root: string, event?: string): boolean {
+  try {
+    const settings = JSON.parse(fs.readFileSync(path.join(root, CLAUDE_SETTINGS_PATH), 'utf8')) as unknown;
+    const hooks = isObject(settings) ? settings['hooks'] : undefined;
+    if (!isObject(hooks)) return false;
+    return (event ? [hooks[event]] : Object.values(hooks)).some(
+      (groups) =>
+        Array.isArray(groups) &&
+        groups.some((g) => isObject(g) && Array.isArray(g['hooks']) && (g['hooks'] as unknown[]).some(isSquadHookHandler)),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Run one hook event. Advisory: the result only adds context or a warning, never a permission decision. */
 export function runClaudeHook(event: string, input: Json, env: ClaudeHookEnv, now = Date.now()): ClaudeHookOutput {
   if (readClaudeHooksMode(env.teamAbs) !== 'advisory') return null;
-  const agent = str(input['agent_type'])?.toLowerCase();
+  if (env.source === 'plugin' && projectHasSquadHooks(env.root, event)) return null;
+  const raw = str(input['agent_type'])?.toLowerCase();
+  // The plugin's coordinator is `squad:squad`; it is the same coordinator as the project's `squad`.
+  const agent = raw === CLAUDE_PLUGIN_COORDINATOR ? COORDINATOR : raw;
 
   if (event === 'SessionStart' || event === 'SubagentStart') {
     if (agent !== COORDINATOR) return null;

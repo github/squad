@@ -28,6 +28,12 @@ For an existing repo:
 npx squad upgrade --client copilot,claude,cursor
 ```
 
+To refresh the configured hosts' files without a full upgrade, for example after you edit `.squad/routing.md` (Claude Code member subagent descriptions are built from it):
+
+```bash
+npx squad client sync
+```
+
 ## What each adapter generates
 
 | Client (`ClientId`) | Generated files |
@@ -43,6 +49,8 @@ npx squad upgrade --client copilot,claude,cursor
 Every host gets one coordinator file. Team members are not projected as separate host agents: the coordinator spawns each specialist as a generic subagent with that member's `.squad/agents/<name>/charter.md` inlined, exactly as Copilot does.
 
 ## Claude Code walkthrough
+
+> To use the Squad plugin for Claude Code instead (no `.mcp.json` approval, no `--mcp-config`), see [Squad for Claude Code (plugin)](../features/claude-code-plugin.md).
 
 1. Run `npx squad init --client claude`.
 2. Open `.claude/agents/squad.md` to inspect the coordinator prompt.

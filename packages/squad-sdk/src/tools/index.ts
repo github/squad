@@ -392,6 +392,16 @@ export class ToolRegistry {
   private fanOutDepsGetter?: () => FanOutDependencies | undefined;
   private memoryStore: LocalMemoryStore;
   private backendName: string;
+  /**
+   * Where a write landed, for tool results: with a git-branch backend the path is a key on the
+   * `squad-state` branch, not a file in the working tree, and a coordinator reporting the path to
+   * the user said otherwise (live scenario, 2026-11-13).
+   */
+  private storedWhere(): string {
+    return this.backendName === 'orphan' || this.backendName === 'two-layer'
+      ? ` That path is a key on the \`squad-state\` git branch (${this.backendName} backend): it is stored only there, and there is no file in the working tree.`
+      : '';
+  }
   private runtimeVersion: string;
   private cliVersion: string;
   private launchMode: string;
@@ -654,7 +664,7 @@ export class ToolRegistry {
           this.storage.writeSync(filename, content);
 
           return {
-            textResultForLlm: `Decision written: ${inboxRel}/${authorSlug}-${slug}.md (ID: ${decisionId})`,
+            textResultForLlm: `Decision written: ${inboxRel}/${authorSlug}-${slug}.md (ID: ${decisionId})${this.storedWhere()}`,
             resultType: 'success',
             toolTelemetry: { decisionId, filename, slug, inbox: inboxRel },
           };
@@ -957,7 +967,13 @@ export class ToolRegistry {
           cliVersion: this.cliVersion,
           sdkVersion: SQUAD_STATE_VERSION,
           stateBackend: this.backendName,
+          /**
+           * The team root (the directory that contains `.squad`), despite its name. Kept as is for
+           * `squad-state-health/v1` consumers; prefer `resolvedTeamRoot` / `resolvedSquadDir` (#2455).
+           */
           resolvedTeamDir: resolvedTeamDirectory(this.squadRoot),
+          resolvedTeamRoot: resolvedTeamDirectory(this.squadRoot),
+          resolvedSquadDir: path.resolve(this.squadRoot),
           bridgeVersion: this.runtimeVersion,
           launchMode: this.launchMode,
         };

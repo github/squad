@@ -19,9 +19,9 @@ import {
   type ClientId,
   type ProjectionFile,
 } from '@bradygaster/squad-sdk/client';
-import { readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
+import { linkedTeamDir, readClientFlag, readConfiguredClients, readUnknownConfiguredClients, syncClients, reportClientResults, parseClients } from '../core/clients.js';
 import { detectSquadDir } from '../core/detect-squad-dir.js';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec } from '../core/mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from '../core/mcp-spec.js';
 import { getPackageVersion } from '../core/version.js';
 import { BOLD, DIM, GREEN, RESET, YELLOW } from '../core/output.js';
 
@@ -55,11 +55,15 @@ export async function listClients(dest: string): Promise<ClientListResult> {
   const unknown = readUnknownConfiguredClients(squadDir);
   const effective: ClientId[] = configured.length > 0 ? configured : ['copilot'];
 
-  const spec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(getPackageVersion()));
+  const spec = projectSquadStateMcpSpec(
+    await resolveCommittedSquadStateMcpSpec(getPackageVersion(), dest, squadDir, { write: false }),
+  );
   const ctx = {
     root: dest,
     mcp: { command: spec.command, args: spec.args },
     squadDir: path.relative(dest, squadDir).split(path.sep).join('/') || '.squad',
+    // A linked team's members are projected too, so they are expected here as well.
+    ...linkedTeamDir(dest),
   };
 
   const clients: ClientStatus[] = CLIENT_IDS
@@ -154,6 +158,30 @@ export async function runClientCommand(dest: string, args: string[]): Promise<nu
     }
   }
 
-  console.error(`❌ Unknown client subcommand: ${sub}\n   Usage: squad client list [--json] | squad client add <list> [--dry-run]`);
+  if (sub === 'sync') {
+    // Re-project the configured hosts, e.g. after routing.md changes (#2456): Claude member
+    // subagent descriptions are built from it. Only Squad-managed files are rewritten.
+    try {
+      const squadDir = detectSquadDir(dest).path;
+      const synced = await syncClients(dest, squadDir, { dryRun, warn: (m) => console.warn(m) });
+      if (synced.clients.length === 0) {
+        console.log('No client hosts configured in .squad/config.json; nothing to sync. Add one with: squad client add <list>');
+        return 0;
+      }
+      if (dryRun) {
+        console.log(`Would refresh client host files for: ${synced.clients.join(', ')} (nothing written: --dry-run)`);
+        return 0;
+      }
+      reportClientResults(synced.results);
+      const failed = synced.results.some((r) => r.action === 'error');
+      console.log(`${failed ? '⚠' : `${GREEN}✓${RESET}`} clients synced: ${synced.clients.join(', ')}`);
+      return failed ? 1 : 0;
+    } catch (err) {
+      console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
+  console.error(`❌ Unknown client subcommand: ${sub}\n   Usage: squad client list [--json] | squad client add <list> [--dry-run] | squad client sync [--dry-run]`);
   return 1;
 }

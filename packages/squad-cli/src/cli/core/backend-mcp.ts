@@ -1,8 +1,17 @@
+import { createHash } from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
 import { resolveSquadState } from '@bradygaster/squad-sdk';
 import {
   ALL_CONTENT_PART_TYPES,
   BACKEND_PROTOCOL_VERSION,
   BackendError,
+  ClaudeAgentSdkHarness,
+  CopilotSdkHarness,
+  DefaultHarnessRegistry,
+  claudeApiCredentialsConfigured,
+  isClaudeAgentSdkAvailable,
+  type HarnessRegistry,
   createSquadBackend,
   createStateBackendStore,
   type BackendContentPart,
@@ -18,9 +27,10 @@ import {
  * `BackendErrorInfo`, `NegotiatedCapabilities`). Errors are returned in the
  * canonical `BackendErrorInfo` structure.
  *
- * No execution harness ships with the CLI: the bridge is a transcript / event-log
- * surface. `squad_backend_send_message` refuses to admit a turn when no harness is
- * registered instead of queueing it forever.
+ * The local backend registers the `claude-agent-sdk` harness when the optional
+ * `@anthropic-ai/claude-agent-sdk` peer is installed (`SQUAD_BACKEND_HARNESSES=none` turns that off).
+ * Without a harness the bridge is a transcript / event-log surface, and
+ * `squad_backend_send_message` refuses to admit a turn instead of queueing it forever.
  */
 export interface BackendMcpTool {
   name: string;
@@ -131,10 +141,64 @@ export function isExperimentalBackendEnabled(
  * Backend selection: SQUAD_BACKEND_URL (+ SQUAD_BACKEND_TOKEN) → durable-http (https, or http to loopback),
  * otherwise the local backend over the repo's .squad directory.
  */
+/**
+ * Execution harnesses for the local backend. `SQUAD_BACKEND_HARNESSES` is a comma-separated list of harness
+ * ids, or `none`. The default is `claude-agent-sdk`, registered only when its optional SDK is installed.
+ * `copilot-sdk` is opt-in: its SDK is always installed, so registering it by default would make every
+ * experimental bridge run Copilot sessions.
+ */
+export interface LocalHarnessOptions {
+  /** Directory each harness keeps its durable state under (accepted deliveries, session ids). */
+  stateDir?: string;
+  /** Override for tests: whether the optional Claude Agent SDK resolves. */
+  claudeSdkAvailable?: () => boolean;
+}
+
+/**
+ * Execution harnesses for the local backend. `SQUAD_BACKEND_HARNESSES` is a comma-separated list of harness
+ * ids, or `none`. The default is `claude-agent-sdk`, registered only when its optional SDK is installed **and**
+ * an API credential is configured (an Anthropic API key or Bedrock/Vertex/Foundry settings; never a claude.ai
+ * login). `copilot-sdk` is opt-in, since its SDK is always installed; it gets its own Copilot config directory so
+ * approvals remembered in the user's own Copilot CLI don't apply to bridge turns.
+ */
+export function createLocalHarnesses(
+  repoRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+  options: LocalHarnessOptions = {},
+): HarnessRegistry {
+  const registry = new DefaultHarnessRegistry();
+  const wanted = (env['SQUAD_BACKEND_HARNESSES'] ?? 'claude-agent-sdk').split(',').map((h) => h.trim()).filter(Boolean);
+  if (wanted.includes('none')) return registry;
+  const dir = (id: string) => (options.stateDir ? path.join(options.stateDir, id) : undefined);
+  const claudeAvailable = options.claudeSdkAvailable ?? isClaudeAgentSdkAvailable;
+  if (wanted.includes('claude-agent-sdk') && claudeAvailable() && claudeApiCredentialsConfigured(env)) {
+    registry.register(new ClaudeAgentSdkHarness({ cwd: repoRoot, env, ...(dir('claude-agent-sdk') ? { stateDir: dir('claude-agent-sdk')! } : {}) }));
+  }
+  if (wanted.includes('copilot-sdk')) {
+    const copilotDir = dir('copilot-sdk');
+    registry.register(new CopilotSdkHarness({
+      cwd: repoRoot,
+      ...(copilotDir ? { stateDir: copilotDir, configDirectory: path.join(copilotDir, 'copilot-config') } : {}),
+    }));
+  }
+  return registry;
+}
+
+/**
+ * Where harness state lives. The local backend keeps it beside its conversations (`<team>/backend/harnesses`); a
+ * configured backend keeps its data outside the working tree, so harness state goes to a per-user cache instead.
+ */
+export function harnessStateDir(context: { paths: { teamSquadDir: string }; backend: { name: string } }): string {
+  if (context.backend.name === 'local') return path.join(context.paths.teamSquadDir, 'backend', 'harnesses');
+  const id = createHash('sha256').update(path.resolve(context.paths.teamSquadDir)).digest('hex').slice(0, 16);
+  return path.join(os.homedir(), '.cache', 'squad', 'harnesses', id);
+}
+
 export function createMcpBackend(
   startDir: string,
   env: NodeJS.ProcessEnv = process.env,
-  resolveState: (dir: string) => Pick<NonNullable<ReturnType<typeof resolveSquadState>>, 'paths' | 'backend'> | null = resolveSquadState,
+  resolveState: (dir: string) => (Pick<NonNullable<ReturnType<typeof resolveSquadState>>, 'paths' | 'backend'> & { repoRoot?: string }) | null = resolveSquadState,
+  harnessesFor: (repoRoot: string, stateDir: string) => HarnessRegistry = (root, stateDir) => createLocalHarnesses(root, env, { stateDir }),
 ): SquadBackend {
   if (env['SQUAD_BACKEND_URL']) {
     return createSquadBackend({ kind: 'durable-http', baseUrl: env['SQUAD_BACKEND_URL'], token: env['SQUAD_BACKEND_TOKEN'] });
@@ -147,7 +211,11 @@ export function createMcpBackend(
   const state = context.backend.name === 'local'
     ? undefined
     : createStateBackendStore(context.backend, { lockAnchor: context.paths.teamSquadDir });
-  return createSquadBackend({ kind: 'mcp', squadDir: context.paths.teamSquadDir, state });
+  // Turns run in the worktree-aware repository root: a linked worktree without its own .squad resolves to the
+  // main checkout's squad directory, but its edits belong in the worktree.
+  const repoRoot = context.repoRoot ?? path.dirname(context.paths.projectDir ?? context.paths.teamSquadDir);
+  const harnesses = harnessesFor(repoRoot, harnessStateDir(context));
+  return createSquadBackend({ kind: 'mcp', squadDir: context.paths.teamSquadDir, state, harnesses });
 }
 
 /** Harness ids registered on an in-process backend; `undefined` when the backend is remote and does not expose them. */
@@ -183,7 +251,7 @@ export function createBackendMcpTools(getBackend: () => SquadBackend): BackendMc
     {
       name: 'squad_backend_send_message',
       description: 'Send a message; (runId, seq) is the idempotency key and epoch is the lease fencing token. '
-        + 'Fails with code "unavailable" when no execution harness is registered (the bundled bridge ships none: it records transcripts only).',
+        + 'Fails with code "unavailable" when no execution harness is registered (without one, the bridge records transcripts only; claude-agent-sdk registers when its optional SDK is installed).',
       inputSchema: { type: 'object', properties: {
         conversationId: cid,
         runId: { type: 'string' }, seq,
@@ -277,7 +345,7 @@ export function createBackendMcpTools(getBackend: () => SquadBackend): BackendMc
     {
       name: 'squad_backend_negotiate',
       description: 'Negotiate protocol version and capabilities. `harnesses` lists registered execution harnesses and '
-        + '`executionAvailable` is false when there are none (the bundled bridge ships no harness).',
+        + '`executionAvailable` is false when there are none (the bridge then records transcripts only; claude-agent-sdk registers when its optional SDK is installed).',
       inputSchema: { type: 'object', properties: {
         protocols: { type: 'array', items: { type: 'string' } },
         clientName: { type: 'string' },

@@ -49,7 +49,12 @@ export interface HealthReport {
     cliVersion: string;
     sdkVersion: string;
     stateBackend: string;
+    /** The team root (the directory that contains `.squad`), despite its name; kept for v1 consumers (#2455). */
     resolvedTeamDir: string | null;
+    /** The team root: the directory that contains the squad directory. */
+    resolvedTeamRoot: string | null;
+    /** The squad directory itself (`.squad`, or a flat externalized team directory). */
+    resolvedSquadDir: string | null;
     bridgeVersion: string;
     launchMode: 'cli';
   };
@@ -642,6 +647,8 @@ function healthMetadata(
     sdkVersion: SDK_VERSION,
     stateBackend,
     resolvedTeamDir: stateDir ? resolvedTeamDirectory(stateDir) : null,
+    resolvedTeamRoot: stateDir ? resolvedTeamDirectory(stateDir) : null,
+    resolvedSquadDir: stateDir ? path.resolve(stateDir) : null,
     bridgeVersion: cliVersion,
     launchMode: 'cli',
   };

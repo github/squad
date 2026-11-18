@@ -200,6 +200,8 @@ Squad runs on VS Code with **conditional support**. Key differences from CLI:
 - `.gitignore` — `.claude/worktrees/` under a `# squad:claude` comment
 - `.claude/settings.json` — Squad's governance hooks, only if you opt in (see below). Your other settings and hooks are kept.
 
+`squad init --client claude` also writes the GitHub Copilot files: `.github/agents/squad.agent.md`, `.github/skills/`, `.copilot/mcp-config.json`, the Squad workflows under `.github/workflows/` and `.vscode/settings.json`. This is intended. GitHub Copilot is the base host. The Claude Code coordinator is generated from the same shared source as Copilot's `.github/agents/squad.agent.md` and is complete on its own: it doesn't read Copilot's file ([ADR-003](https://github.com/github/squad/blob/dev/docs/specification/adr-003-host-neutral-canonical-coordinator.md), option C). Skip the workflows with `--no-workflows` and the VS Code setting with `--no-vscode-default`.
+
 ### Starting a session
 
 ```bash
@@ -220,6 +222,16 @@ Interactive Claude Code doesn't load project-scoped `.mcp.json` servers until yo
 | **MCP server access** | ✅ | `squad_state` tools appear as `mcp__squad_state__*`; subagents inherit them. |
 | **Hooks** | ✅ Opt-in, advisory | Off by default. See [Governance hooks](#governance-hooks). |
 | **`squad watch --execute`** | ✅ Preset | `squad watch --execute --agent-preset claude` (or `"agentPreset": "claude"` under `watch` in `.squad/config.json`) runs each round as `claude -p … --agent squad` with a `squad_state`-only MCP config written by the `squad` CLI (never the repository's `.mcp.json`, whose other servers keep Claude Code's approval). Execute mode defaults to `--permission-mode bypassPermissions`, the counterpart of Copilot's `--yolo`; override it with `--claude-flags`. Fleet dispatch (`--dispatch-mode fleet`) stays Copilot-only. |
+
+### Permissions for Squad's own tools
+
+`squad init --client claude` and `squad upgrade --client claude` add these rules to `permissions.allow` in `.claude/settings.json`, so the coordinator can cast a team and use its state without a permission prompt for each call:
+
+- each `squad_state` tool the coordinator uses, by name: `mcp__squad_state__squad_decide`, `…__squad_state_read`, `…_write`, `…_append`, `…_delete`, `…_list`, `…_create_if_absent`, `…_health` and `…_upstreams` (in plugin mode, the same tools under `mcp__plugin_squad_squad_state__`). Not the whole server: the experimental backend tools, such as approving a harness request, and the `memory.*` tools still ask.
+- `Bash(squad cast:*)`, `Bash(squad client sync:*)`, `Bash(squad lockout reject:*)` and `Bash(squad lockout status:*)`. Recording a rejection only adds a restriction. The steps that move a lockout toward release (`assign`, `submit`, `approve` and `override`) always ask, so an agent can't clear a lockout on its own.
+- The same commands through the repository launcher, `node .squad/squad.mjs …`, only while `.mcp.json` runs Squad's own launcher from a folder inside the repository. A `squad.mjs` Squad didn't write is never pre-approved.
+
+Nothing else is allowed: no edits, no other commands, no other MCP servers. `squad cast` refuses to write through a symbolic link, so a pre-approved cast can't be pointed at a file outside the team folder. Your own rules stay first and are never changed. Squad records the rules it added in `.claude/.squad-permissions.json` (commit it with `settings.json`), and removing Claude Code from the team, or turning the allowlist off, removes only those: a rule you had already written stays. Claude Code applies a project's allow rules only once you've trusted the folder (the trust prompt on your first interactive `claude` run there); until then, and in headless runs in an untrusted folder, it ignores them and says so. To turn the allowlist off, set `"claudePermissions": "off"` in `.squad/config.json` and run `squad upgrade --client claude`.
 
 ### Governance hooks
 

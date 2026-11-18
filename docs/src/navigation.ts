@@ -49,6 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { title: '@copilot Coding Agent', slug: 'features/copilot-coding-agent' },
       { title: 'Standalone Install (no npm)', slug: 'features/standalone-install' },
       { title: 'VS Code', slug: 'features/vscode' },
+      { title: 'Claude Code Plugin', slug: 'features/claude-code-plugin' },
     ],
   },
   {

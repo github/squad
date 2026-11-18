@@ -531,9 +531,9 @@ describe('CLI: export with externalized state (#1396)', () => {
   const origAppData = process.env['APPDATA'];
   const origXdgConfig = process.env['XDG_CONFIG_HOME'];
   const origHome = process.env['HOME'];
-  const externalBase = process.platform === 'darwin'
-    ? join(EXT_GLOBAL, 'Library', 'Application Support')
-    : EXT_GLOBAL;
+  // macOS honours XDG_CONFIG_HOME before ~/Library/Application Support, and the test harness sets it
+  // for every test, so redirect it on macOS too rather than HOME.
+  const externalBase = EXT_GLOBAL;
   const externalStateDir = join(externalBase, 'squad', 'projects', EXT_PROJECT_KEY);
 
   beforeEach(async () => {
@@ -547,8 +547,6 @@ describe('CLI: export with externalized state (#1396)', () => {
     // Point resolveGlobalSquadPath() inside EXT_GLOBAL (not the real user dir)
     if (process.platform === 'win32') {
       process.env['APPDATA'] = EXT_GLOBAL;
-    } else if (process.platform === 'darwin') {
-      process.env['HOME'] = EXT_GLOBAL;
     } else {
       process.env['XDG_CONFIG_HOME'] = EXT_GLOBAL;
     }

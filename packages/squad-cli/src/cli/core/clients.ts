@@ -27,7 +27,8 @@ import {
   type ApplyResult,
   type ClientId,
 } from '@bradygaster/squad-sdk/client';
-import { projectSquadStateMcpSpec, resolveSquadStateMcpSpec } from './mcp-spec.js';
+import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec } from './mcp-spec.js';
+import { resolveSquadPaths } from '@bradygaster/squad-sdk/resolution';
 import { getPackageVersion } from './version.js';
 
 export { CLIENT_IDS, parseClients, type ClientId };
@@ -114,6 +115,36 @@ export interface SyncClientsOptions {
   warn?: (message: string) => void;
   /** Only compute the client set; write nothing and persist nothing. */
   dryRun?: boolean;
+  /**
+   * `--claude-plugin` / `--no-claude-plugin`: record `claudePlugin` in `.squad/config.json` before
+   * projecting, which switches the Claude projection to (or from) plugin mode.
+   */
+  claudePlugin?: boolean;
+}
+
+/** `--claude-plugin` → true, `--no-claude-plugin` → false, neither → undefined. */
+export function readClaudePluginFlag(args: readonly string[]): boolean | undefined {
+  if (args.includes('--no-claude-plugin')) return false;
+  if (args.includes('--claude-plugin')) return true;
+  return undefined;
+}
+
+/** Set or clear `claudePlugin` in `.squad/config.json`, keeping every other key. */
+export function persistClaudePlugin(squadDir: string, on: boolean): void {
+  const file = resolveInsideRoot(squadDir, 'config.json');
+  let cfg: Record<string, unknown> = {};
+  if (fs.existsSync(file)) {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`Refusing to overwrite ${file}: root must be a JSON object`);
+    }
+    cfg = parsed as Record<string, unknown>;
+  }
+  if (on) cfg['claudePlugin'] = true;
+  else if ('claudePlugin' in cfg) delete cfg['claudePlugin'];
+  else return;
+  fs.mkdirSync(squadDir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
 }
 
 /**
@@ -123,12 +154,32 @@ export interface SyncClientsOptions {
  * (it would otherwise re-warn on every upgrade); already-configured clients stay.
  * Returns the clients that were synced and per-file results.
  */
+/**
+ * The linked team's squad directory when the project at `dest` (its own `.squad/`, not a parent's)
+ * uses a team repository (`squad link`, `init --mode remote`), else null.
+ */
+export function linkedTeamSquadDir(dest: string): string | null {
+  const paths = resolveSquadPaths(dest);
+  return paths?.mode === 'remote' && path.resolve(paths.projectDir) === path.resolve(dest, '.squad')
+    ? paths.teamSquadDir
+    : null;
+}
+
+/** `{ teamDir }` when `dest` is linked to a team repository (remote mode), else nothing. */
+export function linkedTeamDir(dest: string): { teamDir?: string } {
+  const teamDir = linkedTeamSquadDir(dest);
+  return teamDir ? { teamDir } : {};
+}
+
 export async function syncClients(
   dest: string,
   squadDir: string,
   options: SyncClientsOptions = {},
 ): Promise<{ clients: ClientId[]; results: ApplyResult[] }> {
-  const requested = options.clients;
+  const requested =
+    options.claudePlugin !== undefined && !(options.clients ?? []).includes('claude')
+      ? [...(options.clients ?? []), 'claude' as ClientId]
+      : options.clients;
   const configured = readConfiguredClients(squadDir);
   const unknownClients = readUnknownConfiguredClients(squadDir);
   if (unknownClients.length > 0) {
@@ -148,13 +199,15 @@ export async function syncClients(
     resolveInsideRoot(destAbs, path.relative(destAbs, squadAbs) || '.');
   }
   resolveInsideRoot(squadAbs, 'config.json');
+  if (options.claudePlugin !== undefined) persistClaudePlugin(squadDir, options.claudePlugin);
 
   const version = options.version ?? getPackageVersion();
-  const spec = projectSquadStateMcpSpec(await resolveSquadStateMcpSpec(version));
+  const spec = projectSquadStateMcpSpec(await resolveCommittedSquadStateMcpSpec(version, dest, squadDir));
   const ctx = {
     root: dest,
     mcp: { command: spec.command, args: spec.args },
     squadDir: path.relative(dest, squadDir).split(path.sep).join('/') || '.squad',
+    ...linkedTeamDir(dest),
   };
   const results = installClients(clients, ctx);
   const failedPaths = new Set(results.filter((r) => r.action === 'error').map((r) => r.path));

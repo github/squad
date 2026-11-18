@@ -22,7 +22,8 @@ describe('fail-closed test profile guard', () => {
     expect(roots.length).toBeGreaterThan(0);
     const norm = (p: string) => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
     expect(roots).toContain(norm(realHomeSquad));
-    expect(norm(process.env['SQUAD_HOME']!).startsWith(norm(os.tmpdir()).replace(/[A-Z]:/, (m) => m.toLowerCase()).slice(0, 3)), 'SQUAD_HOME must be under the temp dir').toBe(true);
+    // The guard creates its root under the resolved temp dir (macOS /var is /private/var).
+    expect(norm(process.env['SQUAD_HOME']!).startsWith(norm(fs.realpathSync(os.tmpdir())).replace(/[A-Z]:/, (m) => m.toLowerCase()).slice(0, 3)), 'SQUAD_HOME must be under the temp dir').toBe(true);
     expect(roots.some((r) => norm(process.env['SQUAD_HOME']!).startsWith(r))).toBe(false);
   });
 

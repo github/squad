@@ -2290,7 +2290,9 @@ Each mode's playbook ships as a **skill**. Enter this section only after **Actor
 
 **Planning modes only** — before running the mode skill, also load `squad-planning-policy` (policy resolution) and `squad-planning-ontology` (artifact schemas and the lifecycle state machine). The non-planning modes (Cast, Connect, Adopt, Cast Member, Retire, Status, Review Relay, Approve Improvement, Revoke Improvement, Implement) must not load them.
 
-If the parsed mode's skill cannot be loaded, report the failure in plain language and stop. Never improvise a mode playbook from memory.
+**Skill discovery fallback:** if the `skill` tool reports `Skill not found` for a skill listed above (headless SDK sessions may not register workspace skills), read the installed copy `.github/skills/<skill-name>/SKILL.md` from the workspace with `bash` (`cat`) and follow that file verbatim as the playbook. Apply the same fallback to `squad-planning-policy` and `squad-planning-ontology`. Do not `report_incomplete` or stop solely because the skill tool is not registered.
+
+If the parsed mode's skill cannot be loaded by either path, report the failure in plain language and stop. Never improvise a mode playbook from memory.
 
 ---
 
@@ -2495,7 +2497,24 @@ Guidelines: 4–7 active agents. Min: Lead + 2 specialists + 1 quality role.
    - Descriptive mode: keep names role-derived, short, and unique; do not assign fictional character names.
    - Themed modes: use one universe only, pressure/function over authority, no spoilers, and early-introduction names. For a custom universe, apply the same one-universe and spoiler-safety rules.
 4. Write `.squad/casting/registry.json` as `squad-agent-provenance/v1`. Compare the committed registry: preserve every ID/tombstone, immutable role/creation time, and avatar unless explicitly cleared; set `revision` greater than the committed revision (legacy is 0). Keys are immutable IDs/directories. Records hold equal names, role, universe, lifecycle/status, and optional ID-owned avatar under `.squad/agents/{id}/`. Rename uses the existing ID; deletion tombstones; never reuse or infer IDs. In descriptive mode every registry entry has `universe` set to `"descriptive"`.
-5. Initialize `.squad/casting/history.json`: `{ "universe_usage_history": [{ "universe": "descriptive-or-Universe", "assigned_at": "ISO", "agent_count": N }], "assignment_cast_snapshots": {} }`
+5. Write `.squad/casting/history.json` so it passes the deterministic Cast validator (`squad-cast-validator.mjs`), replacing the disposable activation preset file entirely. For a fresh Cast (`revision: 1`) the file must contain exactly one usage record and one snapshot keyed `cast-revision-1`; `used_at` and `created_at` must both equal the registry `generated_at`; `universe` must match the registry (`"descriptive"` in descriptive mode); `agents` must list every registry agent ID; and the only top-level fields are `universe_usage_history` and `assignment_cast_snapshots` — never carry over `transaction_id`, `registry_revision`, `assigned_at`, or `agent_count`. Example for a registry with `generated_at` `2026-09-21T00:00:00.000Z` and agents `lead`, `builder`, `tester`:
+   <!-- SQUAD:CAST-HISTORY-EXAMPLE:BEGIN -->
+   ```json
+   {
+     "universe_usage_history": [
+       { "universe": "descriptive", "used_at": "2026-09-21T00:00:00.000Z" }
+     ],
+     "assignment_cast_snapshots": {
+       "cast-revision-1": {
+         "created_at": "2026-09-21T00:00:00.000Z",
+         "universe": "descriptive",
+         "agents": ["lead", "builder", "tester"]
+       }
+     }
+   }
+   ```
+   <!-- SQUAD:CAST-HISTORY-EXAMPLE:END -->
+   For a re-Cast at revision N, append one `cast-revision-N` snapshot and one usage record (both stamped with the new `generated_at`) to the committed history instead of rewriting it.
 
 ##### Step 4: Generate Scaffolding
 

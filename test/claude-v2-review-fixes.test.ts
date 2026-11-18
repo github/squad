@@ -153,9 +153,10 @@ describe('lockout store', () => {
   });
 });
 
-describe('settings.json with hooks off', () => {
+describe('settings.json with hooks and the permission allowlist off', () => {
   for (const original of ['{}\n', '{"model":"opus"}', '{\n    "model": "opus"\n}\n']) {
     it(`keeps ${JSON.stringify(original)} byte for byte`, () => {
+      write('.squad/config.json', '{ "claudePermissions": "off" }\n');
       write(CLAUDE_SETTINGS_PATH, original);
       installClients(['claude'], { root, mcp: MCP });
       expect(fs.readFileSync(path.join(root, CLAUDE_SETTINGS_PATH), 'utf8')).toBe(original);

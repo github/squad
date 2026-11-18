@@ -1,0 +1,59 @@
+# Squad launcher on Windows and Linux.
+#
+# `.squad/squad.mjs` and the Claude plugin's `scripts/squad.mjs` take a different path on Windows:
+# npm's `squad.cmd` and `npx.cmd` shims are run through their JavaScript entry, never cmd.exe, so
+# arguments arrive unchanged. The main CI runs on Linux only, so this job runs the launcher tests on
+# both platforms whenever the launcher template or its tests change.
+name: Squad launcher platforms
+
+on:
+  pull_request:
+    paths:
+      - 'packages/squad-sdk/src/client/adapters/claude-plugin.ts'
+      - 'packages/squad-sdk/src/client/adapters/claude-hooks.ts'
+      - 'packages/squad-cli/src/cli/core/mcp-spec.ts'
+      - 'plugins/squad/scripts/**'
+      - 'test/launcher-argv.test.ts'
+      - 'test/portable-launch.test.ts'
+      - '.github/workflows/squad-launcher-platforms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  launcher:
+    name: launcher (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 #v6
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Install dependencies
+        shell: bash
+        run: |
+          success=false
+          for i in 1 2 3; do
+            if npm install; then success=true; break; fi
+            echo "Retry $i/3 — npm install failed, retrying in 5s..."; sleep 5
+          done
+          [ "$success" = true ] || { echo "::error::npm install failed after 3 attempts"; exit 1; }
+      - name: Build (no version bump)
+        shell: bash
+        run: npm run build
+        env:
+          SKIP_BUILD_BUMP: '1'
+      - name: Launcher tests
+        shell: bash
+        run: npx vitest run test/launcher-argv.test.ts test/portable-launch.test.ts --reporter=default

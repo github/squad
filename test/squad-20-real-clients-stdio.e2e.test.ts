@@ -92,6 +92,8 @@ class McpStdioClient {
     delete baseEnv['SQUAD_BACKEND_URL'];
     delete baseEnv['SQUAD_BACKEND_TOKEN'];
     delete baseEnv['SQUAD_EXPERIMENTAL_BACKEND'];
+    // No execution harness here, whatever is installed or inherited: these tests cover the transcript-only bridge.
+    baseEnv['SQUAD_BACKEND_HARNESSES'] = 'none';
     this.proc = spawn(spec.command, spec.args, { cwd, env: { ...baseEnv, ...spec.env }, stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (d: string) => this.onData(d));
@@ -349,7 +351,7 @@ describe.each(CLIENTS)('real stdio MCP server launched from the %s config', (cli
     const conv = await server!.call('squad_backend_create_conversation', { conversationId: `${client}-conv`, title: `real ${client}` });
     expect(conv.json).toMatchObject({ conversationId: `${client}-conv`, epoch: 1 });
 
-    // no execution harness ships with the CLI: the bridge refuses to admit a turn instead of queueing it forever
+    // no harness is registered here (the optional Claude Agent SDK isn't installed): the bridge refuses to admit a turn instead of queueing it forever
     const sent = await server!.call('squad_backend_send_message', {
       conversationId: `${client}-conv`, runId: `${client}-run`, seq: 1, correlationId: 'corr-real',
       parts: [{ type: 'text', text: 'hello from a real client' }, { type: 'resource', uri: 'file:///README.md', title: 'README' }],

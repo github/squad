@@ -172,7 +172,8 @@
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::field findings from the live demo: Init Mode, scratch files, casting registry",
             "validated-test:test/cli/init.test.ts::*",
-            "validated-manual:lab:init-mode@2026-10-22"
+            "validated-manual:lab:init-mode@2026-10-22",
+            "validated-manual:lab:no-copilot-first-run-trusted@2026-11-13"
           ],
           "notes": "Live: cast 4 members via `squad cast --name` (registry pair valid); ignored the requested descriptive universe and used Apollo 13 names."
         },
@@ -268,7 +269,8 @@
           "mechanism": "Digest §2–3: route by `routing.md`, exactly one owner, explicit deliverables/exclusions.",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
-            "validated-manual:lab:smoke-roster@2026-10-22"
+            "validated-manual:lab:smoke-roster@2026-10-22",
+            "validated-manual:lab:no-copilot-routing@2026-11-12"
           ]
         },
         "kiro": {
@@ -713,7 +715,10 @@
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::executes squad_state tools against the workspace .squad directory",
-            "validated-manual:lab:parallel-fanout@2026-10-22"
+            "validated-manual:lab:parallel-fanout@2026-10-22",
+            "validated-manual:lab:no-copilot-restart@2026-11-13",
+            "validated-manual:lab:no-copilot-compaction@2026-11-13",
+            "validated-manual:lab:no-copilot-customization-precedence@2026-11-13"
           ]
         },
         "kiro": {
@@ -996,7 +1001,8 @@
             "validated-test:test/upgrade-state-backend.test.ts::*",
             "validated-manual:lab:state-orphan@2026-10-22",
             "validated-manual:lab:state-twolayer@2026-10-22",
-            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_decide over the bridge lands in the squad-state branch for the %s backend, not the working tree"
+            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_decide over the bridge lands in the squad-state branch for the %s backend, not the working tree",
+            "validated-manual:lab:no-copilot-backend-isolation@2026-11-13"
           ],
           "notes": "F6 fixed: `squad_state_health` now reports `State backend: local|orphan|two-layer` plus the storage class and team squad dir. F8 fixed: `squad_state_list` without `dir` lists the root on orphan/two-layer."
         },
@@ -1194,7 +1200,8 @@
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
             "validated-test:test/claude-hooks.test.ts::runs reject → assign → submit → approve, and approval clears the lockout",
             "validated-test:test/claude-hooks.test.ts::PreToolUse warns when a locked-out member edits a subject file, and never denies",
-            "validated-manual:lab:reviewer-lockout@2026-10-22"
+            "validated-manual:lab:reviewer-lockout@2026-10-22",
+            "validated-manual:lab:no-copilot-reviewer-rejection@2026-11-13"
           ]
         },
         "kiro": {
@@ -1526,11 +1533,12 @@
         },
         "claude": {
           "capability": "supported",
-          "validation": "validated-test",
+          "validation": "validated-live",
           "mechanism": "Digest §21.",
           "evidence": [
             "validated-test:test/clients.test.ts::coordinator behavioral-contract parity",
-            "static-only"
+            "static-only",
+            "validated-manual:lab:no-copilot-human-signoff@2026-11-13"
           ]
         },
         "kiro": {
@@ -2698,14 +2706,16 @@
           "capability": "unsupported",
           "validation": "validated-test",
           "expectedFailure": true,
-          "mechanism": "Claude discovers `.claude/agents/squad.md` and `.mcp.json` from a package subfolder; state-mcp walks up to the root `.squad/`. Headless (`-p`) runs need `--mcp-config <root>/.mcp.json` or a prior per-project approval (F5).",
+          "mechanism": "Claude discovers `.claude/agents/squad.md` and `.mcp.json` from a package subfolder; state-mcp walks up to the root `.squad/`. Interactive runs prompt to approve the project `.mcp.json` server (F5); headless (`-p`) runs on Claude Code 2.1.318 connect it without `--mcp-config` (lab `plugin-mcp-headless`, 2026-11-10; earlier versions needed the flag or a prior per-project approval). The Squad plugin's server needs no approval in either mode.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
             "validated-manual:lab:mono-subfolder@2026-10-22",
+            "validated-manual:lab:plugin-mcp-headless@2026-11-10",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp resolves the root .squad when launched from a monorepo subfolder",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude lists the root .mcp.json squad_state server from packages/api",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
-            "static-only"
+            "static-only",
+            "validated-manual:lab:no-copilot-monorepo-subfolder@2026-11-13"
           ],
           "notes": "Validate per host: does the host find root-level projections from a subfolder cwd? Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The runtime path works (state-mcp walks up to the root `.squad/` / follows `teamRoot`; see the live run where recorded), but the projected digest carries no team-root section, so the coordinator is not told how resolution works. Unsupported on this host until the section ships."
         },
@@ -2796,39 +2806,40 @@
       ],
       "cells": {
         "copilot": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "CLI writes `config.json.teamRoot`; state-mcp resolves `mode: remote`; canonical step 3 loads `team.md` from the team root.",
+          "mechanism": "CLI writes `config.json.teamRoot`; state-mcp resolves `mode: remote`; canonical step 3 loads `team.md` from the team root; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
-          ],
-          "notes": "Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The runtime path works (state-mcp walks up to the root `.squad/` / follows `teamRoot`; see the live run where recorded), but the projected digest carries no team-root section, so the coordinator is not told how resolution works. Unsupported on this host until the section ships."
+          ]
         },
         "claude": {
-          "capability": "unsupported",
-          "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "The state bridge follows `config.json.teamRoot`, so the host coordinator read the team-root roster via `squad_state_read` and did not enter Init Mode, even though the digest has no team-root section.",
+          "capability": "supported",
+          "validation": "validated-live",
+          "mechanism": "`squad link` / `init --mode remote` write `config.json.teamRoot`; `squad init` and `squad upgrade` then scaffold no local roster, routing, charters or casting, and project the member subagents from the linked team (they read their charters with `squad_state_read`). The state bridge follows `teamRoot`, and the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
+            "validated-test:test/claude-linked-team.test.ts::init and upgrade use the linked team: no local roster, members projected from the team",
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-manual:lab:satellite-remote@2026-10-22",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
-            "static-only"
+            "static-only",
+            "validated-manual:lab:satellite-linked-members@2026-11-13"
           ],
-          "notes": "Live: roster served from `..\\base`; no casting attempted. Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The runtime path works (state-mcp walks up to the root `.squad/` / follows `teamRoot`; see the live run where recorded), but the projected digest carries no team-root section, so the coordinator is not told how resolution works. Unsupported on this host until the section ships."
+          "notes": "Live (2026-11-13): roster and routing read from the linked team via `squad_state_read`, API work routed to Dallas, and the projected `dallas` subagent read its charter through `squad_state`; no local team files, no denials. Earlier run: roster served from `..\\\\base`; no casting attempted."
         },
         "kiro": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator.",
+          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
@@ -2836,26 +2847,26 @@
           "notes": "Finding F4 candidate — validate. Live run blocked on 2026-10-22: kiro quota/usage limit reached on the reference machine. Expected-fail digest gap (per-host it.fails in test/clients.test.ts): unsupported on this host until the section ships."
         },
         "opencode": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "The state bridge follows `config.json.teamRoot`, so the host coordinator read the team-root roster via `squad_state_read` and did not enter Init Mode, even though the digest has no team-root section.",
+          "mechanism": "The state bridge follows `config.json.teamRoot`, so the host coordinator read the team-root roster via `squad_state_read` and did not enter Init Mode, even though the digest has no team-root section; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-manual:lab:satellite-remote@2026-10-22",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
           ],
-          "notes": "Live: roster served from `..\\base`; no casting attempted. Expected-fail digest gap (per-host it.fails in test/clients.test.ts): The runtime path works (state-mcp walks up to the root `.squad/` / follows `teamRoot`; see the live run where recorded), but the projected digest carries no team-root section, so the coordinator is not told how resolution works. Unsupported on this host until the section ships."
+          "notes": "Live: roster served from `..\\base`; no casting attempted."
         },
         "cursor": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator.",
+          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
@@ -2863,12 +2874,12 @@
           "notes": "Finding F4 candidate — validate. Live run blocked on 2026-10-22: cursor quota/usage limit reached on the reference machine. Expected-fail digest gap (per-host it.fails in test/clients.test.ts): unsupported on this host until the section ships."
         },
         "codex": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator.",
+          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
@@ -2876,12 +2887,12 @@
           "notes": "Finding F4 candidate — validate. No Codex binary or ChatGPT/API auth on the reference machine; static-only. Expected-fail digest gap (per-host it.fails in test/clients.test.ts): unsupported on this host until the section ships."
         },
         "antigravity": {
-          "capability": "unsupported",
+          "capability": "supported",
           "validation": "validated-test",
-          "expectedFailure": true,
-          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator.",
+          "mechanism": "State tools follow `teamRoot` transparently, but the digest reads `.squad/team.md` literally and never mentions `teamRoot`/`stateLocation`, so a satellite repo may look like Init Mode to the host coordinator; the digest's **Linked team** rule reads team files only through `squad_state`.",
           "evidence": [
             "validated-test:test/resolution.test.ts::*",
+            "validated-test:test/claude-linked-team.test.ts::every coordinator digest reads a linked team through squad_state",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::state-mcp follows config.json teamRoot from a satellite repo (remote mode)",
             "validated-test:test/clients.test.ts::coordinator digest vs. host feature matrix",
             "static-only"
@@ -4211,8 +4222,12 @@
             "validated-test:test/clients-real-cli.test.ts::claude discovers the squad subagents and parses .mcp.json",
             "validated-manual:lab:smoke-roster@2026-10-22",
             "validated-test:test/squad-20-host-feature-matrix.test.ts::claude --agent squad reads the roster through mcp__squad_state__squad_state_read",
-            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_state_health names the configured backend (orphan) as the coordinator digest promises"
-          ]
+            "validated-test:test/squad-20-host-feature-matrix.test.ts::squad_state_health names the configured backend (orphan) as the coordinator digest promises",
+            "validated-manual:lab:plugin-mcp-headless@2026-11-10",
+            "validated-manual:lab:plugin-mcp-interactive@2026-11-10",
+            "validated-manual:lab:no-copilot-backend-outage@2026-11-13"
+          ],
+          "notes": "Plugin measurement (Claude Code 2.1.318, 2026-11-10, #2443): a `squad_state` server supplied by the Squad plugin (`plugin:squad:squad_state`, tools `mcp__plugin_squad_squad_state__*`) connects with no approval prompt and no `--mcp-config`, both interactively and headless (`-p`), from the repo root and from a package subfolder. A project `.mcp.json` server still prompts interactively (\"New MCP server found in this project\", default \"Continue without using this MCP server\"); headless `-p` on this version connects it without the flag."
         },
         "kiro": {
           "capability": "supported",
@@ -4377,23 +4392,34 @@
       "cells": {
         "copilot": {
           "capability": "supported",
-          "validation": "validated-test",
-          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent.",
+          "validation": "validated-live",
+          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent. The `copilot-sdk` harness (`CopilotSdkHarness`) executes turns on the Copilot SDK; opt-in on the bridge via `SQUAD_BACKEND_HARNESSES=copilot-sdk`.",
           "evidence": [
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::completes the MCP handshake and lists squad_state_* and all squad_backend_* tools when opted in",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Scenario 4: DurableHttpSquadBackend full HTTP lifecycle",
-            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect"
-          ]
+            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect",
+            "validated-test:test/harness-contract.test.ts::*",
+            "validated-test:test/copilot-sdk-harness.test.ts::completes a turn through the broker",
+            "validated-test:test/copilot-sdk-harness.test.ts::completes a turn with a harness-only Copilot config directory (login still works)",
+            "validated-manual:lab:copilot-sdk-harness@2026-11-10"
+          ],
+          "notes": "Live: plain turns through the broker on the real Copilot backend (2026-11-09; again 2026-11-10 after event correlation, including with a harness-only config directory). Approvals are covered by the shared contract, not yet live."
         },
         "claude": {
           "capability": "supported",
-          "validation": "validated-test",
-          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent.",
+          "validation": "validated-live",
+          "mechanism": "Opt-in tools over the same MCP server; backend semantics are host-independent. The `claude-agent-sdk` harness (`ClaudeAgentSdkHarness`) executes turns on the Claude Agent SDK when the optional peer is installed.",
           "evidence": [
             "validated-test:test/squad-20-real-clients-stdio.e2e.test.ts::completes the MCP handshake and lists squad_state_* and all squad_backend_* tools when opted in",
             "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Scenario 4: DurableHttpSquadBackend full HTTP lifecycle",
-            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect"
-          ]
+            "validated-test:test/squad-20-all-scenarios.e2e.test.ts::Full non-bypass journey: host adapter → broker → harness → approval → restart/reconnect",
+            "validated-test:test/harness-contract.test.ts::*",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::*",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::routes a real tool call through broker approval and honours a deny",
+            "validated-manual:lab:claude-agent-sdk-harness@2026-11-10",
+            "validated-test:test/claude-agent-sdk-harness.test.ts::runs G1–G9 on claude-agent-sdk: approve after reconnect, then cancel"
+          ],
+          "notes": "Live (2026-11-10): a plain turn and a write denied through the broker (not run). The original golden-trace smoke run approved a real tool call after reconnect, but did not prove replay continuity or prompt harness cancellation. The strengthened trace (exact command and full hashed Bash input validation, explicit 120-second foreground tool timeout, cursor suffix and replay checks, 10-second cancellation deadline) awaits a new credentialed live run and is not yet promotion evidence. Deterministic negatives reject short-timeout/abort-ignoring transport, background execution and implicit timeouts before approval. Claude Code runs some read-only commands without asking, so those never reach the broker."
         },
         "kiro": {
           "capability": "supported",
@@ -4981,28 +5007,180 @@
       "outcome": "blocked",
       "observedTools": [],
       "notes": "cursor-agent -p failed: \"You've hit your usage limit\"."
+    },
+    {
+      "host": "copilot",
+      "scenario": "copilot-sdk-harness",
+      "date": "2026-11-09",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "copilot-sdk HarnessAdapter (@github/copilot-sdk 1.0.19, signed-in Copilot user) completed one turn through LocalSquadBackend: \"Reply with exactly the word: pong\" → completed, transcript ends in pong (4.4 s). Plain text only; no tool approval in this run."
+    },
+    {
+      "host": "claude",
+      "scenario": "claude-agent-sdk-harness",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash"
+      ],
+      "notes": "claude-agent-sdk HarnessAdapter (@anthropic-ai/claude-agent-sdk 0.3.317, Anthropic API key) through LocalSquadBackend: a plain turn completed (6.7 s); a Bash `touch` reached the broker as an approval, was denied, ended the turn cancelled, and the file was not created (6.1 s). A read-only `echo` ran without an approval request (Claude Code treats it as safe)."
+    },
+    {
+      "host": "copilot",
+      "scenario": "copilot-sdk-harness",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "After review round 4 (event correlation to the turn's own user.message, durable state): one turn through LocalSquadBackend completed (5.7 s), and the same with a harness-only Copilot configDirectory in an empty temp dir (3.2 s): sign-in still works there, so state-mcp's isolated config directory is safe."
+    },
+    {
+      "host": "claude",
+      "scenario": "claude-agent-sdk-golden-trace",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash"
+      ],
+      "notes": "Historical smoke run of the original golden-trace test on the real claude-agent-sdk harness (Agent SDK 0.3.317, Anthropic API key), 8.1 s: a real Bash `touch` approval was approved after reconnect and the file was created; the broker recorded cancellation and the fixture's backend events appeared in order. Review found that the assertions did not prove replay continuity, cursor filtering or interruption of an executing sleep. This pass is not evidence for the strengthened trace; a new credentialed live run is pending."
+    },
+    {
+      "host": "claude",
+      "scenario": "plugin-mcp-headless",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__plugin_squad_squad_state__squad_state_health",
+        "mcp__squad_state__squad_state_health"
+      ],
+      "notes": "Claude Code 2.1.318, clean environment, `claude -p --output-format stream-json`, no `--mcp-config`, no prior approval. Plugin loaded with `--plugin-dir`: init lists `plugin:squad:squad_state` connected (source `plugin`) and `squad_state_health` returns, at the repo root and from packages/api. The plugin's settings.json `agent: \"squad\"` made `squad:squad` the main agent with no `--agent`; when the repo also has a projected `.claude/agents/squad.md`, that project agent wins. Control: a project `.mcp.json` server also connected headless without the flag (source `project`) on this version."
+    },
+    {
+      "host": "claude",
+      "scenario": "plugin-mcp-interactive",
+      "date": "2026-11-10",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "Claude Code 2.1.318 interactive TUI driven in a pty, clean environment. With the plugin (`--plugin-dir`): after the folder-trust dialog there is no MCP approval prompt, `/mcp` lists `plugin:squad:squad_state` connected (15 tools), and the session starts as `@squad:squad` with no `--agent`. Control, project `.mcp.json` only: after the folder-trust dialog Claude Code shows \"New MCP server found in this project: squad_state\" with \"Continue without using this MCP server\" preselected."
+    },
+    {
+      "host": "claude",
+      "scenario": "satellite-linked-members",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read",
+        "Agent"
+      ],
+      "notes": "Satellite linked to a team repo with Ripley and Dallas: roster/routing from the team via squad_state_read, `dallas` subagent read agents/dallas/charter.md via squad_state_read; no local team files written."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-routing",
+      "date": "2026-11-12",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read",
+        "Task"
+      ],
+      "notes": "Routed a CLI change to Dallas per routing.md; the coordinator made no edits itself and didn't commit. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-human-signoff",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Releases routed to a human member: the request was not taken as the sign-off; it asked, and proceeded only after an explicit yes (#2491). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-monorepo-subfolder",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Started in packages/api with the team at the repository root; squad_state launched and served the root team (#2490). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-reviewer-rejection",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "Bash",
+        "Task"
+      ],
+      "notes": "Reviewer REJECT ran `squad lockout reject`, the revision went to another engineer, then re-review and approve; nothing merged in between. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-restart",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "A fresh session resumed from the TODOs the previous session left in decisions.md, without repeating finished work. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-customization-precedence",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "A team decision in decisions.md was followed unprompted over the coordinator default. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-backend-outage",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_health"
+      ],
+      "notes": "Bridge down with stateBackend two-layer: stopped after 2 turns, named the backend, pointed to `squad doctor`, wrote nothing (#2495). Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-first-run-trusted",
+      "date": "2026-11-13",
+      "outcome": "partial",
+      "observedTools": [
+        "Bash",
+        "mcp__squad_state__squad_state_read"
+      ],
+      "notes": "Trusted folder: `squad cast` x3, `squad client sync` and squad_state ran without prompts (#2496). Writing routing.md is not allowlisted, so headless runs deny it by design; the coordinator stopped and named what it needed. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-backend-isolation",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [
+        "mcp__squad_state__squad_state_health",
+        "mcp__squad_state__squad_decide"
+      ],
+      "notes": "Orphan backend (`squad upgrade --state-backend orphan`): decisions landed only on the squad-state branch, no working-tree files, no commit on main, 0 denials; the coordinator names the branch as the location (#2502). Model claude-opus-4-6[1m]. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
+    },
+    {
+      "host": "claude",
+      "scenario": "no-copilot-compaction",
+      "date": "2026-11-13",
+      "outcome": "pass",
+      "observedTools": [],
+      "notes": "Work session (Dallas edit + commit, Ripley review, Scribe merge, one decision), then `/compact`, then resumed with \"make sure everything is finished\": no second commit, spawn or decision entry, and no invented approvals. It answered from the compacted summary without re-reading state. Model claude-opus-4-6[1m]. Claude Code 2.1.318, `claude -p --agent squad`, Copilot's `.github/agents/squad.agent.md` deleted (#2487)."
     }
   ],
   "expectedFailures": [
     {
       "featureId": "monorepo-team-root",
-      "test": "test/clients.test.ts::digest gap (expected until the stack adds it): team-root resolution (teamRoot / stateLocation / TEAM_ROOT)",
-      "kind": "it.fails",
-      "perHost": true,
-      "hosts": [
-        "copilot",
-        "claude",
-        "kiro",
-        "opencode",
-        "cursor",
-        "codex",
-        "antigravity"
-      ],
-      "meaning": "The projected digest lacks this canonical section on the listed hosts; one it.fails per host (title suffixed `[<host>]`) turns red the moment a stack adds it. Every listed cell is `unsupported` for that host until then."
-    },
-    {
-      "featureId": "dual-root-remote-mode",
-      "test": "test/clients.test.ts::digest gap (expected until the stack adds it): team-root resolution (teamRoot / stateLocation / TEAM_ROOT)",
+      "test": "test/clients.test.ts::digest gap (expected until the stack adds it): team-root resolution (stateLocation / TEAM_ROOT)",
       "kind": "it.fails",
       "perHost": true,
       "hosts": [
@@ -5083,7 +5261,7 @@
   "limitations": [
     "Capability and validation are separate axes: a `supported` cell may be only `static-only`, and an `unsupported` digest-gap cell is `validated-test` because an `it.fails` proves the gap. Read both columns.",
     "Expected failures are pinned per host and per gap (one `it.fails` per `<gap> [<host>]` pair); a section landing for one host turns exactly that host's test red. Those cells are `unsupported`, never `degraded`.",
-    "Live evidence exists for Claude Code and OpenCode only (reference machine, 2026-10-22). Kiro, Codex, Antigravity and Cursor have no passing live run: their cells are `validated-test` only through host-independent tests, otherwise `static-only`, `untested` or `blocked`.",
+    "Live evidence exists for Claude Code and OpenCode (reference machine, 2026-10-22) and for both execution harnesses on the experimental backend: `copilot-sdk` (2026-11-09) and `claude-agent-sdk` (2026-11-10). Kiro, Codex, Antigravity and Cursor have no passing live run: their cells are `validated-test` only through host-independent tests, otherwise `static-only`, `untested` or `blocked`.",
     "The opt-in headless coordinator tests (`SQUAD_REAL_MODEL_TESTS=1`) verify the MCP bridge through a tee'd `squad state-mcp` transcript (a successful `tools/call` of `squad_state_read` with `key: \"team.md\"`), not by matching stdout. No other cell claims bridge-level verification."
   ]
 }

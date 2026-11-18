@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WatchContext } from './types.js';
 import { withAdditionalMcpConfig } from '../../core/copilot-invocation.js';
+import { CLAUDE_PLUGIN_AGENT, readClaudePluginMode } from '@bradygaster/squad-sdk/client';
 
 /** True when running on Windows — used to gate `shell: true`. */
 export const IS_WINDOWS = process.platform === 'win32';
@@ -276,10 +277,11 @@ export function buildClaudeCommand(
   options: { session?: boolean } = {},
 ): { cmd: string; args: string[]; checkStdout: (stdout: string) => string | undefined } {
   const args = ['-p', prompt];
-  if (options.session) args.push('--agent', 'squad');
-  if (context.claudeMcpConfig) {
+  const plugin = readClaudePluginMode(path.join(context.teamRoot, '.squad'));
+  if (options.session) args.push('--agent', plugin ? CLAUDE_PLUGIN_AGENT : 'squad');
+  if (!plugin && context.claudeMcpConfig) {
     args.push('--mcp-config', context.claudeMcpConfig);
-  } else {
+  } else if (!plugin) {
     console.warn('[squad] ⚠  No squad_state MCP config for the Claude preset: squad_state tools will NOT be available in this session.');
   }
   // stream-json (which needs --verbose with -p) ends with a `result` event even when the run

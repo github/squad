@@ -6,6 +6,7 @@ import { runInit } from '../../packages/squad-cli/src/cli/core/init.js';
 import { runUpgrade } from '../../packages/squad-cli/src/cli/core/upgrade.js';
 import { getPackageVersion } from '../../packages/squad-cli/src/cli/core/version.js';
 import { STANDALONE_HOME_ENV } from '../../packages/squad-cli/src/cli/core/mcp-spec.js';
+import { squadRepoLauncherArgs } from '@bradygaster/squad-sdk/client';
 import { getTemplatesDir } from '../../packages/squad-cli/src/cli/core/templates.js';
 import { copyManagedFile, writeManagedText } from '../../packages/squad-cli/src/cli/core/managed-file.js';
 import { TEAM_CAPABILITIES_BEGIN } from '@bradygaster/squad-sdk/config';
@@ -61,17 +62,21 @@ describe('upgrade portability and destination newlines', () => {
       };
       expect(config.mcpServers.custom).toEqual(custom);
       expect(config.mcpServers.squad_state.env).toEqual({ EXTRA: 'keep' });
-      expect(config.mcpServers.squad_state.command).toBe(mode === 'packaged'
-        ? path.join(root, 'example-bundle', portableCommand) : process.execPath);
+      // Committed files carry no path into this machine's install (#2462): a standalone bundle
+      // becomes `squad` from PATH, an installed CLI becomes the repository launcher.
+      expect(config.mcpServers.squad_state.command).toBe(mode === 'packaged' ? 'squad' : 'node');
       expect(config.mcpServers.squad_state.args).toEqual(mode === 'packaged'
-        ? ['state-mcp'] : [path.resolve('packages/squad-cli/dist/cli-entry.js'), 'state-mcp']);
+        ? ['state-mcp'] : squadRepoLauncherArgs('.squad', 'state-mcp'));
       expect(config.mcpServers.squad_state['x-squad']).toEqual({
         managed: true,
         version,
-        machineSpecific: true,
-        source: mode === 'packaged' ? 'standalone' : 'local-entry',
+        machineSpecific: false,
+        source: mode === 'packaged' ? 'path' : 'repo-launcher',
         fallback,
       });
+      expect(raw).not.toContain(root);
+      expect(raw).not.toContain(process.execPath);
+      expect(existsSync(path.join(root, '.squad', 'squad.mjs'))).toBe(mode === 'npm');
       expect(raw).not.toMatch(/(?<!\r)\n/);
     }
   });

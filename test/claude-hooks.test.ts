@@ -12,12 +12,17 @@ import {
 } from '../packages/squad-sdk/src/client/adapters/index.js';
 import {
   CLAUDE_SETTINGS_PATH,
+  claudePermissionRules,
   isSquadHookHandler,
+  mergeClaudePermissions,
+  SQUAD_STATE_PERMISSION_TOOLS,
+  stripClaudePermissions,
   mergeClaudeHooks,
   runClaudeHook,
   stripClaudeHooks,
   type ClaudeHookEnv,
 } from '../packages/squad-sdk/src/client/adapters/claude-hooks.js';
+import { squadRepoLauncherArgs } from '../packages/squad-sdk/src/client/adapters/repo-launcher.js';
 import {
   LockoutError,
   approveRevision,
@@ -35,6 +40,8 @@ import {
 } from '../packages/squad-sdk/src/client/adapters/lockout.js';
 
 const MCP = { command: 'squad', args: ['state-mcp'] };
+/** The committed `.mcp.json` command when Squad's repository launcher is in place. */
+const LAUNCHER_MCP = { command: 'node', args: squadRepoLauncherArgs('.squad', 'state-mcp') };
 const ROSTER = ['dallas', 'lambert', 'ripley'];
 const AT = '2026-11-09T12:00:00.000Z';
 
@@ -112,7 +119,13 @@ describe('Claude hooks in .claude/settings.json', () => {
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  it('is off by default: no settings file is written', () => {
+  it('hooks are off by default: the settings file holds only the permission allowlist', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    expect(JSON.parse(fs.readFileSync(settingsAbs(), 'utf8'))).toEqual({ permissions: { allow: claudePermissionRules(null, false) } });
+  });
+
+  it('with the allowlist and hooks off, no settings file is written', () => {
+    config({ claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
     expect(fs.existsSync(settingsAbs())).toBe(false);
   });
@@ -150,7 +163,7 @@ describe('Claude hooks in .claude/settings.json', () => {
     config({ claudeHooks: 'advisory' });
     installClients(['claude'], { root, mcp: MCP });
     const merged = JSON.parse(fs.readFileSync(settingsAbs(), 'utf8'));
-    expect(merged.permissions).toEqual({ allow: ['Bash(npm test)'] });
+    expect(merged.permissions).toEqual({ allow: ['Bash(npm test)', ...claudePermissionRules(null, false)] });
     expect(merged.hooks.PreToolUse[0]).toEqual({ matcher: 'Bash', hooks: [{ type: 'command', command: './.claude/hooks/no-rm.sh' }] });
     expect(merged.hooks.PreToolUse).toHaveLength(2);
     expect(merged.hooks.Stop).toHaveLength(2);
@@ -162,9 +175,9 @@ describe('Claude hooks in .claude/settings.json', () => {
     const user = '{\n  "model": "opus"\n}\n';
     fs.mkdirSync(path.dirname(settingsAbs()), { recursive: true });
     fs.writeFileSync(settingsAbs(), user);
-    config({ claudeHooks: 'advisory' });
+    config({ claudeHooks: 'advisory', claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
-    config({ claudeHooks: 'off' });
+    config({ claudeHooks: 'off', claudePermissions: 'off' });
     installClients(['claude'], { root, mcp: MCP });
     expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
   });
@@ -188,6 +201,114 @@ describe('Claude hooks in .claude/settings.json', () => {
   it('refuses to clobber a malformed hooks value', () => {
     expect(() => mergeClaudeHooks({ hooks: [] as unknown as Record<string, unknown> }, MCP)).toThrow(/Refusing/);
     expect(() => mergeClaudeHooks({ hooks: { Stop: 'x' } }, MCP)).toThrow(/Refusing/);
+  });
+});
+
+describe('Claude permission allowlist in .claude/settings.json', () => {
+  let root: string;
+  const settingsAbs = () => path.join(root, CLAUDE_SETTINGS_PATH);
+  const config = (cfg: Record<string, unknown>) => fs.writeFileSync(path.join(root, '.squad/config.json'), `${JSON.stringify(cfg, null, 2)}\n`);
+  const allow = () => JSON.parse(fs.readFileSync(settingsAbs(), 'utf8')).permissions?.allow;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-claude-perms-'));
+    fs.mkdirSync(path.join(root, '.squad'), { recursive: true });
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it("allows only Squad's own tools: named squad_state tools and the coordinator's squad subcommands", () => {
+    const rules = claudePermissionRules('.squad', false);
+    expect(rules).toEqual([
+      ...SQUAD_STATE_PERMISSION_TOOLS.map((t) => `mcp__squad_state__${t}`),
+      'Bash(squad cast:*)',
+      'Bash(squad client sync:*)',
+      'Bash(squad lockout reject:*)',
+      'Bash(squad lockout status:*)',
+      'Bash(node .squad/squad.mjs cast:*)',
+      'Bash(node .squad/squad.mjs client sync:*)',
+      'Bash(node .squad/squad.mjs lockout reject:*)',
+      'Bash(node .squad/squad.mjs lockout status:*)',
+    ]);
+    // Never the whole server (backend approval tools), never a step that releases a lockout.
+    expect(rules).not.toContain('mcp__squad_state');
+    expect(rules.some((r) => /backend|override|assign|submit|approve/.test(r) || r === 'Bash(squad lockout:*)')).toBe(false);
+    expect(claudePermissionRules('.squad', true)[0]).toBe('mcp__plugin_squad_squad_state__squad_decide');
+    expect(claudePermissionRules('.ai-team', false)).toContain('Bash(node .ai-team/squad.mjs cast:*)');
+    expect(claudePermissionRules('team\\.squad', false)).toContain('Bash(node team/.squad/squad.mjs cast:*)');
+  });
+
+  it('writes no launcher rule for a squad dir outside the repository or with dot segments', () => {
+    for (const dir of ['/abs/.squad', '../main/.squad', 'a/../.squad', './.squad', '..\\main\\.squad', 'C:/x/.squad', '', 'a//b', 'has space/.squad']) {
+      expect(claudePermissionRules(dir, false).some((r) => r.startsWith('Bash(node')), dir).toBe(false);
+    }
+    expect(claudePermissionRules(null, false).some((r) => r.startsWith('Bash(node'))).toBe(false);
+  });
+
+  it('pre-approves the launcher only when the committed MCP command is Squad\'s repository launcher', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    expect(allow()).toEqual(claudePermissionRules(null, false));
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(allow()).toEqual(claudePermissionRules('.squad', false));
+    // A shared team dir outside the repository (a worktree's `../main/.squad`) gets no launcher rule.
+    installClients(['claude'], { root, mcp: { command: 'node', args: squadRepoLauncherArgs('../main/.squad', 'state-mcp') } });
+    expect(allow().some((r: string) => r.startsWith('Bash(node'))).toBe(false);
+  });
+
+  it("never removes a user's rule, even one that matches Squad's", () => {
+    const user = `${JSON.stringify({ permissions: { allow: ['Bash(squad cast:*)', 'mcp__squad_state__squad_state_read', 'Bash(node tools/squad.mjs cast:*)'] } }, null, 2)}\n`;
+    fs.mkdirSync(path.dirname(settingsAbs()), { recursive: true });
+    fs.writeFileSync(settingsAbs(), user);
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    const rules = claudePermissionRules('.squad', false);
+    expect(allow()).toEqual([
+      'Bash(squad cast:*)', 'mcp__squad_state__squad_state_read', 'Bash(node tools/squad.mjs cast:*)',
+      ...rules.filter((r) => r !== 'Bash(squad cast:*)' && r !== 'mcp__squad_state__squad_state_read'),
+    ]);
+    uninstallClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
+    // Turned off on the first install: nothing is Squad's, so nothing is removed.
+    config({ claudePermissions: 'off' });
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
+    const unowned = { permissions: { allow: ['Bash(squad cast:*)'] } };
+    expect(stripClaudePermissions(unowned, [])).toBe(unowned);
+  });
+
+  it('appends after user rules, is idempotent, and rollback restores the user bytes', () => {
+    const user = `${JSON.stringify({ permissions: { allow: ['Bash(npm test:*)'], deny: ['Bash(rm:*)'] }, model: 'opus' }, null, 2)}\n`;
+    fs.mkdirSync(path.dirname(settingsAbs()), { recursive: true });
+    fs.writeFileSync(settingsAbs(), user);
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(allow()).toEqual(['Bash(npm test:*)', ...claudePermissionRules('.squad', false)]);
+    expect(JSON.parse(fs.readFileSync(settingsAbs(), 'utf8')).permissions.deny).toEqual(['Bash(rm:*)']);
+    expect(installClients(['claude'], { root, mcp: LAUNCHER_MCP }).find((r) => r.path === CLAUDE_SETTINGS_PATH)?.action).toBe('unchanged');
+    uninstallClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(fs.readFileSync(settingsAbs(), 'utf8')).toBe(user);
+    expect(fs.existsSync(path.join(root, '.claude/.squad-permissions.json'))).toBe(false);
+  });
+
+  it('"claudePermissions": "off" removes only Squad rules on the next upgrade', () => {
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(allow()).toEqual(claudePermissionRules('.squad', false));
+    config({ claudePermissions: 'off' });
+    installClients(['claude'], { root, mcp: LAUNCHER_MCP });
+    expect(fs.existsSync(settingsAbs())).toBe(false);
+    expect(fs.existsSync(path.join(root, '.claude/.squad-permissions.json'))).toBe(false);
+  });
+
+  it('rollback deletes a settings file that held only Squad rules, and prunes .claude', () => {
+    installClients(['claude'], { root, mcp: MCP });
+    uninstallClients(['claude'], { root, mcp: MCP });
+    expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
+  });
+
+  it('refuses to clobber malformed permissions', () => {
+    const rules = claudePermissionRules('.squad', false);
+    expect(() => mergeClaudePermissions({ permissions: [] as unknown as Record<string, unknown> }, rules)).toThrow(/Refusing/);
+    expect(() => mergeClaudePermissions({ permissions: { allow: 'x' } }, rules)).toThrow(/Refusing/);
+    // Nothing to add: a malformed value is left alone rather than refused.
+    const odd = { permissions: { allow: 'x' } };
+    expect(mergeClaudePermissions(odd, null, rules).settings).toBe(odd);
   });
 });
 
@@ -264,6 +385,26 @@ describe('Claude hook runtime (advisory)', () => {
     expect(ctx).toMatch(/issue-42 \(author-locked\) on src\/auth\/\*\*: dallas locked out after ripley's REJECT/);
     expect(runClaudeHook('SessionStart', { source: 'startup' }, env)).toBeNull();
     expect(runClaudeHook('SubagentStart', { agent_type: 'squad' }, env)!.hookSpecificOutput!.hookEventName).toBe('SubagentStart');
+  });
+
+  it('the plugin coordinator squad:squad gets the same context as the project squad agent', () => {
+    const plugin = { ...env, source: 'plugin' as const };
+    const ctx = runClaudeHook('SessionStart', { agent_type: 'squad:squad', source: 'startup' }, plugin)!.hookSpecificOutput!.additionalContext;
+    expect(ctx).toContain('Roster:');
+    expect(runClaudeHook('SubagentStart', { agent_type: 'squad:squad' }, plugin)!.hookSpecificOutput!.hookEventName).toBe('SubagentStart');
+    expect(edit('dallas', 'src/auth/login.ts')).not.toBeNull();
+  });
+
+  it('plugin hooks defer when the project settings already run the Squad handlers', () => {
+    const settings = path.join(env.root, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'squad', args: ['hook', 'claude', 'SessionStart'] }] }] } }));
+    try {
+      expect(runClaudeHook('SessionStart', { agent_type: 'squad:squad' }, { ...env, source: 'plugin' })).toBeNull();
+      expect(runClaudeHook('SessionStart', { agent_type: 'squad' }, { ...env, source: 'project' })).not.toBeNull();
+    } finally {
+      fs.rmSync(settings);
+    }
   });
 
   it('SessionStart reports a missing team instead of injecting context', () => {

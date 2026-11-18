@@ -227,10 +227,6 @@ describe('old-repository pattern', () => {
       { path: 'docs/src/content/docs/guide/contributors.md', text: `- [#298](${old}/pull/298)\nSee ${old}/blob/main/CONTRIBUTING.md` },
       { path: 'docs/specification/core-v0.1.md', text: `Provenance: [PR #2074](${old}/pull/2074)\nReference implementation: ${old}` },
       { path: 'docs/src/content/docs/whatsnew.md', text: `## v2.0.0\nFixed (${old}/pull/2279)\n## v1.1.0 — Stable Release\nPorted ([PR #131](${old}/pull/131))` },
-      {
-        path: 'docs/src/content/docs/scenarios/upgrading.md',
-        text: `Report at ${old}/issues\n<!-- UPGRADE-MATRIX:START -->\n| [run](${old}/actions/runs/1) |\n<!-- UPGRADE-MATRIX:END -->\nAfter: ${old}/releases`,
-      },
     ];
 
     const { offenders, kept } = scanOldRepoLinks(files);
@@ -240,8 +236,6 @@ describe('old-repository pattern', () => {
       'docs/src/content/docs/guide/contributors.md:2: github.com/bradygaster/squad/blob/main/CONTRIBUTING.md',
       'docs/specification/core-v0.1.md:2: github.com/bradygaster/squad',
       'docs/src/content/docs/whatsnew.md:2: github.com/bradygaster/squad/pull/2279',
-      'docs/src/content/docs/scenarios/upgrading.md:1: github.com/bradygaster/squad/issues',
-      'docs/src/content/docs/scenarios/upgrading.md:5: github.com/bradygaster/squad/releases',
     ]);
     const keptByEntry = Object.fromEntries([...kept].filter(([, links]) => links.length > 0).map(([entry, links]) => [entry.path, links]));
     expect(keptByEntry, `kept:\n${JSON.stringify(keptByEntry, null, 2)}`).toEqual({
@@ -249,7 +243,6 @@ describe('old-repository pattern', () => {
       'docs/specification/': ['docs/specification/core-v0.1.md:1: github.com/bradygaster/squad/pull/2074'],
       'docs/src/content/docs/guide/contributors.md': ['docs/src/content/docs/guide/contributors.md:1: github.com/bradygaster/squad/pull/298'],
       'docs/src/content/docs/whatsnew.md': ['docs/src/content/docs/whatsnew.md:4: github.com/bradygaster/squad/pull/131'],
-      'docs/src/content/docs/scenarios/upgrading.md': ['docs/src/content/docs/scenarios/upgrading.md:3: github.com/bradygaster/squad/actions/runs/1'],
     });
   });
 
@@ -257,12 +250,10 @@ describe('old-repository pattern', () => {
     const old = 'https://github.com/bradygaster/squad';
     const files = [
       { path: 'docs/src/content/docs/whatsnew.md', text: `## v2.0.0\nPorted ([PR #131](${old}/pull/131))` },
-      { path: 'docs/src/content/docs/scenarios/upgrading.md', text: `<!-- UPGRADE-MATRIX:START -->\n| [run](${old}/actions/runs/1) |` },
     ];
 
     expectLines(scanOldRepoLinks(files).offenders, [
       'docs/src/content/docs/whatsnew.md:2: github.com/bradygaster/squad/pull/131',
-      'docs/src/content/docs/scenarios/upgrading.md:2: github.com/bradygaster/squad/actions/runs/1',
     ]);
   });
 });

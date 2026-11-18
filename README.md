@@ -20,6 +20,18 @@ It's not a chatbot wearing hats. Each team member runs in its own context, reads
 
 > **Responsible AI stance** — Squad is built to amplify a human operator with GitHub Copilot, not to remove humans from the loop. Use it to delegate faster, review better, and keep governance close to the code.
 
+### See it in Claude Code
+
+![Squad's team dashboard following a Claude Code session: the coordinator sends Dallas (Node.js engineer) to build a CLI and Parker (tester) to write tests at the same time, then Jordan (lead) reviews and Scribe records the decisions](docs/src/assets/images/squad-claude-dashboard.gif)
+
+A real run, sped up 12×: a fresh repository, `squad init --client claude`, then two prompts to `claude --agent squad`. "Cast a small team" ran `squad cast` for a lead, an engineer and a tester in 50 seconds. "Team, build the MVP" sent the engineer and the tester out in parallel, then the lead reviewed. The result was a commit with 22 passing `node --test` tests, about $2.60 of model time for both prompts. The page is `squad dashboard`, which reads Claude Code's own session files and needs no setup.
+
+```bash
+squad init --client claude
+claude --agent squad --mcp-config .mcp.json   # "Cast a team for this repo", then give it work
+squad dashboard --open                        # watch the team in your browser
+```
+
 ---
 
 ## Quick Start
@@ -134,7 +146,17 @@ squad init --client claude,opencode      # or: --client all
 squad upgrade --client codex             # add a host later; refreshes every configured host
 ```
 
-Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered. See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md), [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md), and the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md).
+Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered.
+
+In Claude Code, Squad also installs as a plugin that carries the coordinator, `squad_state`, skills, hooks and slash commands, including `/squad:dashboard`, a live local page of the team at work (also `squad dashboard`):
+
+```bash
+claude plugin marketplace add github/squad
+claude plugin install squad@squad --scope project
+squad init --client claude --claude-plugin
+```
+
+See [Squad for Claude Code (plugin)](docs/src/content/docs/features/claude-code-plugin.md). See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md), [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md), and the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md).
 
 ---
 
@@ -193,6 +215,7 @@ Say **"squad commands"** in chat to see a categorized menu of common operations 
 | `squad upstream add\|remove\|list\|sync` | Manage upstream Squad sources |
 | `squad nap` | Context hygiene — compress, prune, archive; use `--deep` for aggressive compression, `--dry-run` to preview changes |
 | `squad aspire` | Open Aspire dashboard for observability |
+| `squad dashboard` | Live local page of the team's Claude Code sessions on 127.0.0.1; `stop`, `status`, `--detach`, `--open`, `--session <id>`, `--stream <file>` |
 | `squad scrub-emails [directory]` | Remove email addresses from Squad state files (default: `.squad/`) |
 
 ---

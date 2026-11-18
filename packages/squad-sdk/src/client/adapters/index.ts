@@ -6,3 +6,4 @@ export * from './capabilities.js';
 export * from './portable.js';
 export * from './lockout.js';
 export * from './claude-hooks.js';
+export * from './claude-plugin.js';

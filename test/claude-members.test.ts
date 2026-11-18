@@ -54,6 +54,13 @@ describe('renderClaudeMember: charter → Claude subagent frontmatter', () => {
     expect(fm).toMatchObject({ name: 'dallas', model: 'sonnet', effort: 'high' });
   });
 
+  it('does not double the period after a role that ends in one', () => {
+    const md = renderClaudeMember('dallas', charter().replace('# Dallas — Backend Dev', '# Dallas — Backend Dev. Writes APIs.'), [], '.squad', NOTE);
+    const description = JSON.parse(frontmatter(md).description!);
+    expect(description).toContain('Writes APIs.');
+    expect(description).not.toContain('..');
+  });
+
   it('omits model and effort for auto (charter §6: auto is never a literal override)', () => {
     const md = renderClaudeMember('dallas', charter(), [], '.squad', NOTE);
     const fm = frontmatter(md);
@@ -220,6 +227,32 @@ describe('CLI: squad upgrade --client claude and squad cast write member subagen
     await runCastAdd(root, { name: 'Dallas', role: 'Backend Dev' });
     expect(agents()).toContain('dallas.md');
     expect(fs.readFileSync(path.join(root, '.claude/agents/dallas.md'), 'utf8')).toMatch(/^---\nname: dallas\n/);
+  }, 60_000);
+
+  it('squad client sync picks up routing written after casting (#2456)', async () => {
+    const { runInit } = await import('../packages/squad-cli/src/cli/core/init.js');
+    const { runCastAdd } = await import('../packages/squad-cli/src/cli/commands/cast.js');
+    const { runClientCommand } = await import('../packages/squad-cli/src/cli/commands/client.js');
+    await runInit(root, { clients: ['claude'], includeWorkflows: false, includeVscodeDefault: false });
+    await runCastAdd(root, { name: 'Dallas', role: 'Backend Dev' });
+    const member = path.join(root, '.claude/agents/dallas.md');
+    expect(fs.readFileSync(member, 'utf8')).not.toContain('Payments API');
+
+    // Init Mode writes routing.md after casting, as an ordinary file.
+    const routing = path.join(root, '.squad/routing.md');
+    fs.writeFileSync(routing, `${fs.readFileSync(routing, 'utf8')}\n| Work Type | Route To | Examples |\n|---|---|---|\n| Payments API | Dallas | refunds |\n`);
+    expect(await runClientCommand(root, ['sync', '--dry-run'])).toBe(0);
+    expect(fs.readFileSync(member, 'utf8')).not.toContain('Payments API');
+    expect(await runClientCommand(root, ['sync'])).toBe(0);
+    expect(fs.readFileSync(member, 'utf8')).toMatch(/^description: ".*Owns: [^"]*Payments API/m);
+  }, 60_000);
+
+  it('squad client sync with no configured host writes nothing (#2456)', async () => {
+    const { runInit } = await import('../packages/squad-cli/src/cli/core/init.js');
+    const { runClientCommand } = await import('../packages/squad-cli/src/cli/commands/client.js');
+    await runInit(root, { includeWorkflows: false, includeVscodeDefault: false });
+    expect(await runClientCommand(root, ['sync'])).toBe(0);
+    expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
   }, 60_000);
 
   it('squad cast writes nothing under .claude when claude is not configured', async () => {

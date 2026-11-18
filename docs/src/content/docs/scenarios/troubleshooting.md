@@ -154,6 +154,16 @@ declarations, which multiplied the process count.
 
 ---
 
+## `squad_state` or Claude hooks fail after cloning
+
+**Problem:** On a fresh clone or another machine, the `squad_state` MCP server doesn't start, or every Claude Code hook reports an error. `squad doctor` shows **portable squad_state launch** failing.
+
+**Cause:** The repository was set up with a Squad version that wrote absolute paths from one machine into `.mcp.json` and `.claude/settings.json`.
+
+**Fix:** run `squad upgrade` once and commit the result. It replaces those paths with `node .squad/squad.mjs`, a launcher that finds the Squad CLI on each machine. If the launcher says no Squad CLI was found, install one (`npm install -g @bradygaster/squad-cli`) or set `SQUAD_ALLOW_NPX=1`.
+
+---
+
 ## Upgrade doesn't change anything
 
 **Problem:** Running `squad upgrade` completes but nothing changes.

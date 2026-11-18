@@ -5,6 +5,7 @@
  * @module cli/commands/cast
  */
 
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   FSStorageProvider,
@@ -24,8 +25,51 @@ import { LocalAgentSource } from '@bradygaster/squad-sdk/config/agent-source';
 import { resolveSquadPaths, resolveExternalStateDir } from '@bradygaster/squad-sdk/resolution';
 import { BOLD, RESET, info, success } from '../core/output.js';
 import { fatal, fatalNoSquad } from '../core/errors.js';
+import { ensureBuiltinSupportSection } from '../core/cast.js';
 
 const storage = new FSStorageProvider();
+
+/**
+ * The first symlink on the way from `root` down to `target` (`root` itself may be a link: a linked
+ * team or external state directory), or null. `squad cast` can run without an approval prompt in
+ * Claude Code, so it must not follow a planted link out of the team directory.
+ */
+export function symlinkUnder(root: string, target: string): string | null {
+  const rel = path.relative(root, target);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  let cur = root;
+  for (const part of rel.split(path.sep)) {
+    cur = path.join(cur, part);
+    try {
+      if (fs.lstatSync(cur).isSymbolicLink()) return cur;
+    } catch {
+      return null; // Does not exist yet: nothing below it can be a link either.
+    }
+  }
+  return null;
+}
+
+/** Refuse to cast when a file `squad cast` writes is reached through a symlink. */
+function assertCastTargetsConfined(squadDir: string, teamRoot: string, agentDir: string): void {
+  const castingDir = path.join(squadDir, 'casting');
+  let castingEntries: string[] = [];
+  try {
+    castingEntries = fs.readdirSync(castingDir).map((f) => path.join(castingDir, f));
+  } catch {
+    // No casting directory yet.
+  }
+  const targets: Array<[string, string]> = [
+    ...[agentDir, path.join(agentDir, 'charter.md'), path.join(agentDir, 'history.md'),
+      path.join(squadDir, 'team.md'), path.join(squadDir, 'routing.md'), castingDir, ...castingEntries]
+      .map((t): [string, string] => [squadDir, t]),
+    [teamRoot, path.join(teamRoot, 'squad.config.ts')],
+    [teamRoot, path.join(teamRoot, '.github', 'agents', 'squad.agent.md')],
+  ];
+  for (const [root, target] of targets) {
+    const link = symlinkUnder(root, target);
+    if (link) fatal(`Refusing to cast: ${link} is a symbolic link. squad cast only writes real files inside the team directory.`);
+  }
+}
 
 export interface CastAddOptions {
   name: string;
@@ -167,6 +211,24 @@ function updateTeamMdWithAgent(squadDir: string, name: string, role: string, slu
   const newSection = `${before}\n${row}${after ? '\n' + after : '\n'}`;
   const updated = existing.slice(0, membersIdx) + newSection + existing.slice(sectionEnd);
   storage.writeSync(teamPath, updated);
+}
+
+/**
+ * `squad init` creates the built-in charters but leaves the roster empty, and casting one member at
+ * a time only adds that member's row. List the built-ins in `team.md` too, so every host reading the
+ * roster sees the same team (#2522). Only built-ins whose charter exists get a row.
+ */
+function ensureBuiltinRoster(squadDir: string): void {
+  const installed = new Set(
+    ['scribe', 'ralph', 'rai', 'fact-checker']
+      .filter((id) => storage.existsSync(path.join(squadDir, 'agents', id, 'charter.md'))),
+  );
+  if (installed.size === 0) return;
+  const teamPath = path.join(squadDir, 'team.md');
+  const existing = storage.readSync(teamPath);
+  if (existing === undefined) return;
+  const updated = ensureBuiltinSupportSection(existing, installed);
+  if (updated !== existing) storage.writeSync(teamPath, updated);
 }
 
 function updateRoutingMdWithAgent(squadDir: string, name: string, role: string): void {
@@ -329,6 +391,8 @@ export async function runCastAdd(cwd: string, options: CastAddOptions): Promise<
   const charterPath = path.join(agentDir, 'charter.md');
   const historyPath = path.join(agentDir, 'history.md');
 
+  assertCastTargetsConfined(squadDir, teamRoot, agentDir);
+
   if (storage.existsSync(charterPath) && !options.force) {
     fatal(`Agent "${rawName}" already exists at ${charterPath} (use --force to overwrite)`);
   }
@@ -346,6 +410,7 @@ export async function runCastAdd(cwd: string, options: CastAddOptions): Promise<
   }
 
   updateTeamMdWithAgent(squadDir, rawName, displayRole, slug);
+  ensureBuiltinRoster(squadDir);
   updateRoutingMdWithAgent(squadDir, rawName, displayRole);
   await updateCastingStateWithAgent(squadDir, rawName, displayRole, slug);
   await addAgentToConfig(teamRoot, slug, displayRole);

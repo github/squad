@@ -24,6 +24,12 @@ export interface ClientContext {
   mcp: McpLaunchSpec;
   /** Squad state directory name relative to root (default `.squad`). */
   squadDir?: string;
+  /**
+   * Absolute path of the linked team's squad directory when the project uses a team repository
+   * (`teamRoot` in `.squad/config.json`, remote mode). Members and routing are read from it.
+   * Default: `<root>/<squadDir>`.
+   */
+  teamDir?: string;
 }
 
 /** A projected file, relative to {@link ClientContext.root}. */

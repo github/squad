@@ -43,8 +43,9 @@ describe('Speed: --help is scannable', { timeout: 30_000 }, () => {
     const output = harness.captureFrame();
     const lines = output.split('\n').filter(l => l.trim());
     // Budget grew to accommodate `sync` + `state-mcp` commands. Hard cap
-    // keeps us honest if help text starts ballooning again. +1 for `lockout`.
-    expect(lines.length).toBeLessThanOrEqual(151);
+    // keeps us honest if help text starts ballooning again. +1 for `lockout`,
+    // +1 for `dashboard`.
+    expect(lines.length).toBeLessThanOrEqual(152);
   });
 
   it('first 5 lines tell user what to do next', async () => {

@@ -103,6 +103,7 @@ describe('printCommandHelp', () => {
       'copilot',
       'copilot-bridge',
       'cost',
+      'dashboard',
       'delegate',
       'discover',
       'doctor',

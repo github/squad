@@ -1272,7 +1272,7 @@ describe('field findings from the live demo: Init Mode, scratch files, casting r
     expect(text).toMatch(/headless/);
     // members are cast into the shared .squad/agents path and registered with the CLI, not projected per client
     expect(text).toMatch(/tell the user to upgrade the squad CLI instead of hand-writing the team/);
-    expect(text).toMatch(/`npx squad cast --name <Name> --role/);
+    expect(text).toMatch(/`squad cast --name <Name> --role/);
   });
 
   it.each(CLIENT_IDS)('%s: keeps scratch files inside the workspace', (id) => {
@@ -1286,7 +1286,7 @@ describe('field findings from the live demo: Init Mode, scratch files, casting r
   it.each(CLIENT_IDS)('%s: casts through the CLI and forbids hand-written casting files', (id) => {
     const text = loadedCoordinatorText(id);
     // live finding: LLM-handwritten casting/registry.json broke `squad upgrade`
-    expect(text).toMatch(/npx squad cast --name <Name> --role/);
+    expect(text).toMatch(/squad cast --name <Name> --role/);
     expect(text).toMatch(/NEVER hand-write or edit anything under .{0,20}casting\//);
     expect(text).toContain('registry-history.commit.json');
   });
