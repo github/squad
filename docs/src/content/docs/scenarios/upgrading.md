@@ -183,12 +183,12 @@ Every row below is a pinned, published artifact of an older Squad release driven
 
 ### Runs
 
-All recorded runs executed against **one tree**, commit `9b254ba858abc19ef62e513993d9802312bfe34c`, with harness hash `a9713d320fdb479c…` (sha256 over the suite, renderer, workflow, fs hook and this fixture minus `runs`; the integrity test refuses a recorded run whose harness differs from the committed one, so folding results may change nothing but the runs data).
+All recorded runs executed against **one tree**, commit `758861e6bcc66e2466c1cb66d94f654712aec1e6`, with harness hash `48482391aaaf04da…` (sha256 over the suite, renderer, workflow, fs hook and this fixture minus `runs`; the integrity test refuses a recorded run whose harness differs from the committed one, so folding results may change nothing but the runs data).
 
 | Platform | Arch | Node | Target | Tree (targetSha) | Trigger | Recorded | Outcome |
 |----------|------|------|--------|------------------|---------|----------|---------|
-| Linux (`linux`) | x64 | v22.23.4 | v2.0.0-preview.4 | `9b254ba858ab` | [pull_request](https://github.com/github/squad/actions/runs/43147851248) | 2026-11-12 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
-| Windows (`win32`) | x64 | v22.23.4 | v2.0.0-preview.4 | `9b254ba858ab` | [pull_request](https://github.com/github/squad/actions/runs/43147851248) | 2026-11-12 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
+| Linux (`linux`) | x64 | v22.23.4 | v2.0.0 | `758861e6bcc6` | [pull_request](https://github.com/github/squad/actions/runs/44384646543) | 2026-11-18 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
+| Windows (`win32`) | x64 | v22.23.5 | v2.0.0 | `758861e6bcc6` | [pull_request](https://github.com/github/squad/actions/runs/44384646543) | 2026-11-18 | 35 rows passed all non-xfail assertions; 4 of them carry a known expected failure (F3: Squad 0.9.1 squad upgrade --dry-run is not dry); 0 rows failed; 7 rows are structurally inapplicable (listed below). |
 
 ### Producers (pinned, immutable provenance)
 
@@ -395,12 +395,12 @@ Recorded by the `downgrade-probe` check (dry-run on a copy; the only assertion i
 
 | Platform | Producer | Shapes | Observed |
 |----------|----------|--------|----------|
-| `linux` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0-preview.4 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 68 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
+| `linux` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 68 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
 | `linux` | 0.13.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.0.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.0.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `linux` | 1.1.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
-| `win32` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0-preview.4 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 67 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
+| `win32` | 0.9.1 | all 4 shapes | exit 0, last lines "[32m✓[0m refreshed .squad/templates/ \| Upgrade complete: v2.0.0 → v0.9.1 \| [2mPreserves user state: team.md, decisions/, agents/*/history.md[0m"; MODIFIED 67 files (20 coordinator/templates/workflows, e.g. .copilot/skills/agent-collaboration/SKILL.md, .copilot/skills/agent-conduct/SKILL.md, .copilot/skills/architectural-proposals/SKILL.md …) |
 | `win32` | 0.13.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `win32` | 1.0.0 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
 | `win32` | 1.0.1 | all 6 shapes | exit 0, last lines "overwrite  ../.github/workflows/squad-triage.yml \| overwrite  ../.github/workflows/sync-squad-labels.yml \| Run without --dry-run to apply."; modified nothing |
