@@ -20,7 +20,7 @@ exports[`host projection regression guards (#2438) > guard 1: the Copilot projec
   ".github/skills/session-recovery/SKILL.md": "54a7c1feba619de57cc212774406331fd53447d48d565430489a6202a0e6b67a",
   ".github/skills/squad-conventions/SKILL.md": "7e1a53f10ceed067e38de48865bfc212deb1fdb04fee65038a7a135753e25c7c",
   ".github/skills/squad-help/SKILL.md": "d2696395847e146dffc88668890adbd4104b3a9fe72be3fb47d773511eb9a4f8",
-  ".github/skills/squad-version-check/SKILL.md": "f75495722a6bfc3a5008b03c1c18228f01966e48fc24ee07f3f2521f2bdf52fd",
+  ".github/skills/squad-version-check/SKILL.md": "995bc883bc7dd504a3a3915e1df663424977ff764688928c4d52d5dc4d44878c",
   ".github/skills/squad/SKILL.md": "5e4c08f0c9b297b194baf5ad73cafae644fead47a929ef4286cd0c3c58b5c142",
   ".github/skills/test-discipline/SKILL.md": "d84983f8e88130a670424796b38c4f947af9f05bb781c6b6e5bfdb81484345bc",
   ".github/skills/tiered-memory/SKILL.md": "1ed0bcef7dbcf6fcd8f41dea1a510080cccca866efed45bad6e59e62c6ededec",
@@ -36,6 +36,6 @@ exports[`host projection regression guards (#2438) > guard 1: the Copilot projec
   ".github/workflows/squad-triage.yml": "54f8a35713f9cd88bef9ee54b03da8f7d9cbd0bbdcbb03c73cb0dd37fd9bd1f2",
   ".github/workflows/sync-squad-labels.yml": "105f9f0b1e004833154c6511c84b7f70c465e69e1e8f3da8676ec1255396c34d",
   ".gitignore": "37aa6c4e49c873d2603b79e173ba46e216b18c596057964aac1cd6e62ff4e89f",
-  ".mcp.json": "f663bb87bb44da6d619c3919daf37c186fa7f1b97649f7f2055ece72d0dbb825",
+  ".mcp.json": "ffc55fcc71aa36ca5aaea958f67690975293ae9139ce2d1a40a7dc8c9e319262",
 }
 `;

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { verifyPublishEvidence } from '../scripts/release/verify-publish-evidence.mjs';
 
 const VERSION = '2.0.0-preview.1';
+const identity = JSON.parse(readFileSync(path.resolve(__dirname, '..', 'scripts', 'release', 'distribution-identity.json'), 'utf8'));
 
 describe('verified publish evidence handoff', () => {
   it('records release, evidence, and workflow identities and fails closed on a tarball hash mismatch', () => {
@@ -17,8 +18,8 @@ describe('verified publish evidence handoff', () => {
     mkdirSync(publishDir);
     const packages: Record<string, Record<string, unknown>> = {};
     for (const [name, filename, bytes] of [
-      ['@squad/sdk', 'sdk.tgz', Buffer.from('sdk')],
-      ['@squad/cli', 'cli.tgz', Buffer.from('cli')],
+      [identity.npm.sdk.current, 'sdk.tgz', Buffer.from('sdk')],
+      [identity.npm.cli.current, 'cli.tgz', Buffer.from('cli')],
     ] as const) {
       const sha256 = createHash('sha256').update(bytes).digest('hex');
       writeFileSync(path.join(evidenceDir, filename), bytes);
@@ -32,7 +33,7 @@ describe('verified publish evidence handoff', () => {
         files: [],
         manifest: {
           version: VERSION,
-          ...(name.endsWith('squad-cli') ? { sdkDependency: VERSION } : {}),
+          ...(name === identity.npm.cli.current ? { sdkDependency: VERSION } : {}),
         },
         privacy: { denyPatterns: ['email-upn'], hits: [] },
       };

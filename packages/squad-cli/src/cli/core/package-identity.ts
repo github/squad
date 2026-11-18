@@ -29,7 +29,7 @@ export const KNOWN_CLI_PATH_PATTERN = KNOWN_CLI_PACKAGE_NAMES
 
 /** Registry metadata path for a scoped name, e.g. `@squad%2Fcli`. */
 export function registryPackagePath(name: string): string {
-  return name.replace('/', '%2F');
+  return name.replaceAll('/', '%2F');
 }
 
 /** True when `spec` is `<known CLI name>` or `<known CLI name>@<version|tag>`. */

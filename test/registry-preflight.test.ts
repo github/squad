@@ -10,6 +10,7 @@ import {
   readDistTags,
   runRegistryPreflight,
 } from '../scripts/release/registry-preflight.mjs';
+import { PACKAGE_KEYS } from '../scripts/release/classify-npm-registry.mjs';
 
 const VERSION = '2.0.0-preview.4';
 const REGISTRY = 'https://registry.npmjs.org/';
@@ -73,7 +74,7 @@ describe('read-only registry preflight', () => {
     const spawn = (command: string, args: string[]) => {
       if (command === 'gh') return result(1, '', 'gh: Not Found (HTTP 404)');
       if (command === 'git') return result(0);
-      const spec = args.find((arg) => arg.startsWith('@bradygaster/')) ?? '';
+      const spec = args.find((arg) => PACKAGE_KEYS.some(([, name]) => arg.startsWith(`${name}@`))) ?? '';
       if (args.includes('dist-tags')) {
         return result(0, JSON.stringify({ insider: '2.0.0-preview.3', preview: '2.0.0-preview.3', latest: '1.1.0' }));
       }

@@ -29,8 +29,13 @@ export const PRESERVED_PATHS = [
   /(^|\/)CHANGELOG\.md$/,
   /^docs\/src\/content\/blog\//,
   /^docs\/_internal\//,
-  /^\.squad\//,
+  // Live team state is history; .squad/templates/ mirrors the canonical templates and must stay in sync.
+  /^\.squad\/(?!templates\/)/,
   /^\.github\/aw\//,
+  // Frozen specification revisions are pinned by exact-byte digest in their manifests.
+  /^docs\/specification\/charter-v0\.1\.md$/,
+  // Byte-exact snapshot of squad-init@<sha> and its installer, bound by sha256 and git blob ids.
+  /^test\/fixtures\/squad-init-approved\.json$/,
   /^test-fixtures\/spec\/suite-v0\.2\/preview-tarball-matrix\.json$/,
   /^test-fixtures\/spec\/suite-v0\.2\/upgrade-matrix\.json$/,
   /^scripts\/release\/distribution-identity\.json$/,

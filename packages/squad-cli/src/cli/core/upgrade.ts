@@ -29,8 +29,8 @@ import { getPackageVersion, stampVersion, readInstalledVersion } from './version
 import {
   CLI_PACKAGE_NAME,
   KNOWN_CLI_NAME_PATTERN,
+  LEGACY_CLI_PACKAGE_NAMES,
   getInstalledCliPackageName,
-  isLegacyCliPackageName,
   registryPackagePath,
 } from './package-identity.js';
 import { projectSquadStateMcpSpec, resolveCommittedSquadStateMcpSpec, type SquadStateMcpSpec } from './mcp-spec.js';
@@ -1909,9 +1909,11 @@ export function selfUpgradeCommand(
   insiderOrTag: boolean | SelfUpgradeTag,
   installedPackageName: string = CLI_PACKAGE_NAME,
 ): string {
-  const tag: SelfUpgradeTag = typeof insiderOrTag === 'boolean' ? (insiderOrTag ? 'insider' : 'latest') : insiderOrTag;
+  // The command reaches a shell, so it is built only from literals: the tag is re-derived and the
+  // legacy name is taken from the constant allowlist, never from the caller's string.
+  const tag: SelfUpgradeTag = (typeof insiderOrTag === 'boolean' ? insiderOrTag : insiderOrTag === 'insider') ? 'insider' : 'latest';
   const pkg = `${CLI_PACKAGE_NAME}@${tag}`;
-  const legacy = isLegacyCliPackageName(installedPackageName) ? installedPackageName : null;
+  const legacy = LEGACY_CLI_PACKAGE_NAMES.find((name) => name === installedPackageName) ?? null;
   switch (packageManager) {
     case 'pnpm': return `${legacy ? `pnpm remove -g ${legacy} && ` : ''}pnpm add -g ${pkg}`;
     case 'yarn': return `${legacy ? `yarn global remove ${legacy} && ` : ''}yarn global add ${pkg}`;

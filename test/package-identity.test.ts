@@ -68,7 +68,8 @@ describe('legacy CLI install migration', () => {
   });
 
   it('encodes scoped names for registry URLs', () => {
-    expect(registryPackagePath(CLI_PACKAGE_NAME)).toBe(CLI_PACKAGE_NAME.replace('/', '%2F'));
+    expect(registryPackagePath('@scope/name')).toBe('@scope%2Fname');
+    expect(registryPackagePath(CLI_PACKAGE_NAME)).not.toContain('/');
   });
 });
 
