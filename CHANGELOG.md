@@ -4,15 +4,55 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-18
+
+Squad 2.0 brings one shared team to seven AI hosts and includes all four 2.0
+previews plus the first-class Claude Code integration described below. Stable
+packages use the npm `latest` tag; preview release history is retained below.
+
+### Squad 2 highlights
+
+- **Seven hosts, one team:** project the same charters, routing, skills and state
+  into GitHub Copilot, Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex and
+  Google Antigravity through `squad init --client` and `squad upgrade --client`.
+  Host capabilities are negotiated without changing the existing Copilot default.
+- **Safer upgrades:** content-aware, idempotent template updates retain verified
+  backups; dry runs do not install or migrate; evidence-backed legacy casting
+  repair preserves identities and leaves ambiguous records unchanged.
+- **Governed memory:** CLI and MCP tools share backend-aware storage, with
+  transactional migration to `orphan` and `two-layer`, source-branch casting
+  configuration, and cross-process memory locking.
+- **Opt-in coordination:** `squad watch` supports fenced git-ref work claims,
+  capability routing and per-round de-duplication; claims remain disabled by default.
+- **Experimental backend and harness contracts:** the dedicated
+  `@bradygaster/squad-sdk/backend` subpath provides local and durable HTTP backend
+  contracts plus Copilot and optional Claude execution harnesses. Remote server
+  integration and profile promotion remain experimental, not stable guarantees.
+- **GitHub organization move:** repository, package metadata, runtime, workflow
+  and docs links use `github/squad` and `https://github.github.com/squad/`.
+  npm names remain `@bradygaster/squad-cli` and `@bradygaster/squad-sdk`.
+
+### Breaking changes and migration
+
+- Personal squads, consult mode and the global squad (`--global`) are removed.
+  Run commands inside a project squad or pass `--team-root`.
+- Import host projections from `@bradygaster/squad-sdk/client`; `/clients` remains
+  a deprecated alias. Import experimental backend APIs from `/backend`, not the root.
+- Backend MCP tools require explicit opt-in; a backend URL alone does not enable them.
+  Upstream inheritance now gives earlier entries precedence.
+- Read [Upgrading to Squad 2.0](docs/src/content/docs/scenarios/upgrading.md)
+  before upgrading an existing team. Historical upgrade-matrix attestations remain
+  tied to the preview versions actually tested.
+
 ### Stable promotion notes
 
-- Stable `v1.1.0` predates the following fixes; merging them into `dev` did not publish a fixed stable package. Carry these notes into the next stable release when it is actually promoted. No stable version or publication date is assigned here.
-- `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). Available in `v2.0.0-preview.2` and later previews, not stable `v1.1.0`.
-- `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. Available in `v2.0.0-preview.3` and later previews, not stable `v1.1.0`. Transactional existing-memory backend migration (#2425, #2439) is available in `v2.0.0-preview.4`.
+- Stable `v1.1.0` predates these fixes; they are included in stable `v2.0.0`.
+- `squad upgrade --self --dry-run` reports the planned upgrade without installing it. `squad upgrade --state-backend orphan --dry-run` also avoids backend migration, source deletion, config changes and hook installation (#2303, #2295). First available in `v2.0.0-preview.2`.
+- `squad memory` and `memory.*` share the backend-aware governed store (#2317, #2316), so CLI writes and MCP searches use the same storage. First available in `v2.0.0-preview.3`; transactional existing-memory backend migration (#2425, #2439) first appeared in `v2.0.0-preview.4`.
 
 ### Claude Code as a first-class host (#2438)
 
-Planned as the headline of `v2.0.0-preview.5`.
+Included in stable `v2.0.0` alongside the four published previews.
 
 Claude Code is the first host after GitHub Copilot where Squad uses the host's own features (subagents, hooks, skills, plugins and the Claude Agent SDK) instead of the shared minimum. Every addition goes through the host projection contract in `squad-client-harness-adapters/v0.2` (§4–§5, §13) and the charter extension rules, and the same `.squad/` team still drives Copilot and the other hosts unchanged. It also ships the SDK's first real `HarnessAdapter`, which makes Claude the non-Copilot host that the two v0.2 profiles (harness-adapters §15.1, backend-decoupling §14.4) need before they can be promoted. Promoting them is still pending.
 
@@ -30,12 +70,18 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
   - `disabledMcpjsonServers`, so the project's `.mcp.json` copy of `squad_state` neither prompts nor duplicates the plugin's tools
 
   `--no-claude-plugin` switches back to the full projection. The Claude projection is now version 3 (`CLAUDE_PROJECTION_VERSION`).
+  Plugin-mode transitions preserve user settings and former project MCP ownership,
+  support watch sessions and direct init callers, skip disabled plugin hooks before
+  CLI startup, and forward launcher and mesh-sync arguments unchanged.
 - **`squad dashboard` and `/squad:dashboard`** (#2459, #2460, #2463). A live local page shows the coordinator and every member at work: who was dispatched and why, which members run in the background and in parallel, each member's tool calls, summaries and results, hook events, and each prompt of a `--continue` session.
   - **What it reads.** The Claude Code session transcripts for the current directory, including each member's own subagent transcript. It reads them incrementally, follows the newest session and moves to a new one when it starts. `--session <id>` pins one, and `--stream <file>` reads `claude -p --output-format stream-json` logs instead. Unknown transcript line types are skipped and their content is never shown.
   - **Local only.** It listens on `127.0.0.1` only (from port 4280; `--port` picks one) and rejects any other `Host` header, which protects against DNS rebinding. It sends a Content Security Policy that allows no inline script and no other origin, and transcript text is always rendered as text, never markup.
   - **One per directory.** `stop`, `status`, `--detach`, `--open` and `--json` manage it, and running it again shows the instance already running. Its state lives in `~/.squad/dashboards/` (or under `SQUAD_HOME`), so `/squad:dashboard` inside Claude Code and `squad dashboard` in a terminal find the same instance.
   - **Safe from the plugin.** `/squad:dashboard` may run only `squad dashboard`, and never passes your words to the shell.
   - **No new dependencies.** It needs only Node.js. It replaces the prototype that was used during the end-to-end test.
+  - **Reliable transcript streaming.** Split UTF-8 characters are preserved,
+    reconnects reset replayed state, shorter rewritten transcripts reset the page,
+    startup is serialized per directory, and unused servers stop after five minutes.
 - **Member subagents** (#2450). Each team member, built-ins included, is projected from its charter as its own subagent in `.claude/agents/<member>.md`.
   - Model, reasoning effort and the new `X-squad-host-claude` charter extension (`Tools`, `Isolation`) map onto the subagent's frontmatter.
   - The coordinator routes to named members and selects a model per spawn through Claude Code's `Agent` tool, using `run_in_background` and `isolation: "worktree"`.
@@ -53,11 +99,18 @@ Claude Code is the first host after GitHub Copilot where Squad uses the host's o
   - It uses a private, `squad_state`-only MCP config, never the repository's `.mcp.json`.
   - It checks for the coordinator and the `claude` CLI before starting, and treats an error result as a failed round.
   - `watch.claudeFlags` is limited to model, permission-mode, effort and turn-limit flags.
+  - Execute mode defaults to `--permission-mode bypassPermissions`; use
+    `--claude-flags` to override it. Error results also fail monitoring, retro and
+    decision-hygiene rounds. The default Copilot runner is unchanged.
 - **First real execution harnesses** (#2441, #2451), experimental, in `@bradygaster/squad-sdk/backend`:
   - `ClaudeAgentSdkHarness` runs conversation turns on the Claude Agent SDK. Broker approvals go through `canUseTool`: each is bound to a hash, they arrive one at a time, and a deny ends the turn. `@anthropic-ai/claude-agent-sdk` is an optional peer dependency.
   - `CopilotSdkHarness` does the same on `@github/copilot-sdk`.
   - Both share an approval queue and a turn lifecycle, and their state survives restarts. Approval records hold a redacted summary, never the tool input.
   - `squad state-mcp --experimental-backend` registers the Claude harness only when its SDK is installed. `SQUAD_BACKEND_HARNESSES` selects the harnesses or turns them off.
+  - Claude requires an API credential, not a claude.ai login, keeps settings deny
+    rules and does not apply repository or user allow rules to broker approvals.
+    Copilot correlates events to its own turn and recovers dropped sessions.
+    Both run turns in the worktree-aware repository root.
 - New docs: [Squad for Claude Code (plugin)](docs/src/content/docs/features/claude-code-plugin.md). The README, CLI reference, multi-client scenario and adapter spec link to it.
 
 #### Changed

@@ -1,27 +1,33 @@
 ---
-// Client-side Table of Contents — reads h2/h3 from the article after render
+// Client-side table of contents: reads h2/h3 from the article after render
+// and highlights the section currently in view.
+interface Props {
+  heading?: string;
+}
+const { heading = 'On this page' } = Astro.props;
 ---
 
-<nav id="toc" class="toc sticky top-8 text-sm" aria-label="On this page" data-pagefind-ignore>
-  <p class="font-semibold text-surface-700 dark:text-surface-300 mb-2 text-xs uppercase tracking-wide">On this page</p>
-  <ul id="toc-list" class="space-y-1 text-surface-500 dark:text-surface-400">
-    <!-- Populated by client script -->
-  </ul>
+<nav id="toc" class="toc f6" aria-labelledby="toc-heading" data-pagefind-ignore>
+  <p id="toc-heading" class="mono-label mb-3">{heading}</p>
+  <ul id="toc-list" class="list-style-none"></ul>
 </nav>
 
 <script is:inline>
+  var tocObserver;
   function buildToc() {
     const article = document.querySelector('article[data-pagefind-body]');
     const list = document.getElementById('toc-list');
     if (!article || !list) return;
 
+    tocObserver && tocObserver.disconnect();
     const headings = Array.from(article.querySelectorAll('h2, h3'));
     if (headings.length === 0) {
-      document.getElementById('toc')?.classList.add('hidden');
+      document.getElementById('toc')?.setAttribute('hidden', '');
       return;
     }
 
     list.innerHTML = '';
+    const links = new Map();
     headings.forEach((h) => {
       if (!h.id) {
         h.id = h.textContent
@@ -33,12 +39,24 @@
       const a = document.createElement('a');
       a.href = '#' + h.id;
       a.textContent = h.textContent || '';
-      a.className = h.tagName === 'H3'
-        ? 'block pl-3 py-0.5 hover:text-squad-600 dark:hover:text-squad-400 transition-colors'
-        : 'block py-0.5 hover:text-squad-600 dark:hover:text-squad-400 transition-colors font-medium';
+      a.className = 'link-muted' + (h.tagName === 'H3' ? ' pl-3' : ' text-bold');
       li.appendChild(a);
       list.appendChild(li);
+      links.set(h, a);
     });
+
+    const setActive = (heading) => {
+      links.forEach((a, h) => {
+        if (h === heading) a.setAttribute('aria-current', 'true');
+        else a.removeAttribute('aria-current');
+      });
+    };
+    setActive(headings[0]);
+    tocObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible.length) setActive(visible[0].target);
+    }, { rootMargin: '-80px 0px -70% 0px' });
+    headings.forEach((h) => tocObserver.observe(h));
   }
 
   document.addEventListener('astro:page-load', buildToc);

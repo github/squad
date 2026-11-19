@@ -1,0 +1,53 @@
+---
+import type { Crumb } from '../lib/breadcrumbs';
+
+interface Props {
+  crumbs: Crumb[];
+}
+
+const { crumbs } = Astro.props;
+// A crumb that points at the page you are already on would be a link that goes nowhere; render it as text
+const here = Astro.url.pathname.replace(/\/?$/, '/');
+const isHere = (href?: string) => !!href && href.split(/[?#]/)[0].replace(/\/?$/, '/') === here;
+const origin = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : Astro.url.pathname;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: crumbs.map((c, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: c.label,
+    item: c.href ? (Astro.site ? new URL(c.href, Astro.site).href : c.href) : origin,
+  })),
+};
+
+// Escape characters that could terminate the script element or break parsing (e.g. a title containing </script>)
+const safeJson = JSON.stringify(jsonLd)
+  .replace(/</g, '\\u003c')
+  .replace(/>/g, '\\u003e')
+  .replace(/&/g, '\\u0026')
+  .replace(/\u2028/g, '\\u2028')
+  .replace(/\u2029/g, '\\u2029');
+---
+
+{crumbs.length === 0 ? (
+  <div class="crumbs crumbs-actions" data-pagefind-ignore><slot /></div>
+) : (
+<nav class="crumbs" aria-label="Breadcrumb" data-pagefind-ignore>
+  <ol class="crumb-list">
+    {crumbs.map((c, i) => (
+      <li class:list={['crumb', { 'crumb-current': i === crumbs.length - 1 }]}>
+        {i === crumbs.length - 1 ? (
+          <span aria-current="page" title={c.label}>{c.label}</span>
+        ) : isHere(c.href) ? (
+          <span class="crumb-static">{c.label}</span>
+        ) : (
+          <a href={c.href}>{c.label}</a>
+        )}
+      </li>
+    ))}
+  </ol>
+  <slot />
+  <script type="application/ld+json" set:html={safeJson} />
+</nav>
+)}

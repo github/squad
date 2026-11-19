@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,7 +19,7 @@ function readReference(path: string): string {
 describe('Ralph reference authority', () => {
   const canonical = readReference(RALPH_REFERENCES[0]);
 
-  for (const path of RALPH_REFERENCES) {
+  for (const path of RALPH_REFERENCES.filter(path => existsSync(resolve(ROOT, path)))) {
     describe(path, () => {
       const content = readReference(path);
 

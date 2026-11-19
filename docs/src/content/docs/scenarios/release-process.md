@@ -37,7 +37,7 @@ node -p "require('semver').valid('$VERSION')"
 grep '"version"' package.json packages/squad-sdk/package.json packages/squad-cli/package.json
 grep -F "## [$VERSION]" CHANGELOG.md
 grep -F "## v$VERSION" docs/src/content/docs/whatsnew.md
-npm run build
+SKIP_BUILD_BUMP=1 npm run build
 npx vitest run
 ```
 
@@ -137,10 +137,12 @@ updates `squad-insider` in Homebrew, and opens or reuses the
 
 ## Publish stable
 
-Prepare another PR that changes all package versions and the changelog heading
-from the prerelease version to stable `2.0.0`. A preview version cannot be
-converted in place after publication; `2.0.0-preview.4` and `2.0.0` are
-different releases.
+Prepare a PR targeting `dev` that sets the root, CLI and SDK versions to
+`2.0.0`, sets the CLI SDK floor to `>=2.0.0`, regenerates the Claude plugin,
+and adds `## [2.0.0] - 2026-11-18` to the changelog. Preserve historical preview
+entries: `2.0.0-preview.4` and `2.0.0` are different immutable releases.
+Reconcile current `main` into the preparation branch and audit its recent docs,
+release authentication and repository-identity changes before promotion.
 
 After the stable preparation lands on `dev`, a human must run the promotion
 validation. This is not agent-safe: `squad-promote.yml` grants
@@ -152,7 +154,10 @@ gh workflow run squad-promote.yml --ref dev -f dry_run=true
 gh run watch
 ```
 
-Only a human may then run the live promotion:
+Only a human may then run the live promotion. **Without `promotion_branch`,
+this command pushes `main` and immediately dispatches the full stable release,
+including standalone and package-manager publication.** It is not a
+PR-only operation and must not be used to bypass branch protection:
 
 ```bash
 gh workflow run squad-promote.yml --ref dev -f dry_run=false
@@ -163,11 +168,42 @@ The promotion workflow merges `dev` directly into `main`, removes internal team
 state from the release tree, validates versions and the changelog, builds, runs
 tests, and pushes `main`.
 
-Promotion explicitly dispatches `squad-release.yml` after pushing `main`,
-because GitHub does not start another workflow from a `GITHUB_TOKEN` push. The
-release workflow creates the stable tag and GitHub Release, publishes npm
-`latest`, uploads standalone archives, updates the Homebrew cask, and opens or
-reuses the WinGet manifest PR.
+For a protected-main PR path, first prepare and validate a sanitized
+`chore/promote-2.0.0` branch in the upstream repository. A human can then have
+the workflow validate and open that existing branch as a PR:
+
+```bash
+gh workflow run squad-promote.yml --ref dev \
+  -f dry_run=true -f promotion_branch=chore/promote-2.0.0
+gh run watch
+gh workflow run squad-promote.yml --ref dev \
+  -f dry_run=false -f promotion_branch=chore/promote-2.0.0
+gh run watch
+```
+
+Wait for required checks and reviews before merging the promotion PR.
+`squad-release.yml` is manual-only; a normal PR merge does not publish.
+After the reviewed promotion reaches `main`, a human reads its exact tip and
+dispatches the release:
+
+```bash
+SHA=$(gh api repos/github/squad/git/ref/heads/main --jq '.object.sha')
+gh workflow run squad-release.yml --ref main \
+  -f confirm_tag=v2.0.0 -f expected_sha="$SHA" \
+  -f build_standalone=true -f publish_standalone=true \
+  -f publish_package_managers=true
+gh run watch
+```
+
+The explicit publication flags match the stable release checklist: defaults
+only build standalone artifacts and do not publish them or promote the GitHub
+Release to latest. The legacy direct-push path already dispatches this release;
+do not dispatch a second run while it is active.
+
+The release workflow verifies the exact SHA, creates the stable tag and a draft
+GitHub Release, publishes npm `latest`, uploads standalone archives, updates the
+Homebrew cask and opens or reuses the WinGet manifest PR. It publishes the
+GitHub Release and marks it latest only after the selected channels complete.
 
 ## What gets removed from `main`
 

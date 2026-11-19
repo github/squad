@@ -1,5 +1,19 @@
 # @bradygaster/squad-cli
 
+## 2.0.0
+
+### Major Changes
+
+- Release Squad 2.0 stable: seven host projections, first-class Claude Code plugin
+  and local dashboard, governed backend-aware memory, transactional migration,
+  safe idempotent upgrades and opt-in multi-machine watch claims.
+- Commands now resolve a project squad; use `--team-root` for an explicit team.
+  Read the root 2.0.0 changelog and upgrading guide for removed commands and the
+  complete migration notes.
+- Retain the `github/squad` repository and docs migration while keeping the
+  `@bradygaster` npm package names. Includes all 2.0.0-preview.1 through preview.4
+  fixes and subsequent Claude Code and cross-host governance improvements.
+
 ## 2.0.0-preview.4
 
 ### Patch Changes

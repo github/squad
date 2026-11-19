@@ -2,6 +2,20 @@
 
 <!-- cspell:words ambiently -->
 
+## 2.0.0
+
+### Major Changes
+
+- Release Squad 2.0 stable with shared host projections and capability negotiation
+  in `/client` (`/clients` remains a deprecated alias), transactional casting
+  repair, governed memory migration and source-branch casting configuration.
+- Experimental backend and harness APIs remain isolated in `/backend`, including
+  Copilot SDK and optional Claude Agent SDK execution harnesses. Remote durable
+  server integration and profile promotion remain experimental.
+- Includes all four Squad 2.0 previews and subsequent host-adapter improvements.
+  Repository metadata points at `github/squad`; the npm scope stays `@bradygaster`.
+  See the root changelog for breaking changes and migration details.
+
 ## 2.0.0-preview.4
 
 ### Patch Changes

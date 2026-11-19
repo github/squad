@@ -3,6 +3,9 @@ import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import TableOfContents from '../../components/TableOfContents.astro';
+import { categoryOf, cleanAuthor, formatDate, titleFromId, toDate } from '../../lib/blog';
 
 const base = import.meta.env.BASE_URL;
 
@@ -17,28 +20,51 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 
-function extractTitle(id: string): string {
-  return id
-    .replace(/^\d+[a-z]?-/, '')
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-const title = entry.data.title || extractTitle(entry.id);
+const title = entry.data.title || titleFromId(entry.id);
+const lead = entry.data.hero || entry.data.description || '';
+const date = toDate(entry.data.date);
+const category = categoryOf(entry.data.tags);
+const crumbs = [
+  { label: 'Squad Blog', href: `${base}blog/` },
+  { label: category, href: `${base}blog/?category=${category}` },
+  { label: title },
+];
+const tags = (entry.data.tags ?? []).filter((t) => t !== 'squad' && t.toLowerCase() !== category.toLowerCase()).slice(0, 4);
 ---
 
-<BaseLayout title={title} description={entry.data.description}>
+<BaseLayout title={title} description={entry.data.description || entry.data.hero}>
   <Header />
-  <main class="max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-    <a href={`${base}blog/`} class="inline-flex items-center gap-1 text-sm text-squad-600 dark:text-squad-400 hover:text-squad-700 dark:hover:text-squad-300 mb-6 transition-colors">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-      </svg>
-      Back to Blog
-    </a>
-    <article class="prose" data-pagefind-body data-pagefind-meta="section:Blog">
-      <Content />
-    </article>
+  <main id="main-content" tabindex="-1">
+    <div class="frame">
+      <Breadcrumbs crumbs={crumbs} />
+
+      <header class="article-hero">
+        <div class="fx-grid" aria-hidden="true"></div>
+        <div class="fx-glow fx-glow-a" aria-hidden="true"></div>
+        <div class="chips">
+          <span class="chip">{category}</span>
+          {entry.data.status === 'draft' && <span class="chip chip-draft">Draft</span>}
+          {tags.map((t) => <span class="chip chip-outline">{t}</span>)}
+        </div>
+        <h1 data-pagefind-ignore>{title}</h1>
+        {lead && <p class="lead" data-pagefind-ignore>{lead}</p>}
+        <div class="meta" data-pagefind-ignore>
+          {date && <time datetime={date.toISOString()}>{formatDate(date)}</time>}
+          <span>By {cleanAuthor(entry.data.author)}</span>
+        </div>
+      </header>
+
+      <div class="article-layout">
+        <div class="article-body">
+          <article class="markdown-body" data-pagefind-body data-pagefind-meta="section:Blog">
+            <Content />
+          </article>
+        </div>
+        <aside class="article-aside" aria-label="In this article" data-pagefind-ignore>
+          <TableOfContents heading="In this article" />
+        </aside>
+      </div>
+    </div>
   </main>
   <Footer />
 </BaseLayout>

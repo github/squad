@@ -1,50 +1,389 @@
 ---
 import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+import Icon from '../../components/Icon.astro';
+import squadLogo from '../../assets/images/squad-logo.png';
+import { CATEGORIES, categoryOf, cleanAuthor, formatDate, postNumber, titleFromId, toDate } from '../../lib/blog';
 
 const base = import.meta.env.BASE_URL;
-const posts = await getCollection('blog');
+const entries = await getCollection('blog');
 
-// Sort by filename (which is chronologically ordered by the number prefix)
-posts.sort((a, b) => b.id.localeCompare(a.id));
+const posts = entries
+  .map((entry) => {
+    const date = toDate(entry.data.date);
+    return {
+      id: entry.id,
+      title: entry.data.title || titleFromId(entry.id),
+      summary: entry.data.hero || entry.data.description || '',
+      date,
+      author: cleanAuthor(entry.data.author),
+      category: categoryOf(entry.data.tags),
+      draft: entry.data.status === 'draft',
+      number: postNumber(entry.id),
+      tags: (entry.data.tags ?? []).filter((t) => t !== 'squad' && t !== 'release').slice(0, 2),
+    };
+  })
+  .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0) || b.id.localeCompare(a.id));
 
-function extractTitle(id: string): string {
-  return id
-    .replace(/^\d+[a-z]?-/, '')
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const published = posts.filter((p) => !p.draft);
+const latest = published.slice(0, 3);
+const newIds = new Set(published.slice(0, 2).map((p) => p.id));
+const authors = [...new Set(posts.map((p) => p.author))].sort();
+const count = (key: 'category' | 'author', value: string) => posts.filter((p) => p[key] === value).length;
 ---
 
-<BaseLayout title="Blog">
+<BaseLayout title="Blog" description="Stories from the Squad development journey — releases, learnings, and the road ahead.">
   <Header />
-  <main class="max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-    <h1 class="text-4xl font-bold text-surface-900 dark:text-white mb-2">Blog</h1>
-    <p class="text-lg text-surface-600 dark:text-surface-400 mb-10">Stories from the Squad development journey — releases, learnings, and the road ahead.</p>
+  <main id="main-content" tabindex="-1">
+    <div class="frame">
+      <section class="band hub-hero" aria-labelledby="blog-title">
+        <div class="fx-grid" aria-hidden="true"></div>
+        <Image src={squadLogo} alt="" class="hub-mark rounded-2" width={56} height={56} />
+        <h1 id="blog-title">Squad <span class="gradient-text">Blog</span></h1>
+        <p class="lead">Stories from the Squad development journey — releases, learnings, and the road ahead.</p>
+        <label class="hub-search" for="post-search">
+          <span class="sr-only">Search posts</span>
+          <Icon name="search" size={20} class="color-fg-muted" />
+          <input id="post-search" type="search" placeholder="What would you like to read about?" autocomplete="off" spellcheck="false" aria-controls="post-grid" />
+          <kbd aria-hidden="true">/</kbd>
+        </label>
+      </section>
 
-    <div class="space-y-6">
-      {posts.map((post) => (
-        <a
-          href={`${base}blog/${post.id}/`}
-          class="group block p-6 rounded-xl border border-surface-200 dark:border-surface-800 hover:border-squad-400 dark:hover:border-squad-700 hover:shadow-lg hover:shadow-squad-100/50 dark:hover:shadow-squad-900/20 transition-all duration-200"
-        >
-          <h2 class="text-xl font-semibold text-surface-900 dark:text-white group-hover:text-squad-600 dark:group-hover:text-squad-400 transition-colors mb-2">
-            {post.data.title || extractTitle(post.id)}
-          </h2>
-          {post.data.description && (
-            <p class="text-surface-600 dark:text-surface-400 text-sm">{post.data.description}</p>
-          )}
-          <span class="inline-flex items-center gap-1 text-sm text-squad-600 dark:text-squad-400 mt-3 font-medium">
-            Read more
-            <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </span>
-        </a>
-      ))}
+      <section class="band" id="latest-band" aria-labelledby="latest-title">
+        <div class="section-head"><h2 id="latest-title">Latest</h2><span class="mono-label">Fresh from the squad</span></div>
+        <div class="latest-grid">
+          {latest.map((p) => (
+            <a href={`${base}blog/${p.id}/`} class="cell">
+              <div class="chips">
+                <span class="chip chip-new">New</span>
+                <span class="chip">{p.category}</span>
+              </div>
+              <h3 class="cell-title"><span>{p.title}</span><Icon name="arrow-up-right" /></h3>
+              <p class="clamp-3">{p.summary}</p>
+              <div class={`thumb thumb-${p.category}`} aria-hidden="true">
+                <span class="thumb-cat">{p.category}</span>
+                <span class="thumb-num">{p.number}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="all-title">
+        <div class="section-head">
+          <h2 id="all-title">All posts</h2>
+          <div class="head-controls">
+            <span id="post-count" class="count-text" role="status" aria-live="polite">{posts.length} posts</span>
+            <div class="dd" data-dd="sort">
+              <span class="dd-label" id="sort-label">Sort by:</span>
+              <button type="button" class="dd-btn" id="post-sort" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="sort-label post-sort-value" data-value="newest">
+                <span id="post-sort-value">Newest</span><Icon name="chevron-down" />
+              </button>
+              <ul class="dd-menu" role="listbox" aria-labelledby="sort-label" tabindex="-1" hidden>
+                <li role="option" tabindex="-1" data-value="newest" aria-selected="true"><span>Newest</span><Icon name="check" /></li>
+                <li role="option" tabindex="-1" data-value="oldest" aria-selected="false"><span>Oldest</span><Icon name="check" /></li>
+              </ul>
+            </div>
+            <span class="head-divider d-none d-sm-block" aria-hidden="true"></span>
+            <div class="dd d-none d-sm-flex" data-dd="size">
+              <span class="dd-label" id="size-label">Posts per page:</span>
+              <button type="button" class="dd-btn" id="post-size" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="size-label post-size-value" data-value="12">
+                <span id="post-size-value">12</span><Icon name="chevron-down" />
+              </button>
+              <ul class="dd-menu" role="listbox" aria-labelledby="size-label" tabindex="-1" hidden>
+                <li role="option" tabindex="-1" data-value="6" aria-selected="false"><span>6</span><Icon name="check" /></li>
+                <li role="option" tabindex="-1" data-value="12" aria-selected="true"><span>12</span><Icon name="check" /></li>
+                <li role="option" tabindex="-1" data-value="24" aria-selected="false"><span>24</span><Icon name="check" /></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="articles">
+          <form class="filters" id="post-filters" aria-label="Filter posts" onsubmit="return false">
+            <fieldset>
+              <legend class="mono-label">Category</legend>
+              {CATEGORIES.map((c) => (
+                <label><input type="checkbox" name="category" value={c} /> {c}<span class="count">{count('category', c)}</span></label>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend class="mono-label">Author</legend>
+              {authors.map((a) => (
+                <label><input type="checkbox" name="author" value={a} /> {a}<span class="count">{count('author', a)}</span></label>
+              ))}
+            </fieldset>
+          </form>
+
+          <div>
+            <ul class="post-grid" id="post-grid">
+              {posts.map((p) => (
+                <li
+                  class="post-card"
+                  data-category={p.category}
+                  data-author={p.author}
+                  data-date={p.date?.toISOString() ?? ''}
+                  data-text={`${p.title} ${p.summary} ${p.tags.join(' ')} ${p.author}`.toLowerCase()}
+                >
+                  <div class="chips">
+                    {newIds.has(p.id) && <span class="chip chip-new">New</span>}
+                    {p.draft && <span class="chip chip-draft">Draft</span>}
+                    <span class="chip">{p.category}</span>
+                    {p.tags.map((t) => <span class="chip chip-outline">{t}</span>)}
+                  </div>
+                  <h3 class="card-title cell-title">
+                    <a href={`${base}blog/${p.id}/`} class="stretch"><span>{p.title}</span></a>
+                    <Icon name="arrow-up-right" />
+                  </h3>
+                  <p class="clamp-3">{p.summary}</p>
+                  <div class="meta">
+                    {p.date && <time datetime={p.date.toISOString()}>{formatDate(p.date)}</time>}
+                    <span>{p.author}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div id="post-empty" class="empty-state" hidden>
+              <svg class="empty-art" viewBox="0 0 160 120" width="160" height="120" fill="none" aria-hidden="true" focusable="false">
+                <defs>
+                  <pattern id="empty-dots" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="currentColor" opacity="0.35" /></pattern>
+                  <linearGradient id="empty-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--brand-rose)" /><stop offset="1" stop-color="var(--brand-teal)" /></linearGradient>
+                </defs>
+                <rect x="10" y="12" width="140" height="96" rx="10" fill="url(#empty-dots)" />
+                <rect x="30" y="30" width="72" height="8" rx="4" fill="currentColor" opacity="0.18" />
+                <rect x="30" y="46" width="52" height="8" rx="4" fill="currentColor" opacity="0.12" />
+                <rect x="30" y="62" width="64" height="8" rx="4" fill="currentColor" opacity="0.08" />
+                <circle cx="104" cy="68" r="22" fill="var(--bgColor-default)" stroke="url(#empty-ring)" stroke-width="4" />
+                <path d="M120 84l16 16" stroke="url(#empty-ring)" stroke-width="6" stroke-linecap="round" />
+                <path d="M96 60l16 16M112 60L96 76" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+              </svg>
+              <h3 class="empty-title" id="empty-title">No posts found</h3>
+              <p class="empty-hint">Check the spelling, try a broader keyword, or clear your filters.</p>
+              <div class="empty-actions">
+                <button type="button" class="btn btn-primary" id="empty-clear">Clear search and filters</button>
+                <button type="button" class="btn" id="empty-site-search">Search the whole site</button>
+              </div>
+              <p class="empty-try">
+                <span class="mono-label">Try</span>
+                {['release', 'skills', 'agents', 'community', 'sdk'].map((w) => <button type="button" class="chip-btn" data-q={w}>{w}</button>)}
+              </p>
+            </div>
+            <nav id="post-pager" class="pager-nav" aria-label="Pagination" hidden></nav>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
   <Footer />
 </BaseLayout>
+
+<script>
+  // Custom listbox dropdown (button + menu) with full keyboard support
+  function setupDropdown(button: HTMLElement, onChange: () => void) {
+    const root = button.closest('.dd') as HTMLElement;
+    const menu = root.querySelector('.dd-menu') as HTMLElement;
+    const valueEl = button.querySelector('span') as HTMLElement;
+    const opts = Array.from(menu.querySelectorAll<HTMLElement>('[role=option]'));
+
+    const close = (focusButton = false) => {
+      menu.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
+      if (focusButton) button.focus();
+    };
+    const open = () => {
+      document.querySelectorAll<HTMLElement>('.dd-menu:not([hidden])').forEach((m) => {
+        m.hidden = true;
+        m.closest('.dd')?.querySelector('.dd-btn')?.setAttribute('aria-expanded', 'false');
+      });
+      menu.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+      (opts.find((o) => o.getAttribute('aria-selected') === 'true') ?? opts[0]).focus();
+    };
+    const set = (value: string, silent = true) => {
+      opts.forEach((o) => o.setAttribute('aria-selected', String(o.dataset.value === value)));
+      const chosen = opts.find((o) => o.dataset.value === value);
+      if (chosen) { button.dataset.value = value; valueEl.textContent = chosen.querySelector('span')!.textContent; }
+      if (!silent) onChange();
+    };
+
+    button.onclick = () => (menu.hidden ? open() : close());
+    button.onkeydown = (e) => { if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(); } };
+    opts.forEach((o) => {
+      o.onclick = () => { set(o.dataset.value!, false); close(true); };
+    });
+    menu.onkeydown = (e) => {
+      const i = opts.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); opts[Math.min(i + 1, opts.length - 1)].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); opts[Math.max(i - 1, 0)].focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); opts[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); opts[opts.length - 1].focus(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (document.activeElement as HTMLElement).click(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+      else if (e.key === 'Tab') close();
+    };
+    return { get: () => button.dataset.value ?? '', set };
+  }
+
+  // Registered once: close any open dropdown when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('.dd')) return;
+    document.querySelectorAll<HTMLElement>('.dd-menu:not([hidden])').forEach((m) => {
+      m.hidden = true;
+      m.closest('.dd')?.querySelector('.dd-btn')?.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  function initBlogHub() {
+    const grid = document.getElementById('post-grid');
+    if (!grid) return;
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.post-card'));
+    const search = document.getElementById('post-search') as HTMLInputElement;
+    const sort = setupDropdown(document.getElementById('post-sort')!, () => apply());
+    const size = setupDropdown(document.getElementById('post-size')!, () => apply());
+    const form = document.getElementById('post-filters') as HTMLFormElement;
+    const status = document.getElementById('post-count');
+    const empty = document.getElementById('post-empty');
+    const pager = document.getElementById('post-pager');
+    const latest = document.getElementById('latest-band');
+    const params = new URLSearchParams(location.search);
+    let page = Math.max(1, Number(params.get('page')) || 1);
+
+    const boxes = (name: string) => Array.from(form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`));
+    const checked = (name: string) => boxes(name).filter((i) => i.checked).map((i) => i.value);
+
+    // Restore state from the URL so searches and pages are shareable
+    search.value = params.get('q') ?? '';
+    sort.set(params.get('sort') === 'oldest' ? 'oldest' : 'newest');
+    if (['6', '12', '24'].includes(params.get('size') ?? '')) size.set(params.get('size')!);
+    (params.get('category') ?? '').split(',').filter(Boolean).forEach((v) => boxes('category').forEach((b) => { if (b.value === v) b.checked = true; }));
+    (params.get('author') ?? '').split(',').filter(Boolean).forEach((v) => boxes('author').forEach((b) => { if (b.value === v) b.checked = true; }));
+
+    function syncUrl(q: string, cats: string[], authors: string[]) {
+      const next = new URLSearchParams();
+      if (q) next.set('q', q);
+      if (cats.length) next.set('category', cats.join(','));
+      if (authors.length) next.set('author', authors.join(','));
+      if (sort.get() !== 'newest') next.set('sort', sort.get());
+      if (size.get() !== '12') next.set('size', size.get());
+      if (page > 1) next.set('page', String(page));
+      const qs = next.toString();
+      history.replaceState(history.state, '', location.pathname + (qs ? `?${qs}` : ''));
+    }
+
+    function renderPager(pages: number) {
+      if (!pager) return;
+      pager.hidden = pages <= 1;
+      pager.innerHTML = '';
+      if (pages <= 1) return;
+      const chevron = (dir: 'left' | 'right') => {
+        const d =
+          dir === 'left'
+            ? 'M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.749.749 0 0 1 1.265.275.749.749 0 0 1-.205.785L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06Z'
+            : 'M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z';
+        return `<svg class="octicon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="${d}"></path></svg>`;
+      };
+      const add = (label: string, target: number, opts: { current?: boolean; disabled?: boolean; aria?: string; control?: 'prev' | 'next' } = {}) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = opts.control ? 'pg pg-ctrl' : 'pg pg-num';
+        if (opts.control === 'prev') b.innerHTML = `${chevron('left')}<span>${label}</span>`;
+        else if (opts.control === 'next') b.innerHTML = `<span>${label}</span>${chevron('right')}`;
+        else b.textContent = label;
+        if (opts.aria) b.setAttribute('aria-label', opts.aria);
+        if (opts.current) b.setAttribute('aria-current', 'page');
+        if (opts.disabled) b.disabled = true;
+        b.onclick = () => {
+          page = target;
+          apply(false);
+          // The pager was rebuilt: restore keyboard focus to the equivalent control (or the current page)
+          const again = Array.from(pager.querySelectorAll<HTMLButtonElement>('button')).find((x) => x.getAttribute('aria-label') === opts.aria && !x.disabled);
+          (again ?? pager.querySelector<HTMLElement>('[aria-current="page"]'))?.focus({ preventScroll: true });
+          document.getElementById('all-title')?.scrollIntoView({ block: 'start' });
+        };
+        pager.appendChild(b);
+      };
+      add('Previous', page - 1, { disabled: page === 1, aria: 'Previous page', control: 'prev' });
+      for (let n = 1; n <= pages; n++) add(String(n), n, { current: n === page, aria: `Page ${n}` });
+      add('Next', page + 1, { disabled: page === pages, aria: 'Next page', control: 'next' });
+    }
+
+    function apply(resetPage = true) {
+      const q = search.value.trim().toLowerCase();
+      const cats = checked('category');
+      const authors = checked('author');
+      if (resetPage) page = 1;
+
+      const dir = sort.get() === 'oldest' ? 1 : -1;
+      const matches = cards
+        .filter(
+          (card) =>
+            (!q || (card.dataset.text ?? '').includes(q)) &&
+            (!cats.length || cats.includes(card.dataset.category ?? '')) &&
+            (!authors.length || authors.includes(card.dataset.author ?? '')),
+        )
+        .sort((a, b) => dir * (a.dataset.date ?? '').localeCompare(b.dataset.date ?? ''));
+
+      const per = Number(size.get()) || 12;
+      const pages = Math.max(1, Math.ceil(matches.length / per));
+      page = Math.min(page, pages);
+      const start = (page - 1) * per;
+      const visible = new Set(matches.slice(start, start + per));
+
+      cards.forEach((card) => { card.hidden = !visible.has(card); });
+      matches.forEach((card) => grid.appendChild(card));
+
+      if (status) {
+        status.textContent = matches.length
+          ? `Showing ${start + 1}–${start + visible.size} of ${matches.length} post${matches.length === 1 ? '' : 's'}`
+          : '0 posts';
+      }
+      if (empty) {
+        empty.hidden = matches.length !== 0;
+        const title = document.getElementById('empty-title');
+        if (title) title.textContent = q ? `No posts match “${search.value.trim()}”` : 'No posts match these filters';
+      }
+      // While searching or filtering, results take the place of the Latest row
+      if (latest) latest.hidden = Boolean(q || cats.length || authors.length);
+      renderPager(pages);
+      syncUrl(q, cats, authors);
+    }
+
+    search.oninput = () => apply();
+    form.onchange = () => apply();
+    form.onreset = () => setTimeout(() => { search.value = ''; apply(); });
+
+    const clearAll = () => {
+      search.value = '';
+      form.reset();
+    };
+    document.getElementById('empty-clear')!.onclick = () => { clearAll(); search.focus(); };
+    document.getElementById('empty-site-search')!.onclick = () => {
+      const term = search.value.trim();
+      document.getElementById('search-btn')?.click();
+      const input = document.getElementById('search-input') as HTMLInputElement | null;
+      if (input && term) { input.value = term; input.dispatchEvent(new Event('input', { bubbles: true })); }
+    };
+    document.querySelectorAll<HTMLElement>('.chip-btn[data-q]').forEach((b) => {
+      b.onclick = () => {
+        form.querySelectorAll<HTMLInputElement>('input:checked').forEach((i) => { i.checked = false; });
+        search.value = b.dataset.q!;
+        apply();
+        search.focus();
+      };
+    });
+    apply(false);
+  }
+
+  // Registered once: the script module only evaluates once across view transitions
+  document.addEventListener('keydown', (e) => {
+    const search = document.getElementById('post-search');
+    const t = e.target as HTMLElement;
+    if (search && e.key === '/' && !/input|textarea|select/i.test(t.tagName) && !t.isContentEditable) {
+      e.preventDefault();
+      search.focus();
+    }
+  });
+  document.addEventListener('astro:page-load', initBlogHub);
+</script>

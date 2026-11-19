@@ -93,9 +93,10 @@ export function registerHostileSteps(registry: StepDefinitions): void {
       const args = command.replace(/^squad\s*/, '').split(/\s+/).filter(Boolean);
       const cols = context.terminalCols as number;
       const rows = context.terminalRows as number;
+      const cwd = context.tempDir as string | undefined;
 
-      const harness = await TerminalHarness.spawnWithArgs(args, { cols, rows });
-      try { await harness.waitForExit(5000); } catch { /* timeout ok */ }
+      const harness = await TerminalHarness.spawnWithArgs(args, { cols, rows, cwd });
+      try { await harness.waitForExit(15000); } catch { /* timeout ok */ }
       context.harness = harness;
       context.output = harness.getOutput();
       context.exitCode = harness.getExitCode();
@@ -111,9 +112,11 @@ export function registerHostileSteps(registry: StepDefinitions): void {
       if (!match) throw new Error('Pattern match failed');
       const command = match[1];
       const args = command.replace(/^squad\s*/, '').split(/\s+/).filter(Boolean);
+      const cwd = context.tempDir as string | undefined;
 
       // Force non-TTY via env
       const harness = await TerminalHarness.spawnWithArgs(args, {
+        cwd,
         env: { TERM: 'dumb', NO_COLOR: '1', FORCE_COLOR: '0' }
       });
       try { await harness.waitForExit(5000); } catch { /* timeout ok */ }

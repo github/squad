@@ -8,13 +8,13 @@ const base = import.meta.env.BASE_URL;
 
 <BaseLayout title="Page Not Found">
   <Header />
-  <main class="max-w-3xl mx-auto px-4 py-24 sm:px-6 lg:px-8 text-center">
-    <p class="text-6xl font-bold text-squad-600 dark:text-squad-400 mb-4">404</p>
-    <h1 class="text-2xl font-bold text-surface-900 dark:text-white mb-4">Page not found</h1>
-    <p class="text-surface-600 dark:text-surface-400 mb-8">The page you're looking for doesn't exist or has been moved.</p>
-    <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-      <a href={base} class="px-6 py-2.5 rounded-lg bg-squad-600 hover:bg-squad-700 text-white font-medium transition-colors">Go Home</a>
-      <a href={`${base}docs/get-started/installation/`} class="px-6 py-2.5 rounded-lg border border-surface-300 dark:border-surface-700 text-surface-700 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-800 font-medium transition-colors">Read the Docs</a>
+  <main id="main-content" class="container-md px-3 px-md-4 py-6 text-center" tabindex="-1">
+    <p class="f00-light text-bold color-fg-accent mb-2" aria-hidden="true">404</p>
+    <h1 class="h1 mb-3">Page not found</h1>
+    <p class="f3 color-fg-muted mb-5">The page you're looking for doesn't exist or has been moved.</p>
+    <div class="d-flex flex-column flex-sm-row flex-justify-center" style="gap: var(--base-size-16)">
+      <a href={base} class="btn btn-primary btn-large">Go home</a>
+      <a href={`${base}docs/get-started/installation/`} class="btn btn-large">Read the docs</a>
     </div>
   </main>
   <Footer />

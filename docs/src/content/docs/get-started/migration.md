@@ -188,7 +188,7 @@ Verify the version:
 squad --version
 ```
 
-Expected output: the latest stable version (currently `1.1.0`).
+Expected output: the latest stable version (currently `2.0.0`).
 
 Your `.squad/` directory is compatible — no reinitialization needed.
 

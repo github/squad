@@ -1,8 +1,8 @@
 import { defineConfig } from 'astro/config';
-import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { remarkRewriteLinks } from './src/plugins/remark-rewrite-links.mjs';
 import { rehypePagefindAttrs } from './src/plugins/rehype-pagefind-attrs.mjs';
+import { rehypeA11y } from './src/plugins/rehype-a11y.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -12,7 +12,6 @@ export default defineConfig({
   base: '/squad/',
   integrations: [sitemap()],
   vite: {
-    plugins: [tailwindcss()],
     define: {
       __VERSION__: JSON.stringify(process.env.SQUAD_VERSION || require('../package.json').version),
       __COMMIT_SHA__: JSON.stringify(process.env.GITHUB_SHA || 'local'),
@@ -21,11 +20,11 @@ export default defineConfig({
   },
   markdown: {
     remarkPlugins: [remarkRewriteLinks],
-    rehypePlugins: [rehypePagefindAttrs],
+    rehypePlugins: [rehypePagefindAttrs, rehypeA11y],
     shikiConfig: {
       themes: {
-        light: 'github-light',
-        dark: 'github-dark',
+        light: 'github-light-high-contrast',
+        dark: 'github-dark-high-contrast',
       },
     },
   },

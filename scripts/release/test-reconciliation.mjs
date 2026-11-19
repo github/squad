@@ -74,6 +74,13 @@ export const CATEGORY_RULES = Object.freeze([
   { category: 'env-gated', file: /(package-exports-targets|bench-runner|cli-outside-project|cli\/command-help|upstream-runtime|cli\/upgrade)\.test\.ts$/, reason: 'requires a built dist/ (CI builds before testing)' },
   { category: 'env-gated', file: /release-pack-install\.test\.ts$/, reason: 'SQUAD_RELEASE_PACK_INSTALL=1 not set for the plain suite run; the release-verify workflow runs it as a dedicated step against the packed tarballs' },
   { category: 'env-gated', file: /(squad-agent-roster|state-backend-handshake)\.test\.ts$/, title: /file does not exist in this checkout/, reason: 'contributor-only .squad file absent from this checkout' },
+  {
+    category: 'env-gated',
+    file: 'test/agent-provenance.test.ts',
+    title: /^(keeps this repository on the complete producer contract|skips the live-team producer audit when the sanitized checkout has no \.squad directory)$/,
+    status: 'skipped',
+    reason: 'Mutually exclusive live-registry assertions: the producer contract runs when .squad/casting/registry.json exists; the sanitized-checkout assertion runs otherwise',
+  },
   { category: 'f3-xfail', file: /squad-20-upgrade-matrix\.test\.ts$/, status: 'xfail', reason: 'finding F3: Squad 0.9.1 upgrade --dry-run is not dry (pinned xfail; xpass fails the suite)' },
   { category: 'digest-gap', file: /clients\.test\.ts$/, status: 'xfail', title: /^digest gap/, reason: 'test/clients.test.ts: per-host coordinator digest gap declared with it.fails' },
 ]);

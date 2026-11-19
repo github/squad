@@ -4,15 +4,23 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { TerminalHarness } from './acceptance/harness.js';
 
 describe('UX Gates', () => {
   let harness: TerminalHarness | null = null;
+  let projectDir: string | null = null;
 
   afterEach(async () => {
     if (harness) {
       await harness.close();
       harness = null;
+    }
+    if (projectDir) {
+      rmSync(projectDir, { recursive: true, force: true });
+      projectDir = null;
     }
   });
 
@@ -64,8 +72,11 @@ describe('UX Gates', () => {
   });
 
   it('Status command shows clear output structure', async () => {
-    harness = await TerminalHarness.spawnWithArgs(['status']);
-    await harness.waitForExit(5000);
+    projectDir = mkdtempSync(join(tmpdir(), 'squad-ux-gates-'));
+    mkdirSync(join(projectDir, '.squad'));
+    writeFileSync(join(projectDir, '.squad', 'team.md'), '# UX test team\n');
+    harness = await TerminalHarness.spawnWithArgs(['status'], { cwd: projectDir });
+    expect(await harness.waitForExit(5000)).toBe(0);
     
     const output = harness.captureFrame();
     

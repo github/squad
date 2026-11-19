@@ -1,10 +1,26 @@
 # What's New
 
-Full release history for Squad — from beta through the v1 TypeScript replatform. Jump to the version you're looking for, or read top-down to see how the project evolved.
+Full release history for Squad — from beta through Squad 2.0. Jump to the version you're looking for, or read top-down to see how the project evolved.
 
 ---
 
-## v2.0.0 — Multi-Host Clients & Experimental Backend Contract
+## v2.0.0 — Current Stable Release
+
+Squad 2.0 brings the same team to seven AI hosts, with stable npm packages on
+`latest`. It includes all four previews, safe idempotent upgrades, transactional
+governed-memory migration, opt-in multi-machine work claims, and the repository
+move to `github/squad`. npm package names remain under `@bradygaster`.
+
+Claude Code now has a native plugin, named member subagents, on-demand skills,
+advisory hooks and a local-only dashboard. Shared governance carries decisions,
+rosters and human sign-off requirements across hosts. The SDK includes Copilot
+and optional Claude execution harnesses; the backend contract and remote durable
+integration remain experimental.
+
+Before upgrading, read [Upgrading to Squad 2.0](./scenarios/upgrading.md):
+user-profile commands are removed, and upstream precedence now favors earlier
+entries. The historical preview notes and tested upgrade
+attestations below retain the versions they actually describe.
 
 ### v2.0.0-preview.4 — `github/squad` repository identity, transactional memory migration, and source-branch casting
 

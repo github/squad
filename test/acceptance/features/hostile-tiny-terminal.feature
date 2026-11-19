@@ -14,12 +14,14 @@ Feature: Hostile — Tiny terminal (40x10)
 
   Scenario: Status command works at 40x10
     Given a terminal size of 40 columns by 10 rows
+    And the current directory has a ".squad" directory
     When I run "squad status" with that terminal size
     Then the output contains "Squad Status"
     And the exit code is 0
 
   Scenario: Doctor command works at 40x10
     Given a terminal size of 40 columns by 10 rows
+    And the current directory has a ".squad" directory
     When I run "squad doctor" with that terminal size
     Then the exit code is 0
 

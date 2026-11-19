@@ -299,7 +299,6 @@ state MCP server before the tool appears in `tools/list`.
 
 ---
 ## Security
-
 State backends include hardening against common injection attacks:
 - **Path traversal:** `..` segments are rejected
 - **Null byte injection:** `\0` characters are rejected

@@ -6,7 +6,7 @@
 import { afterEach } from 'vitest';
 import { join } from 'node:path';
 import { createRegistry, runFeature } from './support/runner.js';
-import { registerCLISteps } from './steps/cli-steps.js';
+import { cleanupAcceptanceTempDirs, registerCLISteps } from './steps/cli-steps.js';
 import { registerHostileSteps } from './steps/hostile-steps.js';
 import { TerminalHarness } from './harness.js';
 
@@ -16,7 +16,7 @@ const registry = createRegistry();
 registerHostileSteps(registry);
 registerCLISteps(registry);
 
-// Cleanup harnesses after each test
+// Cleanup harnesses and temp dirs after each test
 afterEach(async (context) => {
   const harness = (context as Record<string, unknown>).harness as TerminalHarness | undefined;
   if (harness) {
@@ -26,6 +26,7 @@ afterEach(async (context) => {
   if (rapidHarnesses) {
     await Promise.all(rapidHarnesses.map(h => h.close()));
   }
+  cleanupAcceptanceTempDirs();
 });
 
 const featuresDir = join(__dirname, 'features');

@@ -70,7 +70,16 @@ releases from `main`. Channel names identify release streams, not branches.
 - [ ] The promotion merges `dev` directly to `main`.
 - [ ] `.ai-team/`, `.squad/`, `.ai-team-templates/`, `team-docs/`, and
       `docs/proposals/` are absent from `main`.
-- [ ] Promotion explicitly dispatches `squad-release.yml` after pushing `main`.
+- [ ] With no `promotion_branch`, promotion pushes `main` and immediately
+      dispatches `squad-release.yml` with standalone and package managers enabled.
+      Do not use this path to bypass branch protection.
+- [ ] With a validated existing `promotion_branch`, the workflow opens a PR
+      instead. After its required checks/reviews and merge, a human reads
+      `SHA=$(gh api repos/github/squad/git/ref/heads/main --jq '.object.sha')`
+      and dispatches `squad-release.yml --ref main -f confirm_tag=vX.Y.Z
+      -f expected_sha="$SHA" -f build_standalone=true
+      -f publish_standalone=true -f publish_package_managers=true`.
+      A push or PR merge alone does not trigger the manual-only release workflow.
 - [ ] GitHub marks `vX.Y.Z` as the latest stable release.
 - [ ] npm `latest` points to the version for both packages.
 - [ ] The release has six standalone archives and `SHA256SUMS.txt`.

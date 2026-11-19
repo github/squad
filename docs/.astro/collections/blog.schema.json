@@ -11,6 +11,15 @@
     "date": {
       "type": "string"
     },
+    "hero": {
+      "type": "string"
+    },
+    "wave": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
     "tags": {
       "type": "array",
       "items": {

@@ -14,6 +14,7 @@ Feature: Hostile — Non-TTY pipe mode
 
   Scenario: Status works when piped (non-TTY)
     Given a non-TTY environment
+    And the current directory has a ".squad" directory
     When I run "squad status" in non-TTY mode
     Then the output contains "Squad Status"
     And the exit code is 0

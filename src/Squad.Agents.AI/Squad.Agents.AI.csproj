@@ -21,7 +21,7 @@
       Stable package version. Publication is a separate human-triggered release step;
       setting this version does not publish the package.
     -->
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="samples/**/*.cs" />

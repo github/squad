@@ -192,7 +192,6 @@ npm install @bradygaster/squad-sdk@latest
 ```
 
 ## Troubleshooting
-
 ### `squad: command not found`
 
 Open a new terminal after installing. For npm, confirm the npm global binary

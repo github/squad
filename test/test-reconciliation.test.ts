@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { reconcile, resolvePlatform, shouldFail } from '../scripts/release/test-reconciliation.mjs';
 
-function reportForMany(tests: Array<{ file: string; title: string; status: 'passed' | 'skipped' }>) {
+function reportForMany(tests: Array<{ file: string; title: string; status: 'passed' | 'skipped' | 'failed' }>) {
   return {
     numTotalTests: tests.length,
-    numFailedTests: 0,
+    numFailedTests: tests.filter(({ status }) => status === 'failed').length,
     testResults: tests.map(({ file, title, status }) => ({
       name: file,
       status: 'passed',
@@ -18,11 +18,39 @@ function reportForMany(tests: Array<{ file: string; title: string; status: 'pass
   };
 }
 
-function reportFor(file: string, title: string, status: 'passed' | 'skipped') {
+function reportFor(file: string, title: string, status: 'passed' | 'skipped' | 'failed') {
   return reportForMany([{ file, title, status }]);
 }
 
 describe('release test reconciliation', () => {
+  it.each([
+    'keeps this repository on the complete producer contract',
+    'skips the live-team producer audit when the sanitized checkout has no .squad directory',
+  ])('accounts for the mutually exclusive live-registry assertion: %s', (title) => {
+    const result = reconcile(reportFor('test/agent-provenance.test.ts', title, 'skipped'));
+
+    expect(result.summary).toMatchObject({
+      byCategory: { 'env-gated': 1 },
+      countsSum: true,
+      ok: true,
+    });
+    expect(shouldFail(result, { failOnUnexplained: true })).toBe(false);
+  });
+
+  it('does not exempt unrelated provenance skips or failed producer assertions', () => {
+    const unrelated = reconcile(reportFor('test/agent-provenance.test.ts', 'another producer assertion', 'skipped'));
+    const failed = reconcile(reportFor(
+      'test/agent-provenance.test.ts',
+      'keeps this repository on the complete producer contract',
+      'failed',
+    ));
+
+    expect(unrelated.nonPassing[0].category).toBe('unexplained');
+    expect(failed.nonPassing[0].category).toBe('failed');
+    expect(shouldFail(unrelated, { failOnUnexplained: true })).toBe(true);
+    expect(shouldFail(failed, { failOnUnexplained: true })).toBe(true);
+  });
+
   it('classifies NoopClaimProvider contract sections as structurally inapplicable', () => {
     const report = reportFor(
       '/home/runner/work/squad/squad/test/ralph-claims.test.ts',

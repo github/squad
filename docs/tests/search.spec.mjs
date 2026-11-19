@@ -14,7 +14,7 @@ async function openSearchViaButton(page) {
   await expect(searchBtn).toBeVisible();
   await searchBtn.click();
   const modal = page.locator('#search-modal');
-  await expect(modal).not.toHaveClass(/hidden/);
+  await expect(modal).toBeVisible();
   return modal;
 }
 
@@ -30,31 +30,31 @@ test.describe('Search modal interactions', () => {
   test('search modal opens on Ctrl+K keyboard shortcut', async ({ page }) => {
     await page.goto(BASE);
     const modal = page.locator('#search-modal');
-    await expect(modal).toHaveClass(/hidden/);
+    await expect(modal).toBeHidden();
 
     await page.keyboard.press('Control+k');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
     await expect(page.locator('#search-input')).toBeFocused();
   });
 
   test('pressing Escape closes the search modal', async ({ page }) => {
     await openSearchViaButton(page);
     const modal = page.locator('#search-modal');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
 
     await page.keyboard.press('Escape');
-    await expect(modal).toHaveClass(/hidden/);
+    await expect(modal).toBeHidden();
   });
 
   test('clicking backdrop closes the search modal', async ({ page }) => {
     await openSearchViaButton(page);
     const modal = page.locator('#search-modal');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
 
     // The dialog container intercepts pointer events over the backdrop center,
     // so we dispatch a click event directly on the backdrop element
     await page.evaluate(() => document.getElementById('search-backdrop').click());
-    await expect(modal).toHaveClass(/hidden/);
+    await expect(modal).toBeHidden();
   });
 });
 
@@ -81,13 +81,13 @@ test.describe('Search results', () => {
     await expect(resultLinks.first()).toBeVisible({ timeout: 10_000 });
 
     // Look for section badge spans within results
-    const badges = page.locator('#search-results a span.inline-flex');
+    const badges = page.locator('#search-results a span.search-badge');
     const badgeCount = await badges.count();
     expect(badgeCount).toBeGreaterThan(0);
 
     // Verify badge text is a known section
     const knownSections = [
-      'Get Started', 'Guide', 'Features', 'Reference',
+      'Get Started', 'Guide', 'Guides', 'Features', 'Reference',
       'Scenarios', 'Concepts', 'Cookbook', 'Blog', 'Docs', 'Community'
     ];
     const firstBadgeText = await badges.first().textContent();
@@ -101,14 +101,14 @@ test.describe('Search results', () => {
     const resultLinks = page.locator('#search-results a');
     await expect(resultLinks.first()).toBeVisible({ timeout: 10_000 });
 
-    // Check first result has a title (text-base span) and excerpt (text-sm div)
+    // Check first result has a title (search-result-title) and excerpt (search-excerpt)
     const firstResult = resultLinks.first();
-    const title = firstResult.locator('span.text-base');
+    const title = firstResult.locator('span.search-result-title');
     await expect(title).toBeVisible();
     const titleText = await title.textContent();
     expect(titleText.trim().length).toBeGreaterThan(0);
 
-    const excerpt = firstResult.locator('div.text-sm');
+    const excerpt = firstResult.locator('div.search-excerpt');
     await expect(excerpt).toBeVisible();
   });
 
@@ -173,7 +173,7 @@ test.describe('Search after View Transition navigation', () => {
     await searchBtn.click();
 
     const modal = page.locator('#search-modal');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
 
     const input = page.locator('#search-input');
     await input.fill('agent');
@@ -201,7 +201,7 @@ test.describe('Search after View Transition navigation', () => {
     await searchBtn.click();
 
     const modal = page.locator('#search-modal');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
 
     // Verify input is focused and can receive text
     const input = page.locator('#search-input');
@@ -222,7 +222,7 @@ test.describe('Search after View Transition navigation', () => {
     await page.keyboard.press('Control+k');
 
     const modal = page.locator('#search-modal');
-    await expect(modal).not.toHaveClass(/hidden/);
+    await expect(modal).toBeVisible();
 
     const input = page.locator('#search-input');
     await expect(input).toBeFocused({ timeout: 3_000 });
