@@ -134,6 +134,9 @@ This creates:
 
 The same files work from the Copilot CLI and VS Code.
 
+To have a Claude or GitHub Copilot agent install and customize Squad for you,
+see [Set up Squad with an AI agent](agent-setup.md).
+
 ## Use Squad in VS Code
 
 Open the initialized project in VS Code, open Copilot Chat, and select the

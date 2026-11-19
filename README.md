@@ -47,6 +47,11 @@ git init
 
 ### 2. Install Squad
 
+Squad's canonical source repository and release home is
+[`github/squad`](https://github.com/github/squad). The existing
+`@bradygaster` npm namespace and `bradygaster` Homebrew and WinGet identifiers
+below are distribution names, not the repository location.
+
 Choose the install method for your platform:
 
 | Method | Command |
@@ -70,7 +75,9 @@ squad init
 All methods install the same CLI. Standalone installs vendor Node.js, so they do
 not require Node.js or access to the npm registry. See the
 [complete installation guide](https://github.github.com/squad/docs/get-started/installation/)
-for prerequisites and platform details.
+for prerequisites and platform details. To have an AI agent set Squad up for
+your repository, see the
+[agent setup guide](https://github.github.com/squad/docs/get-started/agent-setup/).
 
 > **⚡ Want to be up and running in under a second?** Use `squad init --preset default` to start with a fully-configured squad — complete with members, charters, and routing rules — ready to go immediately. The default `squad init` (without the flag) walks you through setup step by step, ideal if you prefer to build and customize your squad deliberately.
 

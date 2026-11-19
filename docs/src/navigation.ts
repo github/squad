@@ -14,6 +14,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { title: 'Quick Start', slug: 'get-started/five-minute-start' },
       { title: 'Installation', slug: 'get-started/installation' },
+      { title: 'Set Up with an AI Agent', slug: 'get-started/agent-setup' },
       { title: 'Your First Session', slug: 'get-started/first-session' },
     ],
   },
