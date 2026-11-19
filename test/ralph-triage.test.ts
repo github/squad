@@ -368,6 +368,15 @@ describe('triageIssue()', () => {
     expect(decision?.source).toBe('routing-rule');
   });
 
+  it.each(['C++', 'C#', 'Node.js'])('matches punctuated technology keywords: %s', (keyword) => {
+    const technologyRule: RoutingRule[] = [
+      { workType: 'Technology', agentName: 'Runtime Engineer', keywords: [keyword] },
+    ];
+    const decision = triageIssue(issue(`Investigate ${keyword}...`), technologyRule, [], roster);
+    expect(decision?.source).toBe('routing-rule');
+    expect(decision?.agent.name).toBe('Runtime Engineer');
+  });
+
   it('prefers longer module path match (src/ralph/ over src/)', () => {
     const customModules: ModuleOwnership[] = [
       { modulePath: 'src/', primary: 'Team Lead', secondary: null },

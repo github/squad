@@ -202,7 +202,7 @@ export function sanitizeMetadataText(raw: unknown, maxLength: number = MAX_SUMMA
 
   // HTML comments can smuggle markers, canaries, or directives.
   text = withoutHtmlComments(text);
-  text = text.replace(/<!--/g, ' ').replace(/-->/g, ' ').replace(/--!>/g, ' ');
+  text = text.replaceAll('<!--', ' ').replaceAll('-->', ' ').replaceAll('--!>', ' ');
   // Then remove tag-shaped content and escape residual opening brackets.
   text = text.replace(/<[^<>\n]{0,200}>/g, ' ');
   text = text.replace(/</g, '&lt;');

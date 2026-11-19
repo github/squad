@@ -406,8 +406,26 @@ function routeMatch(
     'agent', 'engineer', 'engineering', 'management', 'owner',
     'specialist', 'system', 'work',
   ]);
-  const tokens = (value: string): string[] =>
-    value.toLowerCase().match(/[a-z0-9][a-z0-9+#.]*(?<!\.)/g) ?? [];
+  const tokens = (value: string): string[] => {
+    const text = value.toLowerCase();
+    const result: string[] = [];
+    const isAlphanumeric = (code: number) =>
+      (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+    let cursor = 0;
+    while (cursor < text.length) {
+      if (!isAlphanumeric(text.charCodeAt(cursor))) {
+        cursor++;
+        continue;
+      }
+      const start = cursor++;
+      while (cursor < text.length &&
+          (isAlphanumeric(text.charCodeAt(cursor)) || '+#.'.includes(text[cursor]!))) cursor++;
+      let end = cursor;
+      while (end > start && text[end - 1] === '.') end--;
+      result.push(text.slice(start, end));
+    }
+    return result;
+  };
   const containsPhrase = (haystack: string[], needle: string[]): boolean =>
     needle.length > 0 &&
     needle.length <= haystack.length &&
