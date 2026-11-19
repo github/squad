@@ -14,6 +14,8 @@ import { mkdtemp, rm, readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import { Script } from 'node:vm';
+import { runMigrate } from '../packages/squad-cli/src/cli/commands/migrate.js';
 
 // Note: migrate function location TBD - adjust import when implementation lands
 // Expected at packages/squad-sdk/src/config/migration.ts or cli command
@@ -124,6 +126,80 @@ export default defineSquad({
     expect(configContent).toContain('defineTeam');
     expect(configContent).toContain('defineAgent');
     */
+  });
+
+  it('preserves quotes and backslashes in generated member, charter, and routing strings', async () => {
+    await createMarkdownSquad(tempDir);
+    const member = String.raw`o'brien\agent`;
+    const universe = String.raw`space's\stories`;
+    await writeFile(join(tempDir, '.squad', 'team.md'), [
+      '# Squad Team — Test',
+      '## Members',
+      '| Name | Role | Assignment | Status |',
+      '| --- | --- | --- | --- |',
+      `| ${member} | Developer | Project | Active |`,
+    ].join('\n'), 'utf-8');
+    await writeFile(join(tempDir, '.squad', 'routing.md'), [
+      '## Work Type',
+      '| Work Type | Agent | Example |',
+      '| --- | --- | --- |',
+      String.raw`| Owner's \project | Edie | Owner's \files |`,
+    ].join('\n'), 'utf-8');
+    await mkdir(join(tempDir, '.squad', 'casting'));
+    await writeFile(join(tempDir, '.squad', 'casting', 'policy.json'), JSON.stringify({
+      allowlist_universes: [universe],
+      universe_capacity: { [universe]: 3 },
+    }), 'utf-8');
+
+    await runMigrate(tempDir, { to: 'sdk' });
+    const config = await readFile(join(tempDir, 'squad.config.ts'), 'utf-8');
+    const body = config.slice(config.indexOf("} from '@bradygaster/squad-sdk';") + "} from '@bradygaster/squad-sdk';".length)
+      .replace('export default ', 'globalThis.result = ');
+    interface GeneratedConfig {
+      team: { members: string[] };
+      agents: Array<{ name: string; charter: string }>;
+      routing: { rules: Array<{ pattern: string; description: string }> };
+      casting: { allowlistUniverses: string[]; capacity: Record<string, number> };
+    }
+    const identity = <T>(value: T): T => value;
+    const context: {
+      result?: GeneratedConfig;
+      defineSquad: typeof identity;
+      defineTeam: typeof identity;
+      defineAgent: typeof identity;
+      defineRouting: typeof identity;
+      defineCasting: typeof identity;
+    } = {
+      defineSquad: identity, defineTeam: identity, defineAgent: identity,
+      defineRouting: identity, defineCasting: identity,
+    };
+    new Script(body).runInNewContext(context, { timeout: 1000 });
+
+    expect(context.result?.team.members).toEqual([member]);
+    expect(context.result?.agents[0]).toMatchObject({
+      name: member,
+      charter: `.squad/agents/${member}/charter.md`,
+    });
+    expect(context.result?.routing.rules[0]).toMatchObject({
+      pattern: String.raw`owner's-\project`,
+      description: String.raw`Owner's \files`,
+    });
+    expect(context.result?.casting).toMatchObject({
+      allowlistUniverses: [universe],
+      capacity: { [universe]: 3 },
+    });
+  });
+
+  it('rejects nonnumeric casting capacities instead of generating executable input', async () => {
+    await createMarkdownSquad(tempDir);
+    await mkdir(join(tempDir, '.squad', 'casting'));
+    await writeFile(join(tempDir, '.squad', 'casting', 'policy.json'), JSON.stringify({
+      allowlist_universes: ['example'],
+      universe_capacity: { example: '0}; globalThis.compromised = true; //' },
+    }), 'utf-8');
+
+    await expect(runMigrate(tempDir, { to: 'sdk' })).rejects.toThrow("Casting capacity for 'example' must be a finite number");
+    expect(existsSync(join(tempDir, 'squad.config.ts'))).toBe(false);
   });
 
   it('--to sdk --dry-run prints preview without writing', async () => {

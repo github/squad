@@ -320,7 +320,7 @@ function generateSquadConfig(
       });
     }
   }
-  lines.push(`    members: [${team.members.map(m => `'${m}'`).join(', ')}],`);
+  lines.push(`    members: [${team.members.map(m => `'${escapeString(m)}'`).join(', ')}],`);
   lines.push("  }),");
   lines.push("");
   
@@ -328,7 +328,7 @@ function generateSquadConfig(
   lines.push("  agents: [");
   agents.forEach((agent, idx) => {
     const isLast = idx === agents.length - 1;
-    lines.push(`    defineAgent({ name: '${agent.name}', role: '${escapeString(agent.role)}', charter: '${agent.charter}', status: '${agent.status}' })${isLast ? '' : ','}`);
+    lines.push(`    defineAgent({ name: '${escapeString(agent.name)}', role: '${escapeString(agent.role)}', charter: '${escapeString(agent.charter)}', status: '${agent.status}' })${isLast ? '' : ','}`);
   });
   lines.push("  ],");
   lines.push("");
@@ -339,12 +339,12 @@ function generateSquadConfig(
     lines.push("    rules: [");
     routing.rules.forEach((rule, idx) => {
       const isLast = idx === routing.rules.length - 1;
-      const agentsStr = `[${rule.agents.map(a => `'${a}'`).join(', ')}]`;
+      const agentsStr = `[${rule.agents.map(a => `'${escapeString(a)}'`).join(', ')}]`;
       const desc = rule.description ? `, description: '${escapeString(rule.description)}'` : '';
-      lines.push(`      { pattern: '${rule.pattern}', agents: ${agentsStr}${desc} }${isLast ? '' : ','}`);
+      lines.push(`      { pattern: '${escapeString(rule.pattern)}', agents: ${agentsStr}${desc} }${isLast ? '' : ','}`);
     });
     lines.push("    ],");
-    lines.push(`    defaultAgent: '${routing.defaultAgent}',`);
+    lines.push(`    defaultAgent: '${escapeString(routing.defaultAgent)}',`);
     lines.push("    fallback: 'coordinator',");
     lines.push("  }),");
     lines.push("");
@@ -359,6 +359,9 @@ function generateSquadConfig(
       lines.push("    capacity: {");
       Object.entries(casting.capacity).forEach(([universe, count], idx, arr) => {
         const isLast = idx === arr.length - 1;
+        if (!Number.isFinite(count)) {
+          throw new Error(`Casting capacity for '${universe}' must be a finite number`);
+        }
         lines.push(`      '${escapeString(universe)}': ${count}${isLast ? '' : ','}`);
       });
       lines.push("    },");
