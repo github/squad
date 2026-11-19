@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FSStorageProvider, stripTeamCapabilitiesBlock, syncTeamCapabilities } from '@bradygaster/squad-sdk';
 import { clearResolveSquadCache, isRetiredProfileTeamRoot } from '@bradygaster/squad-sdk/resolution';
 import { squadRepoLauncherScript } from '@bradygaster/squad-sdk/client';
+import { detectPlatformFromUrl } from '@bradygaster/squad-sdk/platform';
 import {
   backfillCastingRegistryFromTeam,
   detectHistoricalCastingSchema,
@@ -271,8 +272,7 @@ function detectIsGitHubForMcp(dest: string, config: Record<string, unknown>): bo
 
   try {
     const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: dest, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    const remoteUrlLower = remoteUrl.toLowerCase();
-    if (remoteUrlLower.includes('dev.azure.com') || remoteUrlLower.includes('visualstudio.com') || remoteUrlLower.includes('ssh.dev.azure.com')) {
+    if (detectPlatformFromUrl(remoteUrl) === 'azure-devops') {
       return false;
     }
   } catch {
@@ -332,7 +332,7 @@ function stripRetiredProfileTeamRoot(squadDir: string, dest: string, dryRun: boo
  */
 export function stripAgentStamps(s: string): string {
   return s
-    .replace(/<!-- squad-cli v[\d.]+[-\w.]* -->\n?/g, '')
+    .replace(/<!-- squad-cli v[\d.][-\w.]* -->\n?/g, '')
     .replace(/<!-- version: [^>]+ -->/g, '<!-- version: X -->')
     .replace(/- \*\*Version:\*\* \S+/g, '- **Version:** X')
     .replace(/`Squad v[^`]+`/g, '`Squad vX`')
@@ -1893,11 +1893,12 @@ export function detectSelfUpgradeTag(currentVersion: string): SelfUpgradeTag {
 /** The exact command `selfUpgradeCli` runs for a package manager and dist-tag. */
 export function selfUpgradeCommand(packageManager: SelfUpgradePackageManager, insiderOrTag: boolean | SelfUpgradeTag): string {
   const tag: SelfUpgradeTag = typeof insiderOrTag === 'boolean' ? (insiderOrTag ? 'insider' : 'latest') : insiderOrTag;
-  const pkg = `@bradygaster/squad-cli@${tag}`;
+  if (tag !== 'latest' && tag !== 'insider') throw new Error('Invalid self-upgrade tag');
   switch (packageManager) {
-    case 'pnpm': return `pnpm add -g ${pkg}`;
-    case 'yarn': return `yarn global add ${pkg}`;
-    default: return `npm install -g ${pkg}`;
+    case 'pnpm': return tag === 'insider' ? 'pnpm add -g @bradygaster/squad-cli@insider' : 'pnpm add -g @bradygaster/squad-cli@latest';
+    case 'yarn': return tag === 'insider' ? 'yarn global add @bradygaster/squad-cli@insider' : 'yarn global add @bradygaster/squad-cli@latest';
+    case 'npm': return tag === 'insider' ? 'npm install -g @bradygaster/squad-cli@insider' : 'npm install -g @bradygaster/squad-cli@latest';
+    default: throw new Error('Invalid self-upgrade package manager');
   }
 }
 

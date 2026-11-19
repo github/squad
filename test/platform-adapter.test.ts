@@ -44,6 +44,23 @@ describe('detectPlatformFromUrl', () => {
     expect(detectPlatformFromUrl('https://myorg.visualstudio.com/myproject/_git/myrepo')).toBe('azure-devops');
   });
 
+  it.each([
+    'https://dev.azure.com.attacker.example/org/project/_git/repo',
+    'https://attacker.example/dev.azure.com/org/project/_git/repo',
+    'https://dev.azure.com@attacker.example/org/project/_git/repo',
+    'git@ssh.dev.azure.com.attacker.example:v3/org/project/repo',
+    'https://attacker-visualstudio.com/project/_git/repo',
+    'file://dev.azure.com/org/project/_git/repo',
+  ])('does not trust Azure-looking text outside the remote host: %s', (url) => {
+    expect(detectPlatformFromUrl(url)).toBe('github');
+    expect(parseAzureDevOpsRemote(url)).toBeNull();
+  });
+
+  it('detects an SSH URL with a port and a GitHub-looking path on Azure', () => {
+    expect(detectPlatformFromUrl('ssh://git@ssh.dev.azure.com:22/v3/org/project/repo')).toBe('azure-devops');
+    expect(detectPlatformFromUrl('https://dev.azure.com/org/github.com/_git/repo')).toBe('azure-devops');
+  });
+
   it('defaults to github for unknown remotes', () => {
     expect(detectPlatformFromUrl('https://gitlab.com/owner/repo.git')).toBe('github');
   });
@@ -78,6 +95,10 @@ describe('parseGitHubRemote', () => {
   it('parses SSH URL without .git suffix', () => {
     const result = parseGitHubRemote('git@github.com:owner/repo');
     expect(result).toEqual({ owner: 'owner', repo: 'repo' });
+  });
+
+  it('does not parse an SSH host that merely ends with github.com', () => {
+    expect(parseGitHubRemote('git@notgithub.com:owner/repo.git')).toBeNull();
   });
 
   it('returns null for non-GitHub URLs', () => {
@@ -149,6 +170,12 @@ describe('parseAzureDevOpsRemote', () => {
   it('parses legacy visualstudio.com URL with .git suffix', () => {
     const result = parseAzureDevOpsRemote('https://contoso.visualstudio.com/WebApp/_git/frontend.git');
     expect(result).toEqual({ org: 'contoso', project: 'WebApp', repo: 'frontend' });
+  });
+
+  it('parses a long legacy organization without backtracking', () => {
+    const org = 'a'.repeat(10_000);
+    const result = parseAzureDevOpsRemote(`https://${org}.visualstudio.com/WebApp/_git/frontend.git`);
+    expect(result).toEqual({ org, project: 'WebApp', repo: 'frontend' });
   });
 
   it('returns null for GitHub URLs', () => {

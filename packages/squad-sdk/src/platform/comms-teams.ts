@@ -778,7 +778,25 @@ function escapeHtml(s: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < html.length) {
+    const open = html.indexOf('<', cursor);
+    if (open === -1) break;
+    const close = html.indexOf('>', open + 1);
+    if (close === -1) break;
+    if (close === open + 1) {
+      parts.push(html.slice(cursor, close + 1));
+    } else {
+      parts.push(html.slice(cursor, open));
+    }
+    cursor = close + 1;
+  }
+  parts.push(html.slice(cursor));
+  const entities: Record<string, string> = {
+    '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"',
+  };
+  return parts.join('').replace(/&(?:nbsp|amp|lt|gt|quot);/g, (entity) => entities[entity]!).trim();
 }
 
 export {

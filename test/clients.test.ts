@@ -216,7 +216,7 @@ describe('shared files and TOML helper', () => {
   it('upsertTomlTable creates, updates and keeps neighbors', () => {
     expect(upsertTomlTable('', 't.x', { a: '"1"' })).toBe('[t.x]\na = "1"\n');
     const out = upsertTomlTable('k = 1\n[t.x]\na = "0"\nz = 2\n[t.y]\nq = 3\n', 't.x', { a: '"1"', b: '[]' });
-    expect(out).toBe('k = 1\n[t.x]\na = "1"\nz = 2\nb = []\n[t.y]\nq = 3\n'.replace(/\n$/, '\n'));
+    expect(out).toBe('k = 1\n[t.x]\na = "1"\nz = 2\nb = []\n[t.y]\nq = 3\n');
   });
   it('all expands to every client including codex and antigravity', () => {
     expect(parseClients('all')).toEqual(expect.arrayContaining(['codex', 'antigravity']));

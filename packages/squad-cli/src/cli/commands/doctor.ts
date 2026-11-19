@@ -101,7 +101,7 @@ function detectMode(cwd: string): ModeInfo {
 export function teamRootIsThisProject(cwd: string, teamRoot: string): boolean {
   const resolved = path.resolve(cwd, teamRoot);
   const normalize = (p: string) => {
-    const n = path.resolve(p).replace(/[\\/]+$/, '');
+    const n = path.resolve(p).replace(/[\\/]$/, '');
     return process.platform === 'win32' ? n.toLowerCase() : n;
   };
   const target = normalize(resolved);

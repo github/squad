@@ -16,7 +16,8 @@ export class InMemoryStorageProvider implements StorageProvider {
   private norm(p: string): string {
     // Convert Windows backslashes to forward slashes before POSIX normalization
     // so that paths from path.join() on Windows match stored POSIX keys.
-    return posix.normalize(p.replace(/\\/g, '/')).replace(/\/+$/, '');
+    const normalized = posix.normalize(p.replace(/\\/g, '/'));
+    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
   }
 
   async createIfAbsent(filePath: string, data: string): Promise<void> {

@@ -14,6 +14,8 @@ import { mkdtemp, rm, readFile, readdir, access } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 // Import initSquad from SDK
 // Note: initSquad lives at packages/squad-sdk/src/config/init.ts
@@ -254,6 +256,102 @@ describe('squad init --sdk flag', () => {
 
     // Should contain the team name
     expect(configContent).toContain('Test Squad');
+  });
+
+  it.each([false, true])('escapes project metadata in SDK config (roles=%s)', async (roles) => {
+    const projectName = "Team\\'name";
+    const projectDescription = "Line \\'one\n*/ globalThis.injected = true; /*\u2028next";
+    await initSquad({
+      teamRoot: tempDir,
+      projectName,
+      projectDescription,
+      agents: [{ name: 'edie', role: 'Engineer' }],
+      configFormat: 'sdk',
+      roles,
+    });
+
+    const content = await readFile(join(tempDir, 'squad.config.ts'), 'utf-8');
+    const parsed = ts.createSourceFile('squad.config.ts', content, ts.ScriptTarget.Latest, true);
+    const literals: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isStringLiteral(node)) literals.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(ts.transpileModule(content, { reportDiagnostics: true }).diagnostics).toEqual([]);
+    expect(literals).toContain(projectName);
+    expect(literals).toContain(projectDescription);
+    expect(content).toContain('* / globalThis.injected');
+  });
+
+  it.each([false, true])('generates safe SDK configs for arbitrary agent fields (roles=%s)', async (roles) => {
+    const agents = [
+      { name: 'lead-agent', role: 'lead' },
+      { name: "name'; globalThis.injected = true; //", role: "role\\'name\nnext", displayName: "Display\\'name\u2028next" },
+      { name: 'class', role: 'worker' },
+      { name: 'defineSquad', role: 'worker' },
+      { name: 'a-b', role: 'worker' },
+      { name: 'a_b', role: 'worker' },
+      { name: 'class', role: 'worker' },
+    ];
+    await initSquad({
+      teamRoot: tempDir,
+      projectName: 'test-squad',
+      agents,
+      configFormat: 'sdk',
+      roles,
+      linkedTeam: true,
+    });
+
+    const content = await readFile(join(tempDir, 'squad.config.ts'), 'utf-8');
+    const compiled = ts.transpileModule(content, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(compiled.diagnostics?.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+    const sdk = {
+      defineSquad: (value: unknown) => value,
+      defineTeam: (value: unknown) => value,
+      defineAgent: (value: unknown) => value,
+      useRole: (role: string, value: object) => ({ role, ...value }),
+    };
+    const sandbox: { exports: Record<string, unknown>; require: () => typeof sdk; injected?: boolean } = {
+      exports: {},
+      require: () => sdk,
+    };
+    runInNewContext(compiled.outputText, sandbox);
+    expect(sandbox.injected).toBeUndefined();
+    const result = sandbox.exports.default as {
+      team: { members: string[] };
+      agents: Array<{ name: string; role: string; description?: string }>;
+    };
+    expect(Array.from(result.team.members)).toEqual(agents.map(agent => agent.name));
+    expect(Array.from(result.agents, agent => agent.name)).toEqual(agents.map(agent => agent.name));
+    expect(Array.from(result.agents, agent => agent.role)).toEqual(agents.map(agent => agent.role));
+    expect(result.agents[1]?.description).toBe(agents[1]?.displayName);
+  });
+
+  it('escapes agent names in legacy TypeScript routing config', async () => {
+    const name = "agent\\'; globalThis.injected = true; //";
+    await initSquad({
+      teamRoot: tempDir,
+      projectName: 'test-squad',
+      agents: [{ name, role: 'developer' }],
+      configFormat: 'typescript',
+      linkedTeam: true,
+    });
+
+    const content = await readFile(join(tempDir, 'squad.config.ts'), 'utf-8');
+    const compiled = ts.transpileModule(content, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(compiled.diagnostics?.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+    const sandbox: { exports: Record<string, unknown>; injected?: boolean } = { exports: {} };
+    runInNewContext(compiled.outputText, sandbox);
+    expect(sandbox.injected).toBeUndefined();
+    const result = sandbox.exports.default as { routing: { rules: Array<{ agents: string[] }> } };
+    expect(Array.from(result.routing.rules, rule => rule.agents[0])).toEqual(Array(4).fill(`@${name}`));
   });
 
   // ── --sdk --roles integration (#378) ────────────────────────────────

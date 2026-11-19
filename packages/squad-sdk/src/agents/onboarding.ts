@@ -444,6 +444,24 @@ export async function onboardAgent(
  * @param role - Agent role
  * @returns True if config was updated, false if not found or JSON format
  */
+function findRulesArray(content: string): { start: number; end: number; entries: string } | undefined {
+  const start = /rules:\s*\[/.exec(content);
+  if (!start) return undefined;
+  const entriesStart = start.index + start[0].length;
+  let cursor = entriesStart;
+  while (cursor < content.length) {
+    const close = content.indexOf(']', cursor);
+    if (close === -1) return undefined;
+    let after = close + 1;
+    while (after < content.length && /\s/.test(content[after]!)) after++;
+    if (after < content.length && ',})'.includes(content[after]!)) {
+      return { start: start.index, end: close + 1, entries: content.slice(entriesStart, close) };
+    }
+    cursor = close + 1;
+  }
+  return undefined;
+}
+
 export async function addAgentToConfig(
   teamRoot: string,
   agentName: string,
@@ -527,21 +545,18 @@ export async function addAgentToConfig(
     if (workType) {
       const workTypePattern = new RegExp(`workType:\\s*['"]${workType}['"]`);
       if (!workTypePattern.test(updatedContent)) {
-        const rulesPattern = /rules:\s*\[([\s\S]*?)\](?=\s*[,}\)])/;
-        const rulesMatch = updatedContent.match(rulesPattern);
+        const rulesMatch = findRulesArray(updatedContent);
         if (rulesMatch) {
           const newRule = `      {
         workType: '${workType}',
         agents: ['@${agentName}'],
         confidence: 'high'
       }`;
-          const existingRules = rulesMatch[1]!.trimEnd();
+          const existingRules = rulesMatch.entries.trimEnd();
           const separator = existingRules.trim() ? ',\n' : '\n';
           const updatedRules = existingRules + separator + newRule;
-          updatedContent = updatedContent.replace(
-            rulesPattern,
-            `rules: [${updatedRules}\n    ]`
-          );
+          updatedContent = updatedContent.slice(0, rulesMatch.start) +
+            `rules: [${updatedRules}\n    ]` + updatedContent.slice(rulesMatch.end);
           modified = true;
         }
       }

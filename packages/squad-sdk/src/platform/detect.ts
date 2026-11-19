@@ -20,6 +20,10 @@ export interface AzureDevOpsRemoteInfo {
   repo: string;
 }
 
+function stripGitSuffix(repo: string): string {
+  return repo.length > 4 && repo.toLowerCase().endsWith('.git') ? repo.slice(0, -4) : repo;
+}
+
 /**
  * Parse a GitHub remote URL into owner/repo.
  * Supports HTTPS and SSH formats:
@@ -37,9 +41,9 @@ export function parseGitHubRemote(url: string): GitHubRemoteInfo | null {
   }
 
   // SSH: git@github.com:owner/repo.git
-  const sshMatch = url.match(/github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  const sshMatch = url.match(/^(?:[^@\s/:]+@)?github\.com:([^/]+)\/([^/]+)$/i);
   if (sshMatch) {
-    return { owner: sshMatch[1]!, repo: sshMatch[2]! };
+    return { owner: sshMatch[1]!, repo: stripGitSuffix(sshMatch[2]!) };
   }
 
   return null;
@@ -66,6 +70,8 @@ function decodeSegment(value: string): string {
  *   https://org.visualstudio.com/project/_git/repo
  */
 export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | null {
+  if (detectPlatformFromUrl(url) !== 'azure-devops') return null;
+
   // Repo capture allows dots in repo names; the literal `/_git/` segment keeps
   // the match anchored unambiguously.
   // HTTPS dev.azure.com: https://dev.azure.com/org/project/_git/repo
@@ -89,10 +95,10 @@ export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | nul
   // (Org subdomain keeps the no-dot constraint — the `.visualstudio.com` anchor
   // requires it. Only the repo capture is widened.)
   const vsMatch = url.match(
-    /([^/.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+?)(?:\.git)?$/i,
+    /^(?:https?|ssh|git):\/\/([^/.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)$/i,
   );
   if (vsMatch) {
-    return { org: decodeSegment(vsMatch[1]!), project: decodeSegment(vsMatch[2]!), repo: decodeSegment(vsMatch[3]!) };
+    return { org: decodeSegment(vsMatch[1]!), project: decodeSegment(vsMatch[2]!), repo: decodeSegment(stripGitSuffix(vsMatch[3]!)) };
   }
 
   return null;
@@ -104,8 +110,21 @@ export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | nul
  * Defaults to 'github' if unrecognized.
  */
 export function detectPlatformFromUrl(url: string): PlatformType {
-  if (/github\.com/i.test(url)) return 'github';
-  if (/dev\.azure\.com/i.test(url) || /\.visualstudio\.com/i.test(url) || /ssh\.dev\.azure\.com/i.test(url)) {
+  const scpRemote = url.match(/^(?:[^@\s/:]+@)?([^:/\s]+):(?=[^/])/);
+  let hostname: string;
+  if (scpRemote) {
+    hostname = scpRemote[1]!.toLowerCase();
+  } else {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:', 'ssh:', 'git:'].includes(parsed.protocol)) return 'github';
+      hostname = parsed.hostname.toLowerCase();
+    } catch {
+      return 'github';
+    }
+  }
+  if (hostname === 'dev.azure.com' || hostname === 'ssh.dev.azure.com' ||
+      (hostname.endsWith('.visualstudio.com') && hostname.length > '.visualstudio.com'.length)) {
     return 'azure-devops';
   }
   return 'github';

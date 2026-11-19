@@ -66,7 +66,7 @@ export function toAgentId(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-|-$/g, '');
 }
 
 export interface DroppedRecord { name: string; reason: string }
@@ -757,13 +757,24 @@ export interface TeamRosterMember {
   charterId?: string;
 }
 
-const UNIVERSE_LINE = /^\s*(?:[-*]\s+)?\*{0,2}universe\*{0,2}\s*:\s*\*{0,2}\s*([^\n|*]+?)\s*$/im;
-const UNIVERSE_CELL = /^\s*\|\s*\*{0,2}universe\*{0,2}\s*\|\s*([^|\n]+?)\s*\|/im;
+const UNIVERSE_LINE = /^(?:[-*]\s+)?\*{0,2}universe\*{0,2}\s*:(.*)$/i;
+const UNIVERSE_CELL = /^\|\s*\*{0,2}universe\*{0,2}\s*\|([^|]+)\|/i;
 
 /** Parse specialist rows from `team.md` (`## Members` table, else the first Name/Role table). */
 export function parseTeamRoster(teamMd: string): { members: TeamRosterMember[]; universe?: string } {
-  const universe = (UNIVERSE_LINE.exec(teamMd)?.[1] ?? UNIVERSE_CELL.exec(teamMd)?.[1])?.replace(/[*_`]/g, '').trim();
   const lines = teamMd.split(/\r?\n/);
+  let universeLine: string | undefined;
+  let universeCell: string | undefined;
+  for (const line of lines) {
+    const text = line.trim();
+    const lineMatch = UNIVERSE_LINE.exec(text);
+    if (universeLine === undefined && lineMatch) {
+      const candidate = lineMatch[1]!.trimStart().replace(/^\*{0,2}/, '').trimStart();
+      if (candidate && !/[*|]/.test(candidate)) universeLine = candidate;
+    }
+    if (universeCell === undefined) universeCell = UNIVERSE_CELL.exec(text)?.[1];
+  }
+  const universe = (universeLine ?? universeCell)?.replace(/[*_`]/g, '').trim();
   const membersHeading = lines.findIndex((l) => /^##\s+members\b/i.test(l.trim()));
   const scope = membersHeading === -1
     ? lines

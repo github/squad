@@ -232,7 +232,9 @@ export function validateBaseUrl(baseUrl: string | undefined): string {
       `baseUrl must use https:// (plain http:// is allowed only for localhost / 127.0.0.1 / ::1); got '${url.protocol}//${url.host}'`, 400);
   }
   if (url.username || url.password) throw new BackendError('invalid-request', 'baseUrl must not embed credentials', 400);
-  return baseUrl.replace(/\/+$/, '');
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl[end - 1] === '/') end--;
+  return baseUrl.slice(0, end);
 }
 
 function toError(res: Response, text: string): BackendError {

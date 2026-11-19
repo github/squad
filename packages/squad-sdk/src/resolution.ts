@@ -211,7 +211,7 @@ export function resolveSquad(startDir?: string): string | null {
 /**
  * Platform config directory for Squad WITHOUT creating it (see {@link resolveGlobalSquadPath}).
  */
-function platformSquadConfigDir(): string | null {
+function platformSquadConfigDir(canonicalize = true): string | null {
   try {
     const platform = process.platform;
     let base: string;
@@ -222,10 +222,10 @@ function platformSquadConfigDir(): string | null {
     } else {
       base = process.env['XDG_CONFIG_HOME'] ?? path.join(os.homedir(), '.config');
     }
-    // Canonicalize the PARENT only and append `squad` lexically: establishing the boundary must
+    // Resolve the PARENT only and append `squad` lexically: establishing the boundary must
     // never stat/read the retired profile directory itself.
-    const canonicalBase = canonicalDir(base);
-    return canonicalBase === null ? null : path.join(canonicalBase, 'squad');
+    const resolvedBase = canonicalize ? canonicalDir(base) : path.resolve(base);
+    return resolvedBase === null ? null : path.join(resolvedBase, 'squad');
   } catch {
     return null;
   }
@@ -239,12 +239,15 @@ function platformSquadConfigDir(): string | null {
  * removes the key.
  */
 export function isRetiredProfileTeamRoot(teamDir: string): boolean {
-  const target = canonicalDir(teamDir);
+  const resolved = path.resolve(teamDir);
+  const lexical = profileBoundary(false);
+  // Reject known profile paths before canonicalizing the target, which would probe the retired tree.
+  if (!lexical.homeDir || isRetiredProfilePath(resolved, lexical)) return true;
   const b = profileBoundary();
   // Fail closed: an unresolvable target or an unknown boundary is treated as retired (never followed).
-  if (target === null || !b.homeDir) return true;
-  if (isProfileOwned(target, b)) return true;
-  return isAncestorOf(path.join(b.homeDir, '.squad'), target) || samePath(target, path.join(b.homeDir, '.squad'));
+  if (!b.homeDir || isRetiredProfilePath(resolved, b)) return true;
+  const target = canonicalTeamDirOutsideProfile(resolved, b);
+  return target === null || isRetiredProfilePath(target, b);
 }
 
 /** Directories that are never project squads: the home dir and the roaming SQUAD_HOME root. */
@@ -257,16 +260,17 @@ interface ProfileBoundary {
   configDir: string | null;
 }
 
-function profileBoundary(): ProfileBoundary {
+function profileBoundary(canonicalize = true): ProfileBoundary {
+  const resolveBoundary = canonicalize ? canonicalDir : (p: string) => path.resolve(p);
   let homeDir: string | null = null;
-  try { homeDir = canonicalDir(os.homedir()); } catch { homeDir = null; }
+  try { homeDir = resolveBoundary(os.homedir()); } catch { homeDir = null; }
   const envHome = process.env['SQUAD_HOME'];
   // SQUAD_HOME: canonicalize its parent and append the leaf lexically, so the boundary is
   // established without touching the roaming directory itself.
   const squadHome = envHome
-    ? (() => { const parent = canonicalDir(path.dirname(path.resolve(envHome))); return parent === null ? null : path.join(parent, path.basename(path.resolve(envHome))); })()
+    ? (() => { const parent = resolveBoundary(path.dirname(path.resolve(envHome))); return parent === null ? null : path.join(parent, path.basename(path.resolve(envHome))); })()
     : (homeDir ? path.join(homeDir, '.squad') : null);
-  return { homeDir, squadHome, configDir: platformSquadConfigDir() };
+  return { homeDir, squadHome, configDir: platformSquadConfigDir(canonicalize) };
 }
 
 /** A canonical path is "profile-owned" when it is the home dir itself, SQUAD_HOME (or below), or the platform config dir (or below). */
@@ -274,6 +278,67 @@ function isProfileOwned(canonical: string, b: ProfileBoundary): boolean {
   const under = (root: string | null) => root !== null && (samePath(canonical, root) || isAncestorOf(root, canonical));
   if (b.homeDir && samePath(canonical, b.homeDir)) return true;
   return under(b.squadHome) || under(b.configDir);
+}
+
+function isRetiredProfilePath(target: string, b: ProfileBoundary): boolean {
+  return (b.homeDir !== null && samePath(target, b.homeDir)) || isRetiredProfileTree(target, b);
+}
+
+function isRetiredProfileTree(target: string, b: ProfileBoundary): boolean {
+  const under = (root: string | null) => root !== null && (samePath(target, root) || isAncestorOf(root, target));
+  return under(b.squadHome) || under(b.configDir) || under(b.homeDir && path.join(b.homeDir, '.squad'));
+}
+
+/** Resolve aliases one component at a time, stopping before entering a retired profile tree. */
+function canonicalTeamDirOutsideProfile(dir: string, b: ProfileBoundary): string | null {
+  const absolute = path.resolve(dir);
+  const root = path.parse(absolute).root;
+  const pending = absolute.slice(root.length).split(path.sep).filter(Boolean)
+    .map(name => ({ name, required: false })).reverse();
+  let current = root;
+  let linkCount = 0;
+  while (pending.length) {
+    const { name, required } = pending.pop()!;
+    if (name === '.') continue;
+    if (name === '..') {
+      current = path.dirname(current);
+      if (isRetiredProfileTree(current, b)) return null;
+      continue;
+    }
+    const candidate = path.join(current, name);
+    if (isRetiredProfileTree(candidate, b)) return null;
+    let candidateExists = false;
+    try {
+      const entry = fs.lstatSync(candidate);
+      candidateExists = true;
+      if (entry.isSymbolicLink()) {
+        if (++linkCount > 40) return null;
+        let target = fs.readlinkSync(candidate);
+        if (process.platform === 'win32') {
+          if (target.slice(0, 8).toLowerCase() === '\\\\?\\unc\\') target = `\\\\${target.slice(8)}`;
+          else if (target.startsWith('\\\\?\\')) target = target.slice(4);
+        }
+        const targetRoot = path.parse(target).root;
+        if (path.isAbsolute(target)) current = targetRoot;
+        else if (targetRoot) return null;
+        const parts = target.slice(targetRoot.length).split(process.platform === 'win32' ? /[\\/]+/ : /\/+/).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          pending.push({ name: parts[i]!, required: true });
+        }
+        continue;
+      }
+      current = fs.realpathSync.native(candidate);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!candidateExists && (code === 'ENOENT' || code === 'ENOTDIR') && !required) {
+        const unresolved = path.join(candidate, ...pending.reverse().map(part => part.name));
+        return isRetiredProfilePath(unresolved, b) ? null : unresolved;
+      }
+      return null;
+    }
+    if (isRetiredProfileTree(current, b)) return null;
+  }
+  return current;
 }
 
 /**
@@ -772,15 +837,22 @@ export function scratchFile(squadRoot: string, prefix: string, ext: string = '.t
  * @param projectDir - Absolute path to the project root.
  * @returns A sanitized, lowercase project key suitable for use as a directory name.
  */
+function withoutEdgeHyphens(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start++;
+  while (end > start && value[end - 1] === '-') end--;
+  return value.slice(start, end);
+}
+
 export function deriveProjectKey(projectDir: string): string {
   const normalized = projectDir.replace(/\\/g, '/');
   const base = path.basename(normalized);
   if (!base) return 'unknown-project';
 
-  const sanitized = base
+  const sanitized = withoutEdgeHyphens(base
     .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9._-]/g, '-'));
 
   return sanitized || 'unknown-project';
 }
@@ -807,10 +879,9 @@ export function resolveExternalStateDir(projectKey: string, create: boolean = tr
   }
 
   // Sanitize: replace path separators and unsafe chars with dashes
-  const sanitized = projectKey
+  const sanitized = withoutEdgeHyphens(projectKey
     .replace(/[/\\]/g, '-')
-    .replace(/[^a-zA-Z0-9._-]/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-zA-Z0-9._-]/g, '-'));
 
   if (!sanitized) {
     throw new Error('Invalid project key');
