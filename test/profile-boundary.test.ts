@@ -196,6 +196,12 @@ describe('profile boundary: only the profile itself is rejected', () => {
     const roots = [profileRoot, configuredRoot, homeSquad, roaming];
     const linkedProfile = path.join(tmp, 'linked-profile');
     const profileLinkAvailable = tryLink(profileRoot, linkedProfile);
+    const chainedProfile = path.join(tmp, 'chained-profile');
+    const profileChainAvailable = profileLinkAvailable && tryLink(linkedProfile, chainedProfile);
+    const spellings = (p: string) => [p, path.join(fs.realpathSync.native(path.dirname(p)), path.basename(p))];
+    const probeRoots = roots.flatMap(spellings);
+    const profileLinks = (profileLinkAvailable ? [linkedProfile, ...(profileChainAvailable ? [chainedProfile] : [])] : [])
+      .flatMap(spellings);
     const homeProject = path.join(fakeHome, 'src', 'project');
     fs.mkdirSync(homeProject, { recursive: true });
     const linkedProject = path.join(tmp, 'linked-project');
@@ -209,14 +215,19 @@ describe('profile boundary: only the profile itself is rejected', () => {
       }
       expect(isRetiredProfileTeamRoot(neighbour)).toBe(false);
       expect(isRetiredProfileTeamRoot(homeProject)).toBe(false);
-      if (projectLinkAvailable) expect(isRetiredProfileTeamRoot(linkedProject)).toBe(false);
+      if (projectLinkAvailable) {
+        expect(isRetiredProfileTeamRoot(linkedProject)).toBe(false);
+        expect(isRetiredProfileTeamRoot(path.join(linkedProject, 'future-team'))).toBe(false);
+      }
       if (profileLinkAvailable) {
         expect(isRetiredProfileTeamRoot(linkedProfile)).toBe(true);
         expect(isRetiredProfileTeamRoot(path.join(linkedProfile, '.squad'))).toBe(true);
+        if (profileChainAvailable) expect(isRetiredProfileTeamRoot(chainedProfile)).toBe(true);
+        expect(realpath.mock.calls.map(([p]) => String(p)).filter(p => profileLinks.includes(p))).toEqual([]);
       }
       const probes = [...lstat.mock.calls, ...realpath.mock.calls]
         .map(([p]) => String(p))
-        .filter((p) => roots.some((root) => {
+        .filter((p) => probeRoots.some((root) => {
           const rel = path.relative(root, p);
           return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
         }));
@@ -230,12 +241,16 @@ describe('profile boundary: only the profile itself is rejected', () => {
   it('canonicalization failure is fail-closed: the resolver refuses instead of comparing lexically (LC-12)', () => {
     const proj = path.join(fakeHome, 'src', 'proj');
     const projSquad = mkSquad(proj);
+    const canonicalProj = fs.realpathSync.native(proj);
     clearResolveSquadCache();
     expect(resolveSquad(proj)).toBe(projSquad);
     // Make canonicalization of this project fail (broken reparse point / EACCES on a parent in real life).
     const native = fs.realpathSync.native;
+    let errorCode = 'EACCES';
     const spy = vi.spyOn(fs.realpathSync, 'native').mockImplementation(((p: fs.PathLike, ...rest: unknown[]) => {
-      if (String(p).toLowerCase().startsWith(proj.toLowerCase())) throw Object.assign(new Error('EACCES: cannot canonicalize'), { code: 'EACCES' });
+      if ([proj, canonicalProj].some(root => String(p).toLowerCase().startsWith(root.toLowerCase()))) {
+        throw Object.assign(new Error(`${errorCode}: cannot canonicalize`), { code: errorCode });
+      }
       return (native as (...a: unknown[]) => string)(p, ...rest);
     }) as typeof fs.realpathSync.native);
     try {
@@ -243,11 +258,27 @@ describe('profile boundary: only the profile itself is rejected', () => {
       expect(resolveSquad(proj), 'unresolvable path must not be admitted lexically').toBeNull();
       expect(resolveSquadPaths(proj)).toBeNull();
       expect(isRetiredProfileTeamRoot(proj), 'an unresolvable teamRoot is never followed').toBe(true);
+      errorCode = 'ENOENT';
+      expect(isRetiredProfileTeamRoot(proj), 'a disappeared existing path is never followed').toBe(true);
     } finally {
       spy.mockRestore();
     }
     clearResolveSquadCache();
     expect(resolveSquad(proj), 'back to normal once canonicalization works').toBe(projSquad);
+  });
+
+  it('refuses broken and cyclic team-root links', (ctx) => {
+    const broken = path.join(tmp, 'broken-team');
+    const first = path.join(tmp, 'first-link');
+    const second = path.join(tmp, 'second-link');
+    if (!tryLink(path.join(tmp, 'missing-target'), broken)
+      || !tryLink(second, first)
+      || !tryLink(first, second)) {
+      ctx.skip();
+      return;
+    }
+    expect(isRetiredProfileTeamRoot(broken)).toBe(true);
+    expect(isRetiredProfileTeamRoot(first)).toBe(true);
   });
 
   it('USERPROFILE/HOME pointing at a different directory moves the boundary with it', () => {

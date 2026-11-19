@@ -266,6 +266,10 @@ function escapeSingleQuotedString(value: string): string {
     .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
+function agentVariableName(name: string, index: number): string {
+  return `agent${index + 1}_${name.replace(/[^A-Za-z0-9_$]/g, '_')}`;
+}
+
 function docCommentText(value: string): string {
   return value.replace(/\*\//g, '* /').replace(/\r\n?|\n/g, '\n * ');
 }
@@ -306,22 +310,22 @@ const config: SquadConfig = {
     rules: [
       {
         workType: 'feature-dev',
-        agents: ['@${agents[0]?.name || 'coordinator'}'],
+        agents: ['@${escapeSingleQuotedString(agents[0]?.name || 'coordinator')}'],
         confidence: 'high'
       },
       {
         workType: 'bug-fix',
-        agents: ['@${agents.find(a => a.role === 'developer')?.name || agents[0]?.name || 'coordinator'}'],
+        agents: ['@${escapeSingleQuotedString(agents.find(a => a.role === 'developer')?.name || agents[0]?.name || 'coordinator')}'],
         confidence: 'high'
       },
       {
         workType: 'testing',
-        agents: ['@${agents.find(a => a.role === 'tester')?.name || agents[0]?.name || 'coordinator'}'],
+        agents: ['@${escapeSingleQuotedString(agents.find(a => a.role === 'tester')?.name || agents[0]?.name || 'coordinator')}'],
         confidence: 'high'
       },
       {
         workType: 'documentation',
-        agents: ['@${agents.find(a => a.role === 'scribe')?.name || agents[0]?.name || 'coordinator'}'],
+        agents: ['@${escapeSingleQuotedString(agents.find(a => a.role === 'scribe')?.name || agents[0]?.name || 'coordinator')}'],
         confidence: 'high'
       }
     ],
@@ -434,6 +438,7 @@ function generateJsonConfig(options: InitOptions): string {
  */
 function generateSDKBuilderConfig(options: InitOptions): string {
   const { projectName, projectDescription, agents } = options;
+  const definitions = agents.map((agent, index) => ({ agent, variableName: agentVariableName(agent.name, index) }));
 
   // Generate imports
   let code = `import {\n  defineSquad,\n  defineTeam,\n  defineAgent,\n} from '@bradygaster/squad-sdk';\n\n`;
@@ -445,12 +450,12 @@ function generateSDKBuilderConfig(options: InitOptions): string {
   code += ` */\n`;
 
   // Generate agent definitions
-  for (const agent of agents) {
+  for (const { agent, variableName } of definitions) {
     const displayName = agent.displayName || titleCase(agent.name);
-    code += `const ${agent.name} = defineAgent({\n`;
-    code += `  name: '${agent.name}',\n`;
-    code += `  role: '${agent.role}',\n`;
-    code += `  description: '${displayName}',\n`;
+    code += `const ${variableName} = defineAgent({\n`;
+    code += `  name: '${escapeSingleQuotedString(agent.name)}',\n`;
+    code += `  role: '${escapeSingleQuotedString(agent.role)}',\n`;
+    code += `  description: '${escapeSingleQuotedString(displayName)}',\n`;
     code += `  status: 'active',\n`;
     code += `});\n\n`;
   }
@@ -463,9 +468,9 @@ function generateSDKBuilderConfig(options: InitOptions): string {
   if (projectDescription) {
     code += `    description: '${escapeSingleQuotedString(projectDescription)}',\n`;
   }
-  code += `    members: [${agents.map(a => `'${a.name}'`).join(', ')}],\n`;
+  code += `    members: [${agents.map(a => `'${escapeSingleQuotedString(a.name)}'`).join(', ')}],\n`;
   code += `  }),\n\n`;
-  code += `  agents: [${agents.map(a => a.name).join(', ')}],\n`;
+  code += `  agents: [${definitions.map(a => a.variableName).join(', ')}],\n`;
   code += `});\n`;
 
   return code;
@@ -496,6 +501,8 @@ function generateSDKBuilderConfigWithRoles(options: InitOptions): string {
         const role = getRoleById(id)!;
         return { name: id, role: id, displayName: role.title };
       });
+  const roleDefinitions = effectiveRoleAgents.map((agent, index) => ({ agent, variableName: agentVariableName(agent.name, index) }));
+  const plainDefinitions = plainAgents.map((agent, index) => ({ agent, variableName: agentVariableName(agent.name, index + roleDefinitions.length) }));
 
   const needsDefineAgent = plainAgents.length > 0;
   const needsUseRole = effectiveRoleAgents.length > 0;
@@ -516,33 +523,27 @@ function generateSDKBuilderConfigWithRoles(options: InitOptions): string {
   code += ` */\n\n`;
 
   // Generate useRole() definitions
-  for (const agent of effectiveRoleAgents) {
-    const varName = agent.name.replace(/-/g, '_');
-    code += `const ${varName} = useRole('${agent.role}', {\n`;
-    code += `  name: '${agent.name}',\n`;
+  for (const { agent, variableName } of roleDefinitions) {
+    code += `const ${variableName} = useRole('${escapeSingleQuotedString(agent.role)}', {\n`;
+    code += `  name: '${escapeSingleQuotedString(agent.name)}',\n`;
     code += `});\n\n`;
   }
 
   // Generate plain defineAgent() definitions (for system agents like scribe/ralph)
-  for (const agent of plainAgents) {
+  for (const { agent, variableName } of plainDefinitions) {
     const displayName = agent.displayName || titleCase(agent.name);
-    code += `const ${agent.name} = defineAgent({\n`;
-    code += `  name: '${agent.name}',\n`;
-    code += `  role: '${agent.role}',\n`;
-    code += `  description: '${displayName}',\n`;
+    code += `const ${variableName} = defineAgent({\n`;
+    code += `  name: '${escapeSingleQuotedString(agent.name)}',\n`;
+    code += `  role: '${escapeSingleQuotedString(agent.role)}',\n`;
+    code += `  description: '${escapeSingleQuotedString(displayName)}',\n`;
     code += `  status: 'active',\n`;
     code += `});\n\n`;
   }
 
   // All agent variable names in order
-  const allVarNames = [
-    ...effectiveRoleAgents.map(a => a.name.replace(/-/g, '_')),
-    ...plainAgents.map(a => a.name),
-  ];
-  const allNames = [
-    ...effectiveRoleAgents.map(a => `'${a.name}'`),
-    ...plainAgents.map(a => `'${a.name}'`),
-  ];
+  const definitions = [...roleDefinitions, ...plainDefinitions];
+  const allVarNames = definitions.map(({ variableName }) => variableName);
+  const allNames = definitions.map(({ agent }) => `'${escapeSingleQuotedString(agent.name)}'`);
 
   code += `export default defineSquad({\n`;
   code += `  version: '1.0.0',\n\n`;

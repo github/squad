@@ -293,24 +293,46 @@ function isRetiredProfileTree(target: string, b: ProfileBoundary): boolean {
 function canonicalTeamDirOutsideProfile(dir: string, b: ProfileBoundary): string | null {
   const absolute = path.resolve(dir);
   const root = path.parse(absolute).root;
-  const parts = absolute.slice(root.length).split(path.sep).filter(Boolean);
+  const pending = absolute.slice(root.length).split(path.sep).filter(Boolean)
+    .map(name => ({ name, required: false })).reverse();
   let current = root;
-  let lexical = root;
-  for (let i = 0; i < parts.length; i++) {
-    lexical = path.join(lexical, parts[i]!);
-    const candidate = path.join(current, parts[i]!);
+  let linkCount = 0;
+  while (pending.length) {
+    const { name, required } = pending.pop()!;
+    if (name === '.') continue;
+    if (name === '..') {
+      current = path.dirname(current);
+      if (isRetiredProfileTree(current, b)) return null;
+      continue;
+    }
+    const candidate = path.join(current, name);
     if (isRetiredProfileTree(candidate, b)) return null;
+    let candidateExists = false;
     try {
-      current = fs.realpathSync.native(lexical);
-    } catch {
-      try {
-        fs.lstatSync(lexical);
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === 'ENOENT' || code === 'ENOTDIR') {
-          const unresolved = path.join(candidate, ...parts.slice(i + 1));
-          return isRetiredProfilePath(unresolved, b) ? null : unresolved;
+      const entry = fs.lstatSync(candidate);
+      candidateExists = true;
+      if (entry.isSymbolicLink()) {
+        if (++linkCount > 40) return null;
+        let target = fs.readlinkSync(candidate);
+        if (process.platform === 'win32') {
+          if (target.slice(0, 8).toLowerCase() === '\\\\?\\unc\\') target = `\\\\${target.slice(8)}`;
+          else if (target.startsWith('\\\\?\\')) target = target.slice(4);
         }
+        const targetRoot = path.parse(target).root;
+        if (path.isAbsolute(target)) current = targetRoot;
+        else if (targetRoot) return null;
+        const parts = target.slice(targetRoot.length).split(process.platform === 'win32' ? /[\\/]+/ : /\/+/).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          pending.push({ name: parts[i]!, required: true });
+        }
+        continue;
+      }
+      current = fs.realpathSync.native(candidate);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!candidateExists && (code === 'ENOENT' || code === 'ENOTDIR') && !required) {
+        const unresolved = path.join(candidate, ...pending.reverse().map(part => part.name));
+        return isRetiredProfilePath(unresolved, b) ? null : unresolved;
       }
       return null;
     }
