@@ -20,6 +20,10 @@ export interface AzureDevOpsRemoteInfo {
   repo: string;
 }
 
+function stripGitSuffix(repo: string): string {
+  return repo.length > 4 && repo.toLowerCase().endsWith('.git') ? repo.slice(0, -4) : repo;
+}
+
 /**
  * Parse a GitHub remote URL into owner/repo.
  * Supports HTTPS and SSH formats:
@@ -37,9 +41,9 @@ export function parseGitHubRemote(url: string): GitHubRemoteInfo | null {
   }
 
   // SSH: git@github.com:owner/repo.git
-  const sshMatch = url.match(/github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  const sshMatch = url.match(/^(?:[^@\s/:]+@)?github\.com:([^/]+)\/([^/]+)$/i);
   if (sshMatch) {
-    return { owner: sshMatch[1]!, repo: sshMatch[2]! };
+    return { owner: sshMatch[1]!, repo: stripGitSuffix(sshMatch[2]!) };
   }
 
   return null;
@@ -91,10 +95,10 @@ export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | nul
   // (Org subdomain keeps the no-dot constraint — the `.visualstudio.com` anchor
   // requires it. Only the repo capture is widened.)
   const vsMatch = url.match(
-    /([^/.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+?)(?:\.git)?$/i,
+    /^(?:https?|ssh|git):\/\/([^/.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)$/i,
   );
   if (vsMatch) {
-    return { org: decodeSegment(vsMatch[1]!), project: decodeSegment(vsMatch[2]!), repo: decodeSegment(vsMatch[3]!) };
+    return { org: decodeSegment(vsMatch[1]!), project: decodeSegment(vsMatch[2]!), repo: decodeSegment(stripGitSuffix(vsMatch[3]!)) };
   }
 
   return null;

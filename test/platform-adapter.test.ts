@@ -97,6 +97,10 @@ describe('parseGitHubRemote', () => {
     expect(result).toEqual({ owner: 'owner', repo: 'repo' });
   });
 
+  it('does not parse an SSH host that merely ends with github.com', () => {
+    expect(parseGitHubRemote('git@notgithub.com:owner/repo.git')).toBeNull();
+  });
+
   it('returns null for non-GitHub URLs', () => {
     expect(parseGitHubRemote('https://dev.azure.com/org/project/_git/repo')).toBeNull();
   });
@@ -166,6 +170,12 @@ describe('parseAzureDevOpsRemote', () => {
   it('parses legacy visualstudio.com URL with .git suffix', () => {
     const result = parseAzureDevOpsRemote('https://contoso.visualstudio.com/WebApp/_git/frontend.git');
     expect(result).toEqual({ org: 'contoso', project: 'WebApp', repo: 'frontend' });
+  });
+
+  it('parses a long legacy organization without backtracking', () => {
+    const org = 'a'.repeat(10_000);
+    const result = parseAzureDevOpsRemote(`https://${org}.visualstudio.com/WebApp/_git/frontend.git`);
+    expect(result).toEqual({ org, project: 'WebApp', repo: 'frontend' });
   });
 
   it('returns null for GitHub URLs', () => {
