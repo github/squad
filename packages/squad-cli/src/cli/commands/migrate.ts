@@ -373,10 +373,12 @@ function generateSquadConfig(
 }
 
 /**
- * Escape single quotes in string literals
+ * Escape content for a single-quoted JavaScript string literal.
  */
 function escapeString(str: string): string {
-  return str.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
 /**

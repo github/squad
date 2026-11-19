@@ -73,7 +73,16 @@ export function removeLines(existing: string, lines: readonly string[], id: stri
   return rows.join('\n');
 }
 
-const SECTION_RE = /^\s*(\[\[?)\s*([^\]\r\n]+?)\s*(\]\]?)\s*(?:#.*)?$/;
+const SECTION_RE = /^\s*(\[\[?)([^\]\r\n]+)(\]\]?)\s*(?:#.*)?$/;
+
+function withoutTrailingLineBreaks(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '\n') {
+    end--;
+    if (end > 0 && value[end - 1] === '\r') end--;
+  }
+  return value.slice(0, end);
+}
 
 function segmentsEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((s, idx) => s === b[idx]);
@@ -471,7 +480,7 @@ export function upsertTomlTable(
       if (!(k in merged)) merged[k] = v;
     }
     const body = Object.entries(merged).map(([k, v]) => `${k} = ${v}`);
-    const cleanedExisting = lines.join(nl).replace(/(\r?\n)*$/, '');
+    const cleanedExisting = withoutTrailingLineBreaks(lines.join(nl));
     const prefix = cleanedExisting === '' ? '' : cleanedExisting + nl + nl;
     return `${prefix}${[header, ...body].join(nl)}${nl}`;
   }
@@ -798,7 +807,7 @@ export function removeTomlTable(existing: string, table: string): string {
   }
   if (!changed) return existing;
   const joined = lines.join(nl);
-  return joined.trim() === '' ? '' : joined.replace(/(\r?\n)*$/, nl);
+  return joined.trim() === '' ? '' : withoutTrailingLineBreaks(joined) + nl;
 }
 
 const MCP_CONTAINERS = ['mcpServers', 'mcp', 'servers'];

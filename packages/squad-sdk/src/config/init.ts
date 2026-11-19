@@ -22,6 +22,7 @@ import { ensureMemoryGovernanceDefaults } from '../memory/index.js';
 import { addSquadStateGitignoreBlock, removeSquadStateGitignoreBlock } from './gitignore-state.js';
 import { syncTeamCapabilities } from './team-capabilities.js';
 import { ensureCastingRegistryPair } from '../casting/durable-registry.js';
+import { detectPlatformFromUrl } from '../platform/detect.js';
 
 // ============================================================================
 // Manifest-Curated Skills (must stay in sync with TEMPLATE_MANIFEST in CLI)
@@ -259,6 +260,16 @@ function formatModelArray(chain: readonly string[]): string {
   return `[${chain.map(m => `'${m}'`).join(', ')}]`;
 }
 
+function escapeSingleQuotedString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+function docCommentText(value: string): string {
+  return value.replace(/\*\//g, '* /').replace(/\r\n?|\n/g, '\n * ');
+}
+
 /**
  * Generate TypeScript config file content.
  */
@@ -268,8 +279,8 @@ function generateTypeScriptConfig(options: InitOptions): string {
   return `import type { SquadConfig } from '@bradygaster/squad';
 
 /**
- * Squad Configuration for ${projectName}
- * ${projectDescription ? `\n * ${projectDescription}` : ''}
+ * Squad Configuration for ${docCommentText(projectName)}
+ * ${projectDescription ? `\n * ${docCommentText(projectDescription)}` : ''}
  */
 const config: SquadConfig = {
   version: '1.0.0',
@@ -427,9 +438,9 @@ function generateSDKBuilderConfig(options: InitOptions): string {
   // Generate imports
   let code = `import {\n  defineSquad,\n  defineTeam,\n  defineAgent,\n} from '@bradygaster/squad-sdk';\n\n`;
 
-  code += `/**\n * Squad Configuration — ${projectName}\n`;
+  code += `/**\n * Squad Configuration — ${docCommentText(projectName)}\n`;
   if (projectDescription) {
-    code += ` *\n * ${projectDescription}\n`;
+    code += ` *\n * ${docCommentText(projectDescription)}\n`;
   }
   code += ` */\n`;
 
@@ -448,9 +459,9 @@ function generateSDKBuilderConfig(options: InitOptions): string {
   code += `export default defineSquad({\n`;
   code += `  version: '1.0.0',\n\n`;
   code += `  team: defineTeam({\n`;
-  code += `    name: '${projectName}',\n`;
+  code += `    name: '${escapeSingleQuotedString(projectName)}',\n`;
   if (projectDescription) {
-    code += `    description: '${projectDescription.replace(/'/g, "\\'")}',\n`;
+    code += `    description: '${escapeSingleQuotedString(projectDescription)}',\n`;
   }
   code += `    members: [${agents.map(a => `'${a.name}'`).join(', ')}],\n`;
   code += `  }),\n\n`;
@@ -496,9 +507,9 @@ function generateSDKBuilderConfigWithRoles(options: InitOptions): string {
 
   let code = `import {\n${imports.map(i => `  ${i},`).join('\n')}\n} from '@bradygaster/squad-sdk';\n\n`;
 
-  code += `/**\n * Squad Configuration — ${projectName}\n`;
+  code += `/**\n * Squad Configuration — ${docCommentText(projectName)}\n`;
   if (projectDescription) {
-    code += ` *\n * ${projectDescription}\n`;
+    code += ` *\n * ${docCommentText(projectDescription)}\n`;
   }
   code += ` *\n * Uses built-in base roles from the role catalog.\n`;
   code += ` * Customize names and overrides for your project.\n`;
@@ -536,9 +547,9 @@ function generateSDKBuilderConfigWithRoles(options: InitOptions): string {
   code += `export default defineSquad({\n`;
   code += `  version: '1.0.0',\n\n`;
   code += `  team: defineTeam({\n`;
-  code += `    name: '${projectName}',\n`;
+  code += `    name: '${escapeSingleQuotedString(projectName)}',\n`;
   if (projectDescription) {
-    code += `    description: '${projectDescription.replace(/'/g, "\\'")}',\n`;
+    code += `    description: '${escapeSingleQuotedString(projectDescription)}',\n`;
   }
   code += `    members: [${allNames.join(', ')}],\n`;
   code += `  }),\n\n`;
@@ -632,6 +643,23 @@ function titleCase(str: string): string {
  * Stamp version into squad.agent.md content.
  * Replaces three locations: HTML comment, Identity Version line, and {version} placeholder.
  */
+function isSemVer(value: string): boolean {
+  const [withoutBuild, build, ...extraBuild] = value.split('+');
+  if (extraBuild.length > 0) return false;
+  const validIdentifiers = (text: string, prerelease: boolean): boolean =>
+    text.split('.').every((part) =>
+      /^[0-9A-Za-z-]+$/.test(part) &&
+      !(prerelease && /^\d+$/.test(part) && part.length > 1 && part.startsWith('0'))
+    );
+  if (build !== undefined && !validIdentifiers(build, false)) return false;
+  const dash = withoutBuild!.indexOf('-');
+  const core = dash === -1 ? withoutBuild! : withoutBuild!.slice(0, dash);
+  const prerelease = dash === -1 ? undefined : withoutBuild!.slice(dash + 1);
+  if (prerelease !== undefined && !validIdentifiers(prerelease, true)) return false;
+  const numbers = core.split('.');
+  return numbers.length === 3 && numbers.every((part) => /^(?:0|[1-9]\d*)$/.test(part));
+}
+
 function stampVersionInContent(content: string, version: string): string {
   // HTML comment: <!-- version: X.Y.Z -->
   content = content.replace(
@@ -645,8 +673,10 @@ function stampVersionInContent(content: string, version: string): string {
   );
   // Greeting placeholder or an already-resolved valid SemVer literal.
   content = content.replace(
-    /`Squad v(?:\{version\}|(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)`/g,
-    `\`Squad v${version}\``,
+    /`Squad v(\{version\}|[0-9A-Za-z.+-]+)`/g,
+    (match, existing: string) => existing === '{version}' || isSemVer(existing)
+      ? `\`Squad v${version}\``
+      : match,
   );
   return content;
 }
@@ -1065,8 +1095,7 @@ All findings logged to \`.squad/fact-checker/audit-trail.md\` (append-only, succ
     let detectedPlatform: string | undefined;
     try {
       const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: teamRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-      const remoteUrlLower = remoteUrl.toLowerCase();
-      if (remoteUrlLower.includes('dev.azure.com') || remoteUrlLower.includes('visualstudio.com') || remoteUrlLower.includes('ssh.dev.azure.com')) {
+      if (detectPlatformFromUrl(remoteUrl) === 'azure-devops') {
         detectedPlatform = 'azure-devops';
       }
     } catch {
@@ -1463,8 +1492,7 @@ ${projectDescription ? `- **Description:** ${projectDescription}\n` : ''}- **Cre
   let isGitHub = true;
   try {
     const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: teamRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    const remoteUrlLower = remoteUrl.toLowerCase();
-    if (remoteUrlLower.includes('dev.azure.com') || remoteUrlLower.includes('visualstudio.com') || remoteUrlLower.includes('ssh.dev.azure.com')) {
+    if (detectPlatformFromUrl(remoteUrl) === 'azure-devops') {
       isGitHub = false;
     }
   } catch {

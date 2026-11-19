@@ -283,11 +283,30 @@ function findColumnIndex(headers: string[], candidates: string[]): number {
   return -1;
 }
 
+function stripMarkdownLinks(value: string): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const open = value.indexOf('[', cursor);
+    if (open === -1) break;
+    const close = value.indexOf(']', open + 1);
+    if (close === -1) break;
+    if (close === open + 1 || value[close + 1] !== '(' || value[close + 2] === ')') {
+      parts.push(value.slice(cursor, close + 1));
+      cursor = close + 1;
+      continue;
+    }
+    const end = value.indexOf(')', close + 2);
+    if (end === -1) break;
+    parts.push(value.slice(cursor, open), value.slice(open + 1, close));
+    cursor = end + 1;
+  }
+  parts.push(value.slice(cursor));
+  return parts.join('');
+}
+
 function cleanCell(value: string): string {
-  return value
-    .replace(/`/g, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .trim();
+  return stripMarkdownLinks(value.replace(/`/g, '')).trim();
 }
 
 function splitKeywords(examplesCell: string | undefined): string[] {
@@ -321,8 +340,7 @@ function normalizeName(value: string): string {
 }
 
 function normalizeRouteDestination(value: string): string {
-  return value
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+  return stripMarkdownLinks(value)
     .replace(/[*_`]/g, '')
     .replace(/\p{Extended_Pictographic}/gu, '')
     .replace(/[\u200d\ufe0f]/g, '')
@@ -389,7 +407,7 @@ function routeMatch(
     'specialist', 'system', 'work',
   ]);
   const tokens = (value: string): string[] =>
-    value.toLowerCase().match(/[a-z0-9]+(?:[+#.][a-z0-9+#.]*)?(?<!\.)/g) ?? [];
+    value.toLowerCase().match(/[a-z0-9][a-z0-9+#.]*(?<!\.)/g) ?? [];
   const containsPhrase = (haystack: string[], needle: string[]): boolean =>
     needle.length > 0 &&
     needle.length <= haystack.length &&

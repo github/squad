@@ -66,6 +66,8 @@ function decodeSegment(value: string): string {
  *   https://org.visualstudio.com/project/_git/repo
  */
 export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | null {
+  if (detectPlatformFromUrl(url) !== 'azure-devops') return null;
+
   // Repo capture allows dots in repo names; the literal `/_git/` segment keeps
   // the match anchored unambiguously.
   // HTTPS dev.azure.com: https://dev.azure.com/org/project/_git/repo
@@ -104,8 +106,21 @@ export function parseAzureDevOpsRemote(url: string): AzureDevOpsRemoteInfo | nul
  * Defaults to 'github' if unrecognized.
  */
 export function detectPlatformFromUrl(url: string): PlatformType {
-  if (/github\.com/i.test(url)) return 'github';
-  if (/dev\.azure\.com/i.test(url) || /\.visualstudio\.com/i.test(url) || /ssh\.dev\.azure\.com/i.test(url)) {
+  const scpRemote = url.match(/^(?:[^@\s/:]+@)?([^:/\s]+):(?=[^/])/);
+  let hostname: string;
+  if (scpRemote) {
+    hostname = scpRemote[1]!.toLowerCase();
+  } else {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:', 'ssh:', 'git:'].includes(parsed.protocol)) return 'github';
+      hostname = parsed.hostname.toLowerCase();
+    } catch {
+      return 'github';
+    }
+  }
+  if (hostname === 'dev.azure.com' || hostname === 'ssh.dev.azure.com' ||
+      (hostname.endsWith('.visualstudio.com') && hostname.length > '.visualstudio.com'.length)) {
     return 'azure-devops';
   }
   return 'github';

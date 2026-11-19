@@ -427,6 +427,8 @@ describe('squad.agent.md template handling (#730)', () => {
       '`Squad velocity`',
       '`Squad v1.2`',
       '`Squad v01.2.3`',
+      '`Squad v1.2.3-01`',
+      '`Squad v1.2.3+build..7`',
     ];
 
     const templateStorage = new Proxy(realStorage, {

@@ -772,15 +772,22 @@ export function scratchFile(squadRoot: string, prefix: string, ext: string = '.t
  * @param projectDir - Absolute path to the project root.
  * @returns A sanitized, lowercase project key suitable for use as a directory name.
  */
+function withoutEdgeHyphens(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '-') start++;
+  while (end > start && value[end - 1] === '-') end--;
+  return value.slice(start, end);
+}
+
 export function deriveProjectKey(projectDir: string): string {
   const normalized = projectDir.replace(/\\/g, '/');
   const base = path.basename(normalized);
   if (!base) return 'unknown-project';
 
-  const sanitized = base
+  const sanitized = withoutEdgeHyphens(base
     .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9._-]/g, '-'));
 
   return sanitized || 'unknown-project';
 }
@@ -807,10 +814,9 @@ export function resolveExternalStateDir(projectKey: string, create: boolean = tr
   }
 
   // Sanitize: replace path separators and unsafe chars with dashes
-  const sanitized = projectKey
+  const sanitized = withoutEdgeHyphens(projectKey
     .replace(/[/\\]/g, '-')
-    .replace(/[^a-zA-Z0-9._-]/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-zA-Z0-9._-]/g, '-'));
 
   if (!sanitized) {
     throw new Error('Invalid project key');

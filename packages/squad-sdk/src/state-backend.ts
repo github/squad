@@ -502,8 +502,14 @@ export function validateStateKey(key: string): void {
 }
 
 
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
+}
+
 function normalizeKey(relativePath: string): string {
-  const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  const normalized = withoutTrailingSlashes(relativePath.replace(/\\/g, '/').replace(/^\/+/, ''));
   // Empty string after normalization means "root" — valid for list() operations
   if (normalized.length > 0) {
     validateStateKey(normalized);
@@ -1225,9 +1231,7 @@ export class StateBackendStorageAdapter implements StorageProvider {
     }
 
     if (!path.isAbsolute(filePath)) {
-      const relative = slashPath
-        .replace(/^(?:\.\/)+/, '')
-        .replace(/\/+$/, '');
+      const relative = withoutTrailingSlashes(slashPath.replace(/^(?:\.\/)+/, ''));
       return relative.length === 0 ? this.resolveRoot(options) : relative;
     }
 

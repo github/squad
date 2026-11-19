@@ -62,8 +62,11 @@ export const CANONICAL_COORDINATOR_HEADINGS = [
 export function extractCanonicalCoordinatorHeadings(markdown: string): string[] {
   const headings: string[] = [];
   for (const line of markdown.split(/\r?\n/)) {
-    const m = /^#{2,3}\s+(.+?)\s*$/.exec(line);
-    if (m) headings.push(m[1]!);
+    const count = line.startsWith('###') ? 3 : line.startsWith('##') ? 2 : 0;
+    if (count && /\s/.test(line.charAt(count))) {
+      const heading = line.slice(count).trim();
+      if (heading) headings.push(heading);
+    }
   }
   return headings;
 }

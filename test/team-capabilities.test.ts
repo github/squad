@@ -517,6 +517,7 @@ describe('#1608 — malformed, empty and unknown metadata', () => {
 describe('#1608 — sanitization of untrusted metadata', () => {
   it('escapes table pipes so a hostile value cannot forge columns', () => {
     expect(sanitizeMetadataText('a | b')).toBe('a \\| b');
+    expect(sanitizeMetadataText('a\\|b')).toBe('a\\\\\\|b');
   });
 
   it('strips HTML comments, tags, and canary/marker tokens', () => {
@@ -526,6 +527,9 @@ describe('#1608 — sanitization of untrusted metadata', () => {
     // Tags are removed; any inert inner text survives as plain prose.
     expect(sanitizeMetadataText('<script>x</script>done')).toBe('x done');
     expect(sanitizeMetadataText('SQUAD:TEAM-CAPABILITIES:END')).toBe('[redacted]');
+    expect(sanitizeMetadataText('safe <!-- hidden --!> tail')).toBe('safe tail');
+    expect(sanitizeMetadataText('safe <!-- hidden ---> tail')).toBe('safe tail');
+    expect(sanitizeMetadataText('safe <!-- hidden')).toBe('safe');
   });
 
   it('escapes residual opening brackets from overlong HTML-like tags', () => {

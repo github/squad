@@ -81,6 +81,11 @@ describe('stripHtml', () => {
   it('handles combined tags and entities', () => {
     expect(stripHtml('<p>Tom &amp; Jerry &lt;3</p>')).toBe('Tom & Jerry <3');
   });
+
+  it('decodes entities once and does not assemble a tag when stripping nested markup', () => {
+    expect(stripHtml('&amp;lt;script&amp;gt;')).toBe('&lt;script&gt;');
+    expect(stripHtml('hello <<b>script>')).toBe('hello script>');
+  });
 });
 
 // ─── formatTeamsMessage ──────────────────────────────────────────────

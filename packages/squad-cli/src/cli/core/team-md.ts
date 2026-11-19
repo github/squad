@@ -90,7 +90,14 @@ export function insertCopilotSection(content: string, autoAssign: boolean = fals
  * Remove @copilot section from team.md
  */
 export function removeCopilotSection(content: string): string {
-  return content.replace(/\n## Coding Agent\n[\s\S]*?(?=\n## |\n*$)/, '');
+  const heading = '\n## Coding Agent\n';
+  const start = content.indexOf(heading);
+  if (start === -1) return content;
+  const nextSection = content.indexOf('\n## ', start + heading.length);
+  if (nextSection !== -1) return content.slice(0, start) + content.slice(nextSection);
+  let end = content.length;
+  while (end > start + heading.length && content[end - 1] === '\n') end--;
+  return content.slice(0, start) + content.slice(end);
 }
 
 /**

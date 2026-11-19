@@ -170,6 +170,26 @@ const INJECTION_PATTERNS: readonly RegExp[] = [
  * @param maxLength - Maximum rendered length (ellipsis added when clamped).
  * @returns A single-line, structure-safe string.
  */
+function withoutHtmlComments(value: string): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const open = value.indexOf('<!--', cursor);
+    if (open === -1) break;
+    parts.push(value.slice(cursor, open), ' ');
+    let close = open + 4;
+    while ((close = value.indexOf('--', close)) !== -1) {
+      if (value.startsWith('-->', close)) { close += 3; break; }
+      if (value.startsWith('--!>', close)) { close += 4; break; }
+      close++;
+    }
+    if (close === -1) return parts.join('');
+    cursor = close;
+  }
+  parts.push(value.slice(cursor));
+  return parts.join('');
+}
+
 export function sanitizeMetadataText(raw: unknown, maxLength: number = MAX_SUMMARY_LENGTH): string {
   if (typeof raw !== 'string' || raw.length === 0) return '';
 
@@ -181,8 +201,8 @@ export function sanitizeMetadataText(raw: unknown, maxLength: number = MAX_SUMMA
   text = text.replace(CONTROL_CHARS, ' ');
 
   // HTML comments can smuggle markers, canaries, or directives.
-  text = text.replace(/<!--[\s\S]*?-->/g, ' ');
-  text = text.replace(/<!--/g, ' ').replace(/-->/g, ' ');
+  text = withoutHtmlComments(text);
+  text = text.replace(/<!--/g, ' ').replace(/-->/g, ' ').replace(/--!>/g, ' ');
   // Then remove tag-shaped content and escape residual opening brackets.
   text = text.replace(/<[^<>\n]{0,200}>/g, ' ');
   text = text.replace(/</g, '&lt;');
@@ -195,7 +215,7 @@ export function sanitizeMetadataText(raw: unknown, maxLength: number = MAX_SUMMA
 
   // Structural markdown that would break the surrounding table/section.
   text = text.replace(/`+/g, "'");
-  text = text.replace(/\|/g, '\\|');
+  text = text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
   text = text.replace(/^[\s>#*+=~-]+/, '');
 
   text = text.replace(/\s+/g, ' ').trim();
@@ -205,7 +225,9 @@ export function sanitizeMetadataText(raw: unknown, maxLength: number = MAX_SUMMA
   if (text.length > limit) {
     text = text.slice(0, Math.max(1, limit - 1)).trimEnd();
     // Never leave a dangling escape from a clipped `\|`.
-    text = text.replace(/\\+$/, '').trimEnd();
+    let end = text.length;
+    while (end > 0 && text[end - 1] === '\\') end--;
+    text = text.slice(0, end).trimEnd();
     text += '…';
   }
   return text;

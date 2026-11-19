@@ -14,6 +14,7 @@ import { mkdtemp, rm, readFile, readdir, access } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import ts from 'typescript';
 
 // Import initSquad from SDK
 // Note: initSquad lives at packages/squad-sdk/src/config/init.ts
@@ -254,6 +255,32 @@ describe('squad init --sdk flag', () => {
 
     // Should contain the team name
     expect(configContent).toContain('Test Squad');
+  });
+
+  it.each([false, true])('escapes project metadata in SDK config (roles=%s)', async (roles) => {
+    const projectName = "Team\\'name";
+    const projectDescription = "Line \\'one\n*/ globalThis.injected = true; /*\u2028next";
+    await initSquad({
+      teamRoot: tempDir,
+      projectName,
+      projectDescription,
+      agents: [{ name: 'edie', role: 'Engineer' }],
+      configFormat: 'sdk',
+      roles,
+    });
+
+    const content = await readFile(join(tempDir, 'squad.config.ts'), 'utf-8');
+    const parsed = ts.createSourceFile('squad.config.ts', content, ts.ScriptTarget.Latest, true);
+    const literals: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isStringLiteral(node)) literals.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(ts.transpileModule(content, { reportDiagnostics: true }).diagnostics).toEqual([]);
+    expect(literals).toContain(projectName);
+    expect(literals).toContain(projectDescription);
+    expect(content).toContain('* / globalThis.injected');
   });
 
   // ── --sdk --roles integration (#378) ────────────────────────────────
