@@ -300,9 +300,10 @@ function withoutShell(command, prefix) {
   if (!win || !/\\.(cmd|bat)$/i.test(command)) return [command, prefix];
   const shim = path.isAbsolute(command) ? command : onPath(path.basename(command, path.extname(command)));
   const dir = shim ? path.dirname(shim) : path.dirname(process.execPath);
+  const modules = path.basename(dir).toLowerCase() === '.bin' ? path.dirname(dir) : path.join(dir, 'node_modules');
   const candidates = path.basename(command).toLowerCase() === 'npx.cmd'
-    ? [path.join(dir, 'node_modules/npm/bin/npx-cli.js'), path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npx-cli.js')]
-    : [path.join(dir, 'node_modules', ...PKG.split('/'), 'dist/cli-entry.js')];
+    ? [path.join(modules, 'npm/bin/npx-cli.js'), path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npx-cli.js')]
+    : [path.join(modules, ...PKG.split('/'), 'dist/cli-entry.js')];
   const entry = candidates.find((candidate) => fs.existsSync(candidate));
   if (!entry) throw new Error(\`Cannot resolve the JavaScript entry for \${command}; set SQUAD_CLI to cli-entry.js\`);
   return [process.execPath, [entry, ...prefix]];

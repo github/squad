@@ -34,6 +34,7 @@ if (root && log) {
     if (typeof original !== 'function') return;
     const wrapped = function (...args) { record(`${label}.${name}`, args.slice(0, 2)); return original.apply(this, args); };
     Object.defineProperty(wrapped, 'name', { value: original.name });
+    Object.assign(wrapped, original);
     obj[name] = wrapped;
   };
   const names = [

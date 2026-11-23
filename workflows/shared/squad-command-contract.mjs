@@ -441,6 +441,30 @@ export function enforceSquadRouterOutputs(agentOutputPath) {
   }
 }
 
+function withoutCommentsForInspection(body) {
+  const parts = [];
+  let cursor = 0;
+  while (cursor < body.length) {
+    const open = body.indexOf('<!--', cursor);
+    if (open === -1) break;
+    parts.push(body.slice(cursor, open));
+    let close = open + 4;
+    while ((close = body.indexOf('--', close)) !== -1) {
+      if (body.startsWith('-->', close)) { close += 3; break; }
+      if (body.startsWith('--!>', close)) {
+        throw new Error('Unsupported HTML comment terminator in agent output; refusing ambiguous authority.');
+      }
+      close++;
+    }
+    if (close === -1) throw new Error('Unclosed HTML comment in agent output; refusing ambiguous authority.');
+    cursor = close;
+  }
+  parts.push(body.slice(cursor));
+  const normalized = parts.join('');
+  if (normalized.includes('<!--')) throw new Error('Nested HTML comments in agent output; refusing ambiguous authority.');
+  return normalized;
+}
+
 export async function enforceSquadCommandContract({
   payload, eventName, createComment, actor, resolvePermission, agentOutputPath,
 }) {
@@ -455,7 +479,7 @@ export async function enforceSquadCommandContract({
       const rawBody = typeof item.body === 'string' ? item.body : '';
       // Readers can see fenced HTML comments; also inspect the normalized view
       // so comment-split lifecycle text cannot bypass the trusted writer boundary.
-      const bodies = [rawBody, rawBody.replace(/<!--[\s\S]*?-->/g, '')];
+      const bodies = [rawBody, withoutCommentsForInspection(rawBody)];
       if (activationArtifacts.has(item.data?.squad_artifact) ||
           bodies.some(body => /Activation (?:bindings|reconciliation):/i.test(body) ||
           /squad-activation-(?:pending|finalization)\/v1/.test(body) ||

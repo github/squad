@@ -29,7 +29,7 @@
  * `node scripts/render-upgrade-matrix.mjs --merge <results.json>`.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execFile, execFileSync } from 'node:child_process';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -96,6 +96,7 @@ interface Matrix {
   inapplicable: Inapplicable[];
   expectedFailures: ExpectedFailure[];
   findings: Finding[];
+  historicalRuns?: Run[];
   runs: Run[];
 }
 
@@ -274,6 +275,15 @@ describe('upgrade-matrix.json integrity', () => {
     }
   });
 
+  it('retains previous runs with their original attribution', () => {
+    for (const run of matrix.historicalRuns ?? []) {
+      expect(run.targetSha).toMatch(/^[0-9a-f]{40}$/);
+      expect(run.harnessHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(run.runUrl).toMatch(/^https:\/\/github\.com\/github\/squad\/actions\/runs\/\d+$/);
+      expect(run.results.length).toBeGreaterThan(0);
+    }
+  });
+
   it('the "Tested upgrade paths" section of upgrading.md is up to date with the JSON', async () => {
     const { renderSection, extractSection } = (await import(RENDERER)) as {
       renderSection: (m: unknown) => string;
@@ -288,6 +298,84 @@ describe('upgrade-matrix.json integrity', () => {
 // ─── harness guards (always on) ─────────────────────────────────────────────
 
 describe('upgrade-matrix harness guards', () => {
+  it('scrubs inherited Node settings but preserves explicit scenario instrumentation', () => {
+    vi.stubEnv('NODE_OPTIONS', '--require inherited-hook.cjs');
+    vi.stubEnv('NODE_PATH', 'inherited-path');
+    vi.stubEnv('SQUAD_CLI', 'inherited-cli');
+    try {
+      const clean = isolatedEnv('isolated-home');
+      expect(clean.HOME).toBe('isolated-home');
+      expect(clean.USERPROFILE).toBe('isolated-home');
+      expect(clean.NODE_OPTIONS).toContain('profile-fs-guard.cjs');
+      expect(clean.NODE_OPTIONS).not.toContain('inherited-hook.cjs');
+      expect(clean.NODE_PATH).toBeUndefined();
+      expect(clean.SQUAD_CLI).toBeUndefined();
+      const instrumented = isolatedEnv('isolated-home', {
+        NODE_OPTIONS: '--require scenario-hook.cjs',
+        NODE_PATH: 'scenario-path',
+        SQUAD_CLI: 'scenario-cli',
+      });
+      expect(instrumented.NODE_OPTIONS).toContain('profile-fs-guard.cjs');
+      expect(instrumented.NODE_OPTIONS).toContain('--require scenario-hook.cjs');
+      expect(instrumented.NODE_PATH).toBe('scenario-path');
+      expect(instrumented.SQUAD_CLI).toBe('scenario-cli');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('records profile probes without breaking native realpath', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-matrix-fs-watch-'));
+    try {
+      const profile = path.join(dir, 'profile');
+      const log = path.join(dir, 'access.log');
+      fs.mkdirSync(profile);
+      const script = [
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
+        "fs.realpathSync.native(process.env.SQUAD_MATRIX_FS_WATCH_ROOT);",
+        "fs.existsSync(path.join(process.env.SQUAD_MATRIX_FS_WATCH_ROOT, 'missing'));",
+      ].join('\n');
+      const result = await run(process.execPath, ['-e', script], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require ${JSON.stringify(FS_HOOK)}`,
+          SQUAD_MATRIX_FS_WATCH_ROOT: profile,
+          SQUAD_MATRIX_FS_WATCH_LOG: log,
+        },
+      });
+      expect(result.code, result.stderr).toBe(0);
+      const recorded = fs.readFileSync(log, 'utf8');
+      expect(recorded).toContain('fs.realpathSync.native');
+      expect(recorded).toContain('fs.existsSync');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('passes metacharacters in npm arguments literally', async () => {
+    const prefix = path.join(ROOT, 'matrix test & literal');
+    const result = await npmCmd(['config', 'get', 'prefix', '--prefix', prefix], ROOT, process.env);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe(prefix);
+  });
+
+  it('packs a local package into a destination containing shell metacharacters', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'squad-matrix- & '));
+    try {
+      const dest = path.join(dir, 'packed files & literal');
+      fs.mkdirSync(dest);
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'squad-matrix-test', version: '1.0.0' }));
+      const result = await npmCmd(['pack', '--quiet', '--ignore-scripts', '--pack-destination', dest], dir, process.env);
+      expect(result.code, result.stderr).toBe(0);
+      const tarball = result.stdout.trim().split(/\r?\n/).pop()!;
+      expect(fs.existsSync(path.join(dest, tarball))).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   const fakeSpec = (over: Partial<ProducerSpec> = {}): ProducerSpec => ({
     version: '0.0.0-guard', source: 'github-release', why: 'guard test', supports: { stateBackend: true, dryRun: true },
     artifacts: { release: { repository: 'bradygaster/squad', tag: 'v0.0.0-guard', assets: {} } },
@@ -456,16 +544,18 @@ function isolatedEnv(configHome: string, extra: NodeJS.ProcessEnv = {}): NodeJS.
   const env: NodeJS.ProcessEnv = {
     ...process.env, ...GIT_ENV,
     CI: '1', SQUAD_NONINTERACTIVE: '1', NO_COLOR: '1', FORCE_COLOR: '0', SQUAD_INIT_NO_COLOR: '1', TERM: 'dumb',
+    HOME: configHome, USERPROFILE: configHome,
     APPDATA: configHome, LOCALAPPDATA: configHome, XDG_CONFIG_HOME: configHome,
     SQUAD_HOME_DIR_OVERRIDE: path.join(configHome, 'squad-home'),
-    ...extra,
   };
-  if (PLATFORM === 'darwin') env['HOME'] = configHome;
   delete env['NODE_PATH'];
   delete env['NODE_OPTIONS'];
+  delete env['SQUAD_CLI'];
   delete env['SQUAD_TEAM_ROOT'];
   for (const k of Object.keys(env)) if (k.startsWith('npm_')) delete env[k];
-  return env;
+  const guard = path.join(ROOT, 'test', 'setup', 'profile-fs-guard.cjs').replace(/\\/g, '/');
+  const nodeOptions = [`--require "${guard}"`, extra.NODE_OPTIONS].filter(Boolean).join(' ');
+  return { ...env, ...extra, NODE_OPTIONS: nodeOptions };
 }
 
 // ─── scenario bookkeeping ───────────────────────────────────────────────────
@@ -593,12 +683,10 @@ async function fetchBuffer(url: string, headers: Record<string, string> = {}): P
 }
 
 async function npmCmd(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<Cmd> {
-  const npm = PLATFORM === 'win32' ? 'npm.cmd' : 'npm';
-  // Absolute tarball paths: a bare `dir/file.tgz` would be read by npm as a GitHub `owner/repo` shorthand.
-  const quoted = args.map((a) => (/\s/.test(a) ? `"${a}"` : a));
-  return PLATFORM === 'win32'
-    ? run(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/s', '/c', `${npm} ${quoted.join(' ')}`], { cwd, env, timeout: 600_000 })
-    : run(npm, args, { cwd, env, timeout: 600_000 });
+  if (PLATFORM !== 'win32') return run('npm', args, { cwd, env, timeout: 600_000 });
+  const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  if (!fs.existsSync(npmCli)) throw new Error(`npm CLI not found beside Node: ${npmCli}`);
+  return run(process.execPath, [npmCli, ...args], { cwd, env, timeout: 600_000 });
 }
 
 /**
@@ -721,17 +809,23 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
     const sdkDir = path.join(ROOT, 'packages', 'squad-sdk');
     const cliDir = path.join(ROOT, 'packages', 'squad-cli');
     const buildEnv = { ...process.env, SKIP_BUILD_BUMP: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
-    const npmShell = PLATFORM === 'win32';
-    if (!fs.existsSync(path.join(sdkDir, 'dist', 'index.js'))) execFileSync('npm', ['run', 'build'], { cwd: sdkDir, stdio: 'inherit', env: buildEnv, shell: npmShell });
-    if (!fs.existsSync(path.join(cliDir, 'dist', 'cli-entry.js'))) execFileSync('npm', ['run', 'build'], { cwd: cliDir, stdio: 'inherit', env: buildEnv, shell: npmShell });
+    const runNpm = async (args: string[], cwd: string): Promise<string> => {
+      const result = await npmCmd(args, cwd, buildEnv);
+      if (result.code !== 0) throw new Error(`npm ${args[0]} failed in ${cwd} (exit ${result.code}): ${result.stderr || result.stdout}`);
+      return result.stdout.trim();
+    };
+    if (!fs.existsSync(path.join(sdkDir, 'dist', 'index.js'))) await runNpm(['run', 'build'], sdkDir);
+    if (!fs.existsSync(path.join(cliDir, 'dist', 'cli-entry.js'))) await runNpm(['run', 'build'], cliDir);
 
     fs.mkdirSync(CACHE_ROOT, { recursive: true });
     staging = fs.mkdtempSync(path.join(CACHE_ROOT, 'staging-'));
     const tarballs = path.join(staging, 'tarballs');
     fs.mkdirSync(tarballs);
-    const pack = (pkgDir: string): string => {
-      const out = execFileSync('npm', ['pack', '--quiet', '--ignore-scripts', '--pack-destination', tarballs], { cwd: pkgDir, encoding: 'utf8', shell: npmShell, env: buildEnv }).trim();
-      return path.join(tarballs, out.split(/\r?\n/).filter(Boolean).pop()!.trim());
+    const pack = async (pkgDir: string): Promise<string> => {
+      const out = await runNpm(['pack', '--quiet', '--ignore-scripts', '--pack-destination', tarballs], pkgDir);
+      const filename = out.split(/\r?\n/).filter(Boolean).pop()?.trim();
+      if (!filename) throw new Error(`npm pack produced no tarball name for ${pkgDir}`);
+      return path.join(tarballs, filename);
     };
     const unpack = (tarball: string, dest: string) => {
       const tmp = fs.mkdtempSync(path.join(tarballs, 'x-'));
@@ -740,8 +834,8 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
       fs.renameSync(path.join(tmp, 'package'), dest);
       rmrf(tmp);
     };
-    unpack(pack(sdkDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-sdk'));
-    unpack(pack(cliDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-cli'));
+    unpack(await pack(sdkDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-sdk'));
+    unpack(await pack(cliDir), path.join(staging, 'node_modules', '@bradygaster', 'squad-cli'));
     fs.writeFileSync(path.join(staging, 'package.json'), JSON.stringify({ name: 'squad-upgrade-matrix-consumer', private: true, type: 'module' }, null, 2) + '\n');
     newVersion = (readJson<{ version: string }>(path.join(staging, 'node_modules', '@bradygaster', 'squad-cli', 'package.json')))!.version;
     newCli = {
@@ -998,6 +1092,7 @@ describe.skipIf(!ENABLED)('old-version × OS × state-shape upgrade matrix (SQUA
     // pointed at the retired profile tree: zero reads, probes or writes may land there.
     const newEnv = isolatedEnv(configHome, {
       ...newCli.env,
+      SQUAD_CLI: newCli.args[0],
       NODE_OPTIONS: `--require ${JSON.stringify(FS_HOOK)}`,
       SQUAD_MATRIX_FS_WATCH_ROOT: profileRoot,
       SQUAD_MATRIX_FS_WATCH_LOG: fsLog,

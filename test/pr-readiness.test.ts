@@ -707,6 +707,7 @@ describe('buildFileList', () => {
 describe('sanitizeFilename', () => {
   it('escapes pipe characters', () => {
     expect(sanitizeFilename('a|b|c')).toBe('a\\|b\\|c');
+    expect(sanitizeFilename('a\\|b')).toBe('a\\\\\\|b');
   });
 
   it('replaces backticks with single quotes', () => {

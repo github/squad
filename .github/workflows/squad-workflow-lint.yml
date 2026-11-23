@@ -53,8 +53,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           SOURCE_SHA: ${{ inputs.sha }}
+          DISPATCH_SHA: ${{ github.sha }}
         run: |
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full lowercase 40-hex SHA, got '$SOURCE_SHA'"; exit 1; }
+          [ "$SOURCE_SHA" = "$DISPATCH_SHA" ] || { echo "::error::sha must match the selected workflow ref"; exit 1; }
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7
         if: github.event_name != 'workflow_dispatch'
@@ -62,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7
         if: github.event_name == 'workflow_dispatch'
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Assert checkout is exactly the requested SHA

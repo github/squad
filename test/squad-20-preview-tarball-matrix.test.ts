@@ -339,6 +339,12 @@ describe('upgrade-matrix.json integrity', () => {
 // ─── harness guards (always on) ─────────────────────────────────────────────
 
 describe('upgrade-matrix harness guards', () => {
+  it('passes metacharacters in npm arguments literally', async () => {
+    const prefix = path.join(ROOT, 'matrix test & literal');
+    const result = await npmCmd(['config', 'get', 'prefix', '--prefix', prefix], ROOT, process.env);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe(prefix);
+  });
   const fakeSpec = (over: Partial<ProducerSpec> = {}): ProducerSpec => ({
     version: '0.0.0-guard', source: 'github-release', why: 'guard test', supports: { stateBackend: true, dryRun: true },
     artifacts: { release: { repository: 'bradygaster/squad', tag: 'v0.0.0-guard', assets: {} } },
@@ -686,12 +692,10 @@ async function fetchBuffer(url: string, headers: Record<string, string> = {}): P
 }
 
 async function npmCmd(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<Cmd> {
-  const npm = PLATFORM === 'win32' ? 'npm.cmd' : 'npm';
-  // Absolute tarball paths: a bare `dir/file.tgz` would be read by npm as a GitHub `owner/repo` shorthand.
-  const quoted = args.map((a) => (/\s/.test(a) ? `"${a}"` : a));
-  return PLATFORM === 'win32'
-    ? run(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/s', '/c', `${npm} ${quoted.join(' ')}`], { cwd, env, timeout: 600_000 })
-    : run(npm, args, { cwd, env, timeout: 600_000 });
+  if (PLATFORM !== 'win32') return run('npm', args, { cwd, env, timeout: 600_000 });
+  const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  if (!fs.existsSync(npmCli)) throw new Error(`npm CLI not found beside Node: ${npmCli}`);
+  return run(process.execPath, [npmCli, ...args], { cwd, env, timeout: 600_000 });
 }
 
 /**

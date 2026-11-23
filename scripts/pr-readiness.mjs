@@ -321,6 +321,7 @@ export const MAX_FILE_LIST = 50;
  */
 export function sanitizeFilename(name) {
   return name
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/`/g, "'")
     .replace(/[\r\n]+/g, ' ');

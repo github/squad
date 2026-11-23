@@ -24,6 +24,64 @@ export const CAPABILITIES = ['supported', 'degraded', 'unsupported', 'n/a'];
 export const VALIDATION_LEVELS = ['validated-live', 'validated-test', 'static-only', 'untested', 'blocked'];
 const CAPABILITY_ICON = { supported: '✅', degraded: '⚠️', unsupported: '❌', 'n/a': '—' };
 const VALIDATION_ICON = { 'validated-live': '🖥️', 'validated-test': '🧪', 'static-only': '📄', untested: '❔', blocked: '⛔' };
+function escapePlain(value) {
+  let backslashes = 0;
+  let result = '';
+  for (const char of value) {
+    if (char === '|' && backslashes % 2 === 0) result += '\\';
+    result += char;
+    backslashes = char === '\\' ? backslashes + 1 : 0;
+  }
+  return result;
+}
+
+function escapeCodeSpan(content, delimiter) {
+  let backslashes = 0;
+  for (const char of content) {
+    if (char === '\\') {
+      backslashes++;
+    } else {
+      if (char === '|' && backslashes % 2 !== 0) {
+        // A table cannot represent an odd number of backslashes before a pipe
+        // inside a Markdown code span; use equivalent, escaped inline HTML.
+        let text = content.replace(/\r\n?|\n/g, ' ');
+        if (text.startsWith(' ') && text.endsWith(' ') && /[^ ]/.test(text)) text = text.slice(1, -1);
+        const encoded = Array.from(text, (char) =>
+          /[A-Za-z0-9 ]/.test(char) ? char : `&#${char.codePointAt(0)};`,
+        ).join('');
+        return `<code>${encoded}</code>`;
+      }
+      backslashes = 0;
+    }
+  }
+  let escaped = '';
+  for (const char of content) escaped += char === '|' ? '\\|' : char;
+  return `${delimiter}${escaped}${delimiter}`;
+}
+
+function escapeTableCell(value) {
+  const runs = [...value.matchAll(/`+/g)].map((match) => {
+    let slashes = 0;
+    for (let i = match.index - 1; i >= 0 && value[i] === '\\'; i--) slashes++;
+    return { start: match.index, end: match.index + match[0].length, delimiter: match[0], escaped: slashes % 2 !== 0 };
+  });
+  const next = new Map();
+  const closing = new Map();
+  for (const run of [...runs].reverse()) {
+    if (next.has(run.delimiter)) closing.set(run.start, next.get(run.delimiter));
+    next.set(run.delimiter, run);
+  }
+  let result = '';
+  let cursor = 0;
+  for (const run of runs) {
+    const end = closing.get(run.start);
+    if (run.start < cursor || run.escaped || !end) continue;
+    result += escapePlain(value.slice(cursor, run.start));
+    result += escapeCodeSpan(value.slice(run.end, end.start), run.delimiter);
+    cursor = end.end;
+  }
+  return result + escapePlain(value.slice(cursor));
+}
 
 export function evidenceKind(entry) {
   return entry.split(':')[0];
@@ -122,7 +180,7 @@ export function render(matrix) {
     lines.push('| Feature | Test (title; each generated test appends the host as `[<host>]`) | Hosts | Meaning |');
     lines.push('|---------|-----------------------------|-------|---------|');
     for (const e of matrix.expectedFailures) {
-      lines.push(`| [${e.featureId}](#${e.featureId}) | \`${e.test.replace(/\|/g, '\\|')}\` (${e.kind}${e.perHost ? ', per host' : ''}) | ${(e.hosts ?? []).map((h) => `\`${h}\``).join(' ')} | ${e.meaning} |`);
+      lines.push(`| [${e.featureId}](#${e.featureId}) | ${escapeTableCell(`\`${e.test}\``)} (${e.kind}${e.perHost ? ', per host' : ''}) | ${(e.hosts ?? []).map((h) => `\`${h}\``).join(' ')} | ${e.meaning} |`);
     }
     lines.push('');
   }
@@ -145,7 +203,7 @@ export function render(matrix) {
         const c = f.cells[h];
         return `${CAPABILITY_ICON[c.capability]} ${VALIDATION_ICON[c.validation]}`;
       });
-      lines.push(`| [${f.name.replace(/\|/g, '\\|')}](#${f.id}) | ${f.dependsOn.join(', ')}${f.hostIndependent ? ' (host-independent)' : ''} | ${cells.join(' | ')} |`);
+      lines.push(`| [${escapeTableCell(f.name)}](#${f.id}) | ${f.dependsOn.join(', ')}${f.hostIndependent ? ' (host-independent)' : ''} | ${cells.join(' | ')} |`);
     }
     lines.push('');
   }
@@ -167,7 +225,7 @@ export function render(matrix) {
       const notes = c.notes ? ` _${c.notes}_` : '';
       const flags = [c.expectedFailure ? ' (expected failure)' : '', c.blockedReason ? ` — ${c.blockedReason}` : ''].join('');
       const evidence = c.evidence.map((v) => `\`${v}\``).join('<br>') || '—';
-      lines.push(`| \`${h}\` | ${CAPABILITY_ICON[c.capability]} ${c.capability} | ${VALIDATION_ICON[c.validation]} ${c.validation}${flags.replace(/\|/g, '\\|')} | ${c.mechanism.replace(/\|/g, '\\|')}${notes.replace(/\|/g, '\\|')} | ${evidence.replace(/\|/g, '\\|')} |`);
+      lines.push(`| \`${h}\` | ${CAPABILITY_ICON[c.capability]} ${c.capability} | ${VALIDATION_ICON[c.validation]} ${c.validation}${escapeTableCell(flags)} | ${escapeTableCell(c.mechanism)}${escapeTableCell(notes)} | ${escapeTableCell(evidence)} |`);
     }
     lines.push('');
   }
@@ -179,7 +237,7 @@ export function render(matrix) {
     lines.push('| Date | Host | Scenario | Outcome | Observed tools | Notes |');
     lines.push('|------|------|----------|---------|----------------|-------|');
     const OUTCOME = { pass: '✅ pass', partial: '⚠️ partial', fail: '🔴 fail', blocked: '⛔ blocked' };
-    for (const r of matrix.liveRuns) lines.push(`| ${r.date} | \`${r.host}\` | ${r.scenario} | ${OUTCOME[r.outcome] ?? r.outcome} | ${(r.observedTools ?? []).map((t) => `\`${t}\``).join(', ') || '—'} | ${(r.notes ?? '').replace(/\|/g, '\\|')} |`);
+    for (const r of matrix.liveRuns) lines.push(`| ${r.date} | \`${r.host}\` | ${r.scenario} | ${OUTCOME[r.outcome] ?? r.outcome} | ${(r.observedTools ?? []).map((t) => `\`${t}\``).join(', ') || '—'} | ${escapeTableCell(r.notes ?? '')} |`);
     lines.push('');
   }
   return lines.join('\n') + '\n';

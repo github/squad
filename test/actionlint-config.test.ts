@@ -118,4 +118,21 @@ describe('actionlint config (#1827)', () => {
     expect(workflow).not.toMatch(/automatically generated\|DO NOT EDIT/i);
     expect(workflow).toMatch(/actionlint \.github\/workflows\/\*\.yml/);
   });
+
+  it('binds a manually requested SHA to the selected ref before checkout', () => {
+    const workflow = parse(readFileSync(LINT_WORKFLOW_PATH, 'utf8'));
+    const steps = workflow.jobs.actionlint.steps as Array<{
+      name?: string;
+      if?: string;
+      env?: Record<string, string>;
+      run?: string;
+      with?: Record<string, string>;
+    }>;
+    const validate = steps.find((step) => step.name === 'Validate requested SHA');
+    const checkout = steps.find((step) => step.if === "github.event_name == 'workflow_dispatch'" && step.with?.ref);
+    expect(validate?.env?.DISPATCH_SHA).toBe('${{ github.sha }}');
+    expect(validate?.run).toContain('[ "$SOURCE_SHA" = "$DISPATCH_SHA" ]');
+    expect(checkout?.with?.ref).toBe('${{ github.sha }}');
+    expect(steps.indexOf(validate!)).toBeLessThan(steps.indexOf(checkout!));
+  });
 });

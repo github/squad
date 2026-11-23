@@ -25,7 +25,7 @@ export const END = '<!-- UPGRADE-MATRIX:END -->';
 const PLATFORM_LABEL = { win32: 'Windows', linux: 'Linux', darwin: 'macOS' };
 const STATUS_ICON = { pass: '✅', fail: '🔴', skipped: '⏭️' };
 
-const esc = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+const esc = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 export function platformsOf(matrix) {
   return [...new Set(matrix.runs.map((r) => r.platform))].sort();
@@ -156,6 +156,10 @@ export function renderSection(matrix) {
       const trigger = run.runUrl ? `[${run.event}](${run.runUrl})` : run.event;
       lines.push(`| ${PLATFORM_LABEL[run.platform] ?? run.platform} (\`${run.platform}\`) | ${run.arch} | ${run.node} | v${run.target} | \`${run.targetSha.slice(0, 12)}\` | ${trigger} | ${run.recordedAt.slice(0, 10)} | ${esc(summarySentence(s, matrix))} |`);
     }
+    lines.push('');
+  }
+  if (matrix.historicalRuns?.length) {
+    lines.push('_Earlier runs remain in `historicalRuns` in the fixture; they do not attest the current harness._');
     lines.push('');
   }
   lines.push('### Producers (pinned, immutable provenance)');

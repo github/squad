@@ -63,4 +63,10 @@ describe('release script policy', () => {
   ])('allows single-line inline JavaScript via %s', (_name, workflow) => {
     expect(findWorkflowJavaScriptViolations(workflow, 'fixture.yml')).toEqual([]);
   });
+
+  it('handles long whitespace without backtracking while detecting a continued eval', () => {
+    const gap = '\t'.repeat(10_000);
+    expect(findWorkflowJavaScriptViolations(`run: |\n  node${gap}--no-warnings${gap}-e "a\n  b"\n`))
+      .not.toEqual([]);
+  });
 });

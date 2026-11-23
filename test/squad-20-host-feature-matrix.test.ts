@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import MarkdownIt from 'markdown-it';
 import { CAPABILITY_TOKENS_BY_HOST, CLIENT_IDS, extractCanonicalCoordinatorHeadings } from '../packages/squad-sdk/src/client/adapters/index.js';
 import { installClients } from '../packages/squad-sdk/src/client/index.js';
 import { createStateMcpSession } from '../packages/squad-cli/src/cli/commands/state-mcp.js';
@@ -217,6 +218,46 @@ describe('host-feature-matrix.json integrity', () => {
     const expected = render(matrix).replace(/\r\n/g, '\n');
     const actual = fs.readFileSync(PAGE_PATH, 'utf8').replace(/\r\n/g, '\n');
     expect(actual, 'docs/src/content/docs/reference/host-feature-matrix.md is stale; run node scripts/render-host-feature-matrix.mjs').toBe(expected);
+  });
+
+  it('preserves code-span backslashes while escaping table pipes', async () => {
+    const { render } = (await import(RENDERER)) as { render: (m: unknown) => string };
+    const fixture = structuredClone(matrix);
+    const feature = fixture.features.find((f) => f.id === 'dual-root-remote-mode')!;
+    const cell = feature.cells['opencode']!;
+    cell.mechanism = 'Path `..\\base`, ``quoted ` ..\\root``, and ``a\\|*bold* [link](url) `tick` & <tag>`` | end';
+    cell.evidence = ['validated-test:test\\source.ts::handles | values'];
+    const page = render(fixture);
+    const section = page.split('### dual-root-remote-mode\n')[1]!;
+    const row = section.split('\n').find((line) => line.startsWith('| `opencode` |'))!;
+    const html = new MarkdownIt({ html: true }).render([
+      '| Host | Capability | Validation | Mechanism | Evidence |',
+      '| --- | --- | --- | --- | --- |',
+      row,
+    ].join('\n'));
+    expect(html.match(/<td>/g)).toHaveLength(5);
+    expect(html).toContain('<code>..\\base</code>');
+    expect(html).toContain('<code>quoted ` ..\\root</code>');
+    expect(html).toContain('<code>a\\|*bold* [link](url) `tick` &amp; &lt;tag&gt;</code>');
+    expect(html).toContain('<code>validated-test:test\\source.ts::handles | values</code>');
+  });
+
+  it('preserves Markdown escapes while keeping plain pipes in the same table cell', async () => {
+    const { render } = (await import(RENDERER)) as { render: (m: unknown) => string };
+    const fixture = structuredClone(matrix);
+    const feature = fixture.features.find((f) => f.id === 'dual-root-remote-mode')!;
+    feature.cells['opencode']!.mechanism = String.raw`before \*literal\* a\|b c\\|d e\\\|f`;
+    const section = render(fixture).split('### dual-root-remote-mode\n')[1]!;
+    const row = section.split('\n').find((line) => line.startsWith('| `opencode` |'))!;
+    const html = new MarkdownIt().render([
+      '| Host | Capability | Validation | Mechanism | Evidence |',
+      '| --- | --- | --- | --- | --- |',
+      row,
+    ].join('\n'));
+
+    expect(html.match(/<td>/g)).toHaveLength(5);
+    expect(html).toContain(String.raw`before *literal* a|b c\|d e\|f`);
+    expect(html).not.toContain('<em>literal');
   });
 });
 

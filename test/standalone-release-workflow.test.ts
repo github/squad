@@ -331,17 +331,19 @@ describe('standalone release handoff', () => {
     expect(standaloneWorkflow.on?.release).toBeUndefined();
   });
 
-  it('pins every standalone checkout and cross-job artifact to source_sha', () => {
+  it('checks out the trusted dispatch SHA and binds it and cross-job artifacts to source_sha', () => {
     for (const [jobName, job] of Object.entries(standaloneWorkflow.jobs)) {
       const steps = job.steps ?? [];
       for (const [index, step] of steps.entries()) {
         if (!step.uses?.startsWith('actions/checkout@')) continue;
-        expect(step.with?.ref, `${jobName} checkout ref`).toBe('${{ inputs.source_sha }}');
+        expect(step.with?.ref, `${jobName} checkout ref`).toBe('${{ github.sha }}');
         const verify = steps[index + 1];
         if (jobName === 'guard') {
           const validate = stepNamed(job, 'Validate inputs').run ?? '';
           expect(validate).toContain('head_sha="$(git rev-parse HEAD)"');
           expect(validate).toContain('test "$head_sha" = "$SOURCE_SHA"');
+          expect(validate).toContain('test "$DISPATCH_SHA" = "$SOURCE_SHA"');
+          expect(validate).toContain('test "$WORKFLOW_SHA" = "$SOURCE_SHA"');
           expect(validate).toContain('echo "Verified checkout HEAD: ${head_sha}"');
         } else {
           expect(verify?.name, `${jobName} checkout verification`).toBe(
@@ -919,7 +921,7 @@ describe('automated package publication', () => {
       const checkout = standaloneWorkflow.jobs[jobName].steps?.find((step) =>
         step.uses?.startsWith('actions/checkout@'),
       );
-      expect(checkout?.with?.ref, jobName).toBe('${{ inputs.source_sha }}');
+      expect(checkout?.with?.ref, jobName).toBe('${{ github.sha }}');
     }
   });
 
