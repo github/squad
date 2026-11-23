@@ -23,7 +23,7 @@ function docsBuildSkipReason(): string | null {
 }
 
 // Expected content directories in src/content/docs/
-const EXPECTED_GET_STARTED = ['installation', 'first-session', 'five-minute-start', 'choose-your-interface', 'migration'];
+const EXPECTED_GET_STARTED = ['installation', 'agent-setup', 'first-session', 'five-minute-start', 'choose-your-interface', 'migration'];
 
 const EXPECTED_GUIDES = ['agent-framework-integration', 'build-autonomous-agent', 'building-extensions', 'building-resilient-agents', 'contributing', 'contributors', 'extensibility', 'faq', 'gh-aw', 'github-auth-setup', 'sample-prompts', 'shell', 'tips-and-tricks'];
 
