@@ -14,19 +14,19 @@
     "screenshots": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.2",
+    "@astrojs/markdown-remark": "^7.3.10",
     "@astrojs/rss": "^4.0.19",
-    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/sitemap": "^3.7.6",
     "@fontsource-variable/mona-sans": "^5.3.0",
     "@primer/css": "^22.3.3",
     "@primer/primitives": "^11.10.0",
-    "astro": "^7.3.8",
+    "astro": "^7.4.13",
     "sharp": "^0.35.5",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
-    "@playwright/test": "^1.64.0",
-    "pagefind": "^1.5.2"
+    "@playwright/test": "^1.65.1",
+    "pagefind": "^1.6.0"
   }
 }
