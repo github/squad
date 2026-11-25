@@ -2,69 +2,40 @@
 
 [English](README.md) | [中文](README.zh.md)
 
-**Human-led AI agent teams for any project.** One command. A team that helps you move faster with your code.
+**Human-led AI agent teams for any project.**
 
-[![Platform](https://img.shields.io/badge/platform-GitHub%20Copilot%20%2B%206%20more%20hosts-blue)](#use-squad-in-other-ai-hosts)
+Squad gives you a team of specialists through GitHub Copilot and other AI clients. Describe what you're building; your team lives in your repository and carries context across sessions. You stay in charge of priorities, approvals, and final changes.
 
-Breaking changes are documented in [CHANGELOG.md](CHANGELOG.md).
+## 1. Install Squad
 
----
-
-## What is Squad?
-
-Squad gives you a human-directed AI development team through GitHub Copilot. Describe what you're building. Get a team of specialists — frontend, backend, tester, lead — that live in your repo as files. They persist across sessions, learn your codebase, share decisions, and help you move faster without giving up oversight.
-
-Squad is a productivity tool for humans, not a replacement for engineers, reviewers, or decision-makers. People stay accountable for priorities, approvals, and final changes; Squad helps with coordination, repetition, and parallel execution.
-
-It's not a chatbot wearing hats. Each team member runs in its own context, reads only its own knowledge, and writes back what it learned so the work stays inspectable.
-
-> **Responsible AI stance** — Squad is built to amplify a human operator with GitHub Copilot, not to remove humans from the loop. Use it to delegate faster, review better, and keep governance close to the code.
-
----
-
-## Quick Start
-
-### 1. Create your project
-
-```bash
-mkdir my-project && cd my-project
-git init
-```
-
-**✓ Validate:** Run `git status` — you should see "No commits yet".
-
-### 2. Install Squad
-
-Choose the install method for your platform:
+Install [Git](https://git-scm.com/) and your preferred AI client, then choose one Squad installation method:
 
 | Method | Command |
 |--------|---------|
 | npm (all platforms, Node.js 22.5+) | `npm install -g @bradygaster/squad-cli` |
 | Homebrew (macOS) | `brew install --cask bradygaster/squad/squad` |
 | WinGet (Windows) | `winget install --id bradygaster.Squad --exact` |
-| Install script (macOS/Linux, no npm) | See [Standalone Install](https://github.github.com/squad/docs/features/standalone-install/) |
 
-Preview and insider builds are available as `squad-preview` and
-`squad-insider` Homebrew casks, or as `bradygaster.Squad.Preview` and
-`bradygaster.Squad.Insider` WinGet packages.
+Homebrew and WinGet include Node.js. For install scripts, direct downloads, and prerequisites, see the [installation guide](docs/src/content/docs/get-started/installation.md).
 
-Direct archives for macOS, Linux, and Windows are also available from
-[GitHub Releases](https://github.com/github/squad/releases/latest).
-
-All methods install the same CLI. Standalone installs vendor Node.js, so they do
-not require Node.js or access to the npm registry. See the
-[complete installation guide](https://github.github.com/squad/docs/get-started/installation/)
-for prerequisites and platform details.
-
-### 3. Initialize Squad for your client
-
-For GitHub Copilot (CLI or VS Code), run:
+Check that the CLI is available:
 
 ```bash
-squad init
+squad --version
 ```
 
-To choose a client explicitly, use `--client`:
+## 2. Open your project
+
+Open a terminal in an existing Git repository, or create one:
+
+```bash
+mkdir my-project && cd my-project
+git init
+```
+
+## 3. Initialize for your client
+
+For GitHub Copilot (CLI or VS Code), run `squad init`. To choose a client explicitly, run one of:
 
 | Client | Initialize in your project |
 |--------|----------------------------|
@@ -83,680 +54,41 @@ squad init --client copilot,cursor,codex
 squad init --client all
 ```
 
-These clients share one `.squad/` team. See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md) for client-specific launch steps and MCP setup.
+These clients share one `.squad/` team. Check that `.squad/team.md` was created.
 
-> **⚡ Want to be up and running in under a second?** Use `squad init --preset default` to start with a fully-configured squad — complete with members, charters, and routing rules — ready to go immediately. The default `squad init` (without the flag) walks you through setup step by step, ideal if you prefer to build and customize your squad deliberately.
+## 4. Launch your AI client
 
-**✓ Validate:** Check that `.squad/team.md` was created in your project.
-
-### 4. Authenticate with GitHub (for Issues, PRs, and Ralph)
+**Copilot CLI:** Sign in to Copilot, then launch Squad from your project directory:
 
 ```bash
-gh auth login
+copilot --agent squad
 ```
 
-**✓ Validate:** Run `gh auth status` — you should see "Logged in to github.com".
+**VS Code:** Open the project, open Copilot Chat, and select the **Squad** agent.
 
-### 5. Open Copilot and go
+**Other clients:** Follow the [per-client launch and MCP setup instructions](docs/src/content/docs/scenarios/using-squad-across-clients.md) for your chosen client. Each client needs its own sign-in and model access.
 
-```
-copilot --agent squad --yolo
-```
+For GitHub issues and pull requests, also install the [GitHub CLI](https://cli.github.com/) and run `gh auth login`; verify with `gh auth status`.
 
-> **Why `--yolo`?** Squad makes many tool calls in a typical session. Without it, Copilot will prompt you to approve each one.
+## 5. Set up your team and give it work
 
-**In VS Code**, open Copilot Chat and select the **Squad** agent.
+Tell Squad what you're building:
 
-Then:
-
-```
+```text
 I'm starting a new project. Set up the team.
 Here's what I'm building: a recipe sharing app with React and Node.
 ```
 
-**✓ Validate:** Squad responds with team member proposals. Type `yes` to confirm — they're ready to work.
+Review the proposed team and confirm when you're ready. Then give it a focused task:
 
-Squad proposes a team — each member named from a persistent thematic cast. You say **yes**. They're ready.
-
----
-
-## .NET package
-
-Building a .NET app that should call a Squad team as a Microsoft Agent Framework agent? `Squad.Agents.AI` is a NuGet package under [`src/Squad.Agents.AI`](src/Squad.Agents.AI/README.md). Version **1.0.0** targets .NET 8, 9, and 10 and registers a Squad-backed `AIAgent` in DI. See the package README for installation and local validation before publication.
-
-## Upgrading
-
-Upgrading Squad is a two-step process.
-
-**Step 1: Update the CLI binary**
-
-Use the same channel you installed from:
-
-| Installed with | Update command |
-|----------------|----------------|
-| npm | `npm install -g @bradygaster/squad-cli@latest` |
-| Homebrew | `brew upgrade --cask squad` |
-| WinGet | `winget upgrade --id bradygaster.Squad --exact` |
-| Install script | Re-run the [install script](https://github.github.com/squad/docs/features/standalone-install/#macos-and-linux) |
-| Direct archive | Download the newer archive from [GitHub Releases](https://github.com/github/squad/releases/latest) |
-
-**Step 2: Update Squad-owned files in your project**
-
-```bash
-squad upgrade
+```text
+Team, add a recipe search page and tests. Ask me before expanding the scope.
 ```
 
-`squad upgrade` updates `squad.agent.md`, `.github/skills`, Squad workflows and `.squad/templates/` to the latest versions, comparing content first so a re-run (or a CRLF checkout) changes nothing, and backing up any file you customized to `<file>.local-backup` before overwriting it. It never touches your `.squad/` team state — your agents, decisions, and history are always preserved.
+Review the team's changes and test results before accepting them. Say **"squad commands"** in chat to discover more actions.
 
-Use `--force` to re-apply updates even when your installed version already matches the latest.
+## Next steps
 
-### Use Squad in other AI hosts
-
-Squad is not tied to one client. Use the [Quick Start client table](#3-initialize-squad-for-your-client) to initialize a new project for your preferred hosts. To add hosts to an existing project and refresh every configured host, run:
-
-```bash
-squad upgrade --client cursor,codex
-```
-
-Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered.
-
-See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md) for setup, launch, and approval steps for each host; the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md) for generated-file details; and [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md) for how clients share team state.
-
----
-
-## Local Development Installation
-
-To install and run Squad from source for development:
-
-```bash
-# Clone the repository
-git clone https://github.com/github/squad.git
-cd squad
-
-# Install dependencies (npm workspaces)
-npm install
-
-# Build the project (SDK first, then CLI)
-npm run build
-
-# Run the CLI directly
-node ./packages/squad-cli/dist/cli-entry.js init
-
-# Or link it globally for convenience
-npm run dev:link
-```
-
-After `npm run dev:link`, the `squad` command will be available globally and will use your local build. To update after code changes, re-run `npm run build` to recompile.
-
----
-
-## Quick Commands
-
-Say **"squad commands"** in chat to see a categorized menu of common operations — install & upgrade, team management, issues & PRs, plugins, model settings, and session state. You can also ask naturally: *"how do I switch state backends?"* or *"how do I add a team member?"* — Squad matches your intent and walks you through it. The `squad-commands` skill ships out of the box with every `squad init` and `squad upgrade`.
-
----
-
-## All Commands (17 commands)
-
-| Command | What it does |
-|---------|-------------|
-| `squad init` | **Init** — scaffold Squad in the current directory (idempotent — safe to run multiple times); alias: `cast`; `--client <list>` also projects Claude Code, Kiro, OpenCode, Cursor, Codex and Antigravity; use `--mode remote <path>` for dual-root mode |
-| `squad upgrade` | Update Squad-owned files to latest; never touches your team state; `--client <list>` adds hosts and refreshes every configured projection; use `--migrate-directory` to rename `.ai-team/` → `.squad/` |
-| `squad upgrade --self` | Update the Squad CLI package itself on its own channel (prerelease installs follow `@insider`, stable follows `@latest`); `--dry-run` prints the command without installing; `--insider` forces the prerelease channel; a downgrade is refused unless `--force` |
-| `squad client list` | Show the client hosts configured in `.squad/config.json` and whether their projected files are present; `squad client add <list>` projects more hosts |
-| `squad update-check` | Report cached CLI update status for tooling/CI; use `--json` for structured output, `--refresh` to bypass the cache |
-| `squad status` | Show which squad is active and why |
-| `squad triage` | **Watch mode** — poll for issues and auto-triage to team (aliases: `watch`, `loop`); use `--interval <minutes>` to set polling frequency (default: 10); with `--execute` dispatch Copilot agents; use `--agent-cmd`, `--copilot-flags`, `--auth-user` to customize agent execution; `--health` shows watch status; `--log-file` for diagnostics |
-| `squad copilot` | Add/remove the Copilot coding agent (@copilot); use `--off` to remove, `--auto-assign` to enable auto-assignment |
-| `squad doctor` | Check your setup and diagnose issues (alias: `heartbeat`) |
-| `squad link <team-repo-path>` | Connect to a remote team |
-| `squad externalize` | Move `.squad/` state outside the working tree; survives branch switches; use `--key <name>` for custom project key |
-| `squad internalize` | Move externalized state back into `.squad/` |
-| `squad shell` | **Deprecated** — Launch interactive shell explicitly. Use `copilot --agent squad` instead. |
-| `squad export` | Export squad to a portable JSON snapshot |
-| `squad import <file>` | Import squad from an export file |
-| `squad plugin marketplace add\|remove\|list\|browse` | Manage plugin marketplaces |
-| `squad upstream add\|remove\|list\|sync` | Manage upstream Squad sources |
-| `squad nap` | Context hygiene — compress, prune, archive; use `--deep` for aggressive compression, `--dry-run` to preview changes |
-| `squad aspire` | Open Aspire dashboard for observability |
-| `squad dashboard` | Live local page of the team's Claude Code sessions on 127.0.0.1; `stop`, `status`, `--detach`, `--open`, `--session <id>`, `--stream <file>` |
-| `squad scrub-emails [directory]` | Remove email addresses from Squad state files (default: `.squad/`) |
-
----
-
-## Watch Mode — Ralph's Automated Polling
-
-Ralph continuously polls for work and dispatches agents to handle it. Watch mode helps a human team stay responsive — Ralph automates triage, execution handoffs, and monitoring, then escalates back to people when judgment or approval is needed.
-
-### Quick Start
-
-```bash
-# Monitor for issues (triage mode — no execution)
-squad watch
-
-# Monitor and auto-execute against actionable issues
-squad watch --execute --interval 5
-
-# With a custom agent runner that uses --task instead of -p
-squad watch --execute \
-  --agent-cmd "custom-agent run --task {prompt} --autopilot" \
-  --auth-user myaccount
-
-# Run watch with diagnostics
-squad watch --execute --log-file ./watch.log --verbose
-
-# Check health of running watch process
-squad watch --health
-```
-
-### Key Flags
-
-| Flag | Description |
-|------|-------------|
-| `--execute` | Enable agent execution (spawn Copilot sessions for actionable issues) |
-| `--interval N` | Poll every N minutes (default: 10) |
-| `--agent-cmd` | Custom agent command; use one standalone `{prompt}` token to place the prompt, or Squad appends `-p <prompt>` |
-| `--copilot-flags` | Flags passed to the default Copilot runner (e.g., `--yolo --autopilot`) |
-| `--auth-user` | GitHub/Azure DevOps account to use for agent auth |
-| `--log-file` | Mirror output to file for later review and diagnostics |
-| `--verbose` | Show extra diagnostic output (auth probes, callbacks, pulls) |
-| `--health` | Show status of running watch: PID, uptime, auth readiness, capabilities |
-| `--overnight-start HH:MM` | Pause watch during off-hours (e.g., `--overnight-start 18:00`) |
-| `--overnight-end HH:MM` | Resume watch at this time (e.g., `--overnight-end 08:00`) |
-| `--notify-level` | Control output verbosity (`all` / `important` / `none`, default: `important`) |
-| `--state-backend` | Persistence strategy (`git-notes` or `orphan-branch`, default: in-memory) |
-
-### How Watch Decides What to Execute
-
-Ralph uses an **agent-delegated selection pattern**:
-
-1. Ralph scans for triage-eligible issues (unassigned, labeled, etc.)
-2. Ralph builds a context snapshot: issue list, squad state, recent decisions
-3. Ralph writes this context to a **temp file** using the `-p <path>` flag
-4. Ralph invokes the agent with that file: `gh copilot -p context.md`
-5. The agent **decides which issue to work on** and **how**
-6. Ralph monitors execution, logs results, updates issue status
-
-This design keeps the polling loop lean while letting agents handle issue selection automatically under the team's rules, review gates, and escalation policy.
-
-### Issue Selection & Escalation
-
-Ralph provides a rich prompt scaffold to the agent:
-
-```
-## Work Context
-
-### Available Issues (prioritized)
-- #42 Urgent bug in auth (P0)
-- #89 Performance review pending (P1)
-- #123 Docs update (P2)
-
-### Why These Issues Matter
-...context from decision archive...
-
-### Success Criteria
-- Tests pass
-- Changes match team conventions
-- PR linked to issue
-
-### When to Escalate
-If blocker detected → pause, log, notify humans
-```
-
-Agents see **full context** and can decide intelligently rather than blindly executing random work.
-
-### Error Recovery (4-Tier Escalation)
-
-Watch includes a tiered remediation strategy:
-
-1. **Tier 1 — Circuit Breaker Reset**: Clear and retry
-2. **Tier 2 — Auth Reprobe**: Re-verify credentials
-3. **Tier 3 — Git Pull**: Update local state
-4. **Tier 4 — Pause 30m**: Back off for human intervention
-
-This prevents watch from spamming the same failure endlessly.
-
-### State Backends
-
-Watch can persist its state in different ways:
-
-```bash
-# Default: in-memory (loses state on restart)
-squad watch --execute
-
-# Persist to git-notes (survives restarts, no new branches)
-squad watch --execute --state-backend git-notes
-
-# Persist to orphan branch (isolated history, easy to prune)
-squad watch --execute --state-backend orphan-branch
-```
-
-### Graceful Shutdown
-
-To stop a running watch process gracefully:
-
-```bash
-# Create sentinel file
-touch .squad/ralph-stop
-
-# Watch will finish current round and exit cleanly
-# Logs final state, cleans scratch dirs
-```
-
-### Cleanup
-
-Watch automatically prunes stale artifacts:
-- Scratch directories older than 7 days
-- Log files older than 30 days
-- Orphaned orchestration state
-
-### Monitoring Watch
-
-Check on a running watch:
-
-```bash
-squad watch --health
-```
-
-Output example:
-```
-Ralph Watch Status
-
-PID: 12345
-Uptime: 2h 15m
-Last Poll: 2 minutes ago
-
-Auth: Ready (account: myaccount@github.com)
-Capabilities: Issue triage, PR review, ADO sync
-
-Next Poll: 14:35 (in 3 minutes)
-Round: 42 / 1200
-```
-
----
-
-## Interactive Shell
-
-> ⚠️ **Deprecated:** The interactive shell (`squad` with no arguments) has been deprecated. For the best Squad experience, use the [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli) instead.
->
-> ```bash
-> copilot --agent squad
-> ```
->
-> See [Choose your interface](docs/src/content/docs/get-started/choose-your-interface.md) for current options.
-
-Tired of typing `squad` followed by a command every time? Enter the interactive shell.
-
-### Entering the Shell
-
-```bash
-squad
-```
-
-No arguments. Just `squad`. You'll get a prompt:
-
-```
-squad >
-```
-
-You're now connected to your team. Talk to them.
-
-### Shell Commands
-
-All shell commands start with `/`:
-
-| Command | What it does |
-|---------|-------------|
-| `/status` | Check your team and what's happening |
-| `/history` | See recent messages |
-| `/agents` | List all team members |
-| `/sessions` | List saved sessions |
-| `/resume <id>` | Restore a past session |
-| `/version` | Show version |
-| `/clear` | Clear the screen |
-| `/help` | Show all commands |
-| `/quit` | Exit the shell (or Ctrl+C) |
-
-### Talking to Agents
-
-Use `@AgentName` (case-insensitive) or natural language with a comma:
-
-```
-squad > @Keaton, analyze the architecture of this project
-squad > McManus, write a blog post about our new feature
-squad > Build the login page
-```
-
-The coordinator routes messages to the right agents. Multiple agents can work in parallel—you'll see progress in real-time.
-
-### What the Shell Does
-
-- **Real-time visibility:** See agents working, decisions being recorded, blockers as they happen
-- **Message routing:** Describe what you need; the coordinator figures out who should do it
-- **Parallel execution:** Multiple agents work simultaneously on independent tasks
-- **Session persistence:** If an agent crashes, it resumes from checkpoint; you never lose context
-- **Decision logging:** Every decision is recorded in `.squad/decisions.md` for the whole team to see
-
-For more details on shell usage, see the commands table above.
-
-## Samples
-
-Eight working examples from beginner to advanced — casting, governance, streaming, Docker. See [samples/README.md](samples/README.md).
-
----
-
-## Agents Work in Parallel — You Stay in Control
-
-Squad helps one human coordinate more work at once. When you give a task, the coordinator launches every agent that can usefully start — simultaneously — while you keep priorities, review, and final decisions.
-
-```
-You: "Team, build the login page"
-
-  🏗️ Lead — analyzing requirements...          ⎤
-  ⚛️ Frontend — building login form...          ⎥ all launched
-  🔧 Backend — setting up auth endpoints...     ⎥ in parallel
-  🧪 Tester — writing test cases from spec...   ⎥
-  📋 Scribe — logging everything...             ⎦
-```
-
-When agents finish, the coordinator records follow-up work and leaves a breadcrumb trail so you can review what happened with full context:
-
-- **`decisions.md`** — every decision any agent made
-- **`orchestration-log/`** — what was spawned, why, and what happened
-- **`log/`** — full session history, searchable
-
-**Knowledge compounds across sessions.** Every time an agent works, it writes lasting learnings to its `history.md`. After a few sessions, agents know your conventions, your preferences, your architecture. They stop asking questions they've already answered.
-
-**And it's all in git.** Anyone who clones your repo gets the team — with all their accumulated knowledge.
-
-**Each agent gets the right model.** Squad picks models quality-first by default: premium for architecture, research and review, standard for code and docs, fast for mechanical work. Opt in to the `balanced` or `economy` profile, or to the `hydrafusion` research preview with `"modelProfile": "hydrafusion"` in `.squad/config.json`. Per-agent selection works in the Copilot CLI and app; VS Code runs every agent on the one session model, and so do the other hosts (Claude Code, Kiro, OpenCode, Cursor, Codex, Antigravity) for now — see the [Host Feature Matrix](docs/src/content/docs/reference/host-feature-matrix.md). See [Model Selection](https://github.github.com/squad/docs/features/model-selection/).
-
----
-
-## What Gets Created
-
-```
-.squad/
-├── team.md              # Roster — who's on the team
-├── routing.md           # Routing — who handles what
-├── decisions.md         # Shared brain — team decisions
-├── ceremonies.md        # Sprint ceremonies config
-├── casting/
-│   ├── policy.json      # Casting configuration
-│   ├── registry.json    # Persistent name registry
-│   └── history.json     # Universe usage history
-├── agents/
-│   ├── {name}/
-│   │   ├── charter.md   # Identity, expertise, voice
-│   │   └── history.md   # What they know about YOUR project
-│   └── scribe/
-│       └── charter.md   # Silent memory manager
-├── skills/              # Compressed learnings from work
-├── identity/
-│   ├── now.md           # Current team focus
-│   └── wisdom.md        # Reusable patterns
-└── log/                 # Session history (searchable archive)
-```
-
-**Commit this folder.** Your team persists. Names persist. Anyone who clones gets the team — with the same cast.
-
-### SDK-First Mode (New in Phase 1)
-
-> ⚠️ **Experimental.** SDK-first mode is under active development and has known bugs. Use markdown-first (the default) for production teams.
-
-Prefer TypeScript? You can define your team in code instead of markdown. Create a `squad.config.ts` with builder functions, run `squad build`, and the `.squad/` files are generated automatically.
-
-```typescript
-// squad.config.ts
-import { defineSquad, defineTeam, defineAgent } from '@bradygaster/squad-sdk';
-
-export default defineSquad({
-  team: defineTeam({ name: 'Platform Squad', members: ['@edie', '@mcmanus'] }),
-  agents: [
-    defineAgent({ name: 'edie', role: 'TypeScript Engineer', model: 'claude-sonnet-5' }),
-    defineAgent({ name: 'mcmanus', role: 'DevRel', model: 'claude-haiku-4.5' }),
-  ],
-});
-```
-
-Run `squad build` to generate all the markdown. See the [SDK-First Mode Guide](docs/src/content/docs/sdk-first-mode.md) for full documentation.
-
----
-
-## Monorepo Development
-
-Squad is a monorepo with two packages:
-- **`@bradygaster/squad-sdk`** — Core runtime and library for programmable agent orchestration
-- **`@bradygaster/squad-cli`** — Command-line interface that depends on the SDK
-
-### Building
-
-```bash
-# Install dependencies (npm workspaces)
-npm install
-
-# Build TypeScript to dist/
-npm run build
-
-# Build CLI bundle (dist/ + esbuild → cli.js)
-npm run build:cli
-
-# Watch mode for development
-npm run dev
-```
-
-### Testing
-
-```bash
-# Run all tests
-npm test
-
-# Watch mode
-npm run test:watch
-```
-
-### Linting
-
-```bash
-# Type check (no emit)
-npm run lint
-```
-
-### Publishing
-
-Squad uses [changesets](https://github.com/changesets/changesets) for independent versioning across packages:
-
-```bash
-# Add a changeset
-npx changeset add
-
-# Validate changesets
-npm run changeset:check
-```
-
-Changesets are resolved on the `main` branch; releases happen independently per package.
-
----
-
-## SDK documentation
-
-The SDK provides programmatic control over agent orchestration — custom tools, hook pipelines, file-write guards, PII scrubbing, reviewer lockout, and event-driven monitoring.
-
-- [SDK API reference](docs/src/content/docs/reference/sdk.md)
-- [Custom tools and hooks guide](docs/src/content/docs/reference/tools-and-hooks.md)
-- [Extensibility guide](docs/src/content/docs/guide/extensibility.md)
-- [Samples](samples/README.md) — eight working examples from beginner to advanced
-
-For SDK installation: `npm install @bradygaster/squad-sdk`
-
----
-
-## GitHub Agentic Workflows
-
-Cast a Squad for any repo — right from a GitHub issue.
-
-If you use [GitHub Agentic Workflows](https://github.blog/changelog/2025-05-19-github-agentic-workflows-public-preview/), you can install Squad as a reusable workflow and manage your team with slash commands in issue comments.
-
-### Install
-
-<!-- cspell:ignore agentics -->
-
-Squad requires GitHub Issues: slash commands are issue comments, and the merged
-bootstrap creates a research/proposals issue. Follow the
-[supported seven-step quick start](docs/src/content/docs/guide/gh-aw.md#quick-start),
-which checks and enables Issues before installation when the authenticated user
-has repository administration permission, and stops before creating a bootstrap
-PR when an administrator must enable them.
-
-```bash
-set -euo pipefail
-
-owner_repo="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
-issues_enabled="$(gh api "repos/${owner_repo}" --jq '.has_issues')"
-if [ "${issues_enabled}" != "true" ]; then
-  if ! gh api --method PATCH "repos/${owner_repo}" \
-    -F has_issues=true --silent; then
-    echo "STOP: A repository administrator must enable Settings > General > Features > Issues." >&2
-    exit 1
-  fi
-fi
-
-test "$(gh api "repos/${owner_repo}" --jq '.has_issues')" = "true" || {
-  echo "STOP: GitHub Issues must be enabled before installing Squad workflows." >&2
-  exit 1
-}
-
-SQUAD_SHA="<40-character-commit-sha>"  # explicit, maintainer-approved; never `commits/dev`
-[[ "${SQUAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
-  echo "STOP: SQUAD_SHA must be an explicit 40-character Squad commit SHA, not a branch name or shortened hash." >&2
-  exit 1
-}
-squad_package="$(gh api --hostname github.com -H 'Accept: application/vnd.github.raw+json' \
-  "repos/github/squad/contents/workflows/squad-workflows.manifest.json?ref=${SQUAD_SHA}" \
-  --jq '.package')" || squad_package=""
-test "${squad_package}" = "github/squad/workflows" || {
-  if [ -z "${squad_package}" ]; then
-    echo "STOP: cannot read workflows/squad-workflows.manifest.json from github/squad at ${SQUAD_SHA}." >&2
-    echo "Check gh auth status --hostname github.com and network access, and confirm SQUAD_SHA is a github/squad commit that has this manifest, then retry." >&2
-  else
-    echo "STOP: Squad ${SQUAD_SHA} does not declare the github/squad/workflows package (found '${squad_package}')." >&2
-    echo "Use a revision whose manifest declares github/squad/workflows, or ask the Squad maintainers for one. Older revisions download the Squad CLI from the bradygaster/squad fork, which has no releases." >&2
-  fi
-  exit 1
-}
-gh aw add "github/squad/workflows@${SQUAD_SHA}"
-rm -f .github/skills/agentic-workflows/SKILL.md
-git add -- \
-  .github/aw/ \
-  .github/skills/ \
-  .github/workflows/ \
-  .gitattributes
-git commit -m "Add Squad workflow"
-git push
-```
-
-`github/squad/workflows` verifies only at Squad revisions whose
-`workflows/squad-workflows.manifest.json` declares
-`"package": "github/squad/workflows"`, so the identity check stops on any other
-revision. Do not install an older revision as `bradygaster/squad/workflows`
-instead: its activation downloads the Squad CLI from the separately controlled
-`bradygaster/squad` fork, which has no releases. Use a revision whose manifest
-declares `github/squad/workflows`, or ask the Squad maintainers for one.
-
-`gh aw add` compiles the workflows automatically. If it reports unapproved
-safe-update changes, review them and run `gh aw compile --approve`.
-
-Review the complete generated diff before you commit:
-
-| Path | What gh-aw writes | Commit? |
-|------|-------------------|---------|
-| `.github/workflows/` | The Squad workflow sources, shared imports, compiled lock files, and `agentics-maintenance.yml` | Yes |
-| `.github/aw/` | Supporting gh-aw state, including pinned action versions and SHAs | Yes |
-| `.github/skills/` | The exact Squad-owned `gh-aw-enlistment` skill; remove gh-aw's generated mutable `agentic-workflows` router before staging | Yes |
-| `.gitattributes` | Marks compiled `.lock.yml` workflows as generated | Yes |
-| `.vscode/` | Workspace settings that enable GitHub Copilot for Markdown files in VS Code | Optional — commit only if you want to share this workspace setting |
-
-`agentics-maintenance.yml` is a second installed workflow. Squad configures its created pull request safe output to expire after 14 days, so this workflow runs scheduled expiration cleanup and also exposes manual maintenance operations. To omit it, create `.github/workflows/aw.json` with `{"maintenance": false}` before installing. gh-aw then warns that expiration is disabled and removes the maintenance workflow.
-
-Unlike the mutable router skill, `agentics-maintenance.yml` is compiled runtime
-output required for the configured 14-day safe-output expiration behavior. Keep
-it unless you explicitly disable maintenance before installation.
-
-#### Retrospective auto-implementation (opt-in behavior)
-
-`squad-improvement-worker` installs as part of the standard seven-workflow
-`gh aw add` command above — it is not a separate add-on. The two activation
-policies are separate: `squad-retro` can auto-dispatch `squad-implement-worker` on its
-own ordinary (non-proposal) action issues once you set
-`"squadRetroAutoImplement": "allow"` in `.squad/config.json` (only
-bot-authored retrospective issues with a valid `Action-Key:` qualify), and a
-maintainer can approve a governance-scoped retrospective proposal (paths
-under `.squad/skills/**` or `.squad/decisions/inbox/**` only) for automated
-implementation by commenting `/squad approve-improvement`, an
-`Approved-Revision:` content hash and one `Approved-Path:` line per approved
-file. The dispatcher forwards the issue and exact comment ID; the worker
-revalidates the human's permission, revision, revocations and actual patch.
-`/squad revoke-improvement` withdraws
-that authorization at any time — it is a reserved, read-only command open to
-any actor, and it emits no output of its own.
-
-Report/proposal-only remains the default. Ordinary opt-in dispatch is capped at
-three per wake-up (five action issues per report), with one delayed retry and a
-durable human handoff after exhaustion. Both workers produce drafts only;
-open, merged and closed-unmerged linked PRs suppress automatic duplicates.
-Human review and merge are always required.
-
-See [the gh-aw guide](https://github.github.com/squad/docs/guide/gh-aw/#retrospective-auto-implementation-opt-in) for the full authority model.
-
-### Slash commands
-
-| Command | What it does |
-|---------|-------------|
-| `/squad` | Cast a fresh team from repo analysis |
-| `/squad connect org/repo` | Link to an external squad |
-| `/squad adopt org/repo` | Fork a squad locally |
-| `/squad cast-member <spec>` | Add a team member |
-| `/squad retire <name>` | Remove a team member |
-| `/squad status` | Check current team |
-| `/squad implement` | Implement an issue or dispatch ready tasks from an epic |
-| `/squad retro` | Run the shared retrospective now; scheduled and evidence-driven wakeups use the same worker |
-| `/squad approve-improvement` | Authorize a governance-scoped retrospective proposal for `squad-improvement-worker` (write/maintain/admin only) |
-| `/squad revoke-improvement` | Withdraw a prior approval; reserved, read-only, open to anyone |
-
-### Casting brief tip
-
-Write a detailed team description in the issue body, then comment `/squad cast` — the issue becomes your casting brief. The more context you give, the better Squad tailors your team.
-
-📖 See [GitHub Agentic Workflows guide](https://github.github.com/squad/docs/guide/gh-aw/) for the complete setup, configuration, and usage reference.
-
----
-
-## Requirements
-
-- **Node.js** ≥22.5.0
-- **npm** ≥10.0.0
-- **Git** with SSH agent
-- **GitHub CLI** (`gh`) for GitHub integration
-
-## License
-
-This project is licensed under the terms of the MIT open source license. Please refer to the [LICENSE](./LICENSE) file for the full terms.
-
-## Maintainers
-
-- [@bradygaster](https://github.com/bradygaster)
-- [@tamirdresher](https://github.com/tamirdresher)
-
-See [CODEOWNERS](.github/CODEOWNERS) for the full list.
-
-## Support
-
-For help or questions about using Squad, please use [GitHub Discussions](https://github.com/github/squad/discussions). See [SUPPORT.md](./SUPPORT.md) for details.
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for build setup, monorepo structure, and guidelines.
-
-## Code of Conduct
-
-This project has adopted the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md). See the full text for details on expected behavior and reporting.
+- [First session guide](docs/src/content/docs/get-started/first-session.md) — working with your team.
+- [Documentation](https://github.github.com/squad/) — upgrades, features, and reference guides.
+- [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
