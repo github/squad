@@ -90,5 +90,6 @@ Review the team's changes and test results before accepting them. Say **"squad c
 ## Next steps
 
 - [First session guide](docs/src/content/docs/get-started/first-session.md) — working with your team.
+- [GitHub Agentic Workflows](docs/src/content/docs/guide/gh-aw.md) — setup and usage.
 - [Documentation](https://github.github.com/squad/) — upgrades, features, and reference guides.
 - [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
