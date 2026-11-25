@@ -20,18 +20,6 @@ It's not a chatbot wearing hats. Each team member runs in its own context, reads
 
 > **Responsible AI stance** — Squad is built to amplify a human operator with GitHub Copilot, not to remove humans from the loop. Use it to delegate faster, review better, and keep governance close to the code.
 
-### See it in Claude Code
-
-![Squad's team dashboard following a Claude Code session: the coordinator sends Dallas (Node.js engineer) to build a CLI and Parker (tester) to write tests at the same time, then Jordan (lead) reviews and Scribe records the decisions](docs/src/assets/images/squad-claude-dashboard.gif)
-
-A real run, sped up 12×: a fresh repository, `squad init --client claude`, then two prompts to `claude --agent squad`. "Cast a small team" ran `squad cast` for a lead, an engineer and a tester in 50 seconds. "Team, build the MVP" sent the engineer and the tester out in parallel, then the lead reviewed. The result was a commit with 22 passing `node --test` tests, about $2.60 of model time for both prompts. The page is `squad dashboard`, which reads Claude Code's own session files and needs no setup.
-
-```bash
-squad init --client claude
-claude --agent squad --mcp-config .mcp.json   # "Cast a team for this repo", then give it work
-squad dashboard --open                        # watch the team in your browser
-```
-
 ---
 
 ## Quick Start
@@ -63,20 +51,45 @@ Preview and insider builds are available as `squad-preview` and
 Direct archives for macOS, Linux, and Windows are also available from
 [GitHub Releases](https://github.com/github/squad/releases/latest).
 
-```bash
-squad init
-```
-
 All methods install the same CLI. Standalone installs vendor Node.js, so they do
 not require Node.js or access to the npm registry. See the
 [complete installation guide](https://github.github.com/squad/docs/get-started/installation/)
 for prerequisites and platform details.
 
+### 3. Initialize Squad for your client
+
+For GitHub Copilot (CLI or VS Code), run:
+
+```bash
+squad init
+```
+
+To choose a client explicitly, use `--client`:
+
+| Client | Initialize in your project |
+|--------|----------------------------|
+| GitHub Copilot (CLI or VS Code) | `squad init --client copilot` |
+| Kiro | `squad init --client kiro` |
+| OpenCode | `squad init --client opencode` |
+| Cursor | `squad init --client cursor` |
+| OpenAI Codex | `squad init --client codex` |
+| Google Antigravity | `squad init --client antigravity` |
+| Claude Code | `squad init --client claude` |
+
+Use a comma-separated list for multiple clients, or `all` for every supported client:
+
+```bash
+squad init --client copilot,cursor,codex
+squad init --client all
+```
+
+These clients share one `.squad/` team. See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md) for client-specific launch steps and MCP setup.
+
 > **⚡ Want to be up and running in under a second?** Use `squad init --preset default` to start with a fully-configured squad — complete with members, charters, and routing rules — ready to go immediately. The default `squad init` (without the flag) walks you through setup step by step, ideal if you prefer to build and customize your squad deliberately.
 
 **✓ Validate:** Check that `.squad/team.md` was created in your project.
 
-### 3. Authenticate with GitHub (for Issues, PRs, and Ralph)
+### 4. Authenticate with GitHub (for Issues, PRs, and Ralph)
 
 ```bash
 gh auth login
@@ -84,7 +97,7 @@ gh auth login
 
 **✓ Validate:** Run `gh auth status` — you should see "Logged in to github.com".
 
-### 4. Open Copilot and go
+### 5. Open Copilot and go
 
 ```
 copilot --agent squad --yolo
@@ -139,24 +152,15 @@ Use `--force` to re-apply updates even when your installed version already match
 
 ### Use Squad in other AI hosts
 
-Squad is not tied to one client. Add `--client` to project the same team and the `squad_state` backend into Claude Code, Kiro, OpenCode, Cursor, OpenAI Codex or Google Antigravity (alongside Copilot):
+Squad is not tied to one client. Use the [Quick Start client table](#3-initialize-squad-for-your-client) to initialize a new project for your preferred hosts. To add hosts to an existing project and refresh every configured host, run:
 
 ```bash
-squad init --client claude,opencode      # or: --client all
-squad upgrade --client codex             # add a host later; refreshes every configured host
+squad upgrade --client cursor,codex
 ```
 
 Each host gets a native coordinator file plus MCP wiring; your own settings in `.mcp.json`, `opencode.json` and the like are never clobbered.
 
-In Claude Code, Squad also installs as a plugin that carries the coordinator, `squad_state`, skills, hooks and slash commands, including `/squad:dashboard`, a live local page of the team at work (also `squad dashboard`):
-
-```bash
-claude plugin marketplace add github/squad
-claude plugin install squad@squad --scope project
-squad init --client claude --claude-plugin
-```
-
-See [Squad for Claude Code (plugin)](docs/src/content/docs/features/claude-code-plugin.md). See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md), [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md), and the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md).
+See [Using Squad across clients](docs/src/content/docs/scenarios/using-squad-across-clients.md) for setup, launch, and approval steps for each host; the [multi-client quickstart](docs/tutorials/multi-client-quickstart.md) for generated-file details; and [Squad 2.0 architecture](docs/src/content/docs/concepts/squad-2-0-architecture.md) for how clients share team state.
 
 ---
 
