@@ -127,6 +127,16 @@ function memberIds(agentsAbs: string): string[] {
     .sort();
 }
 
+function stripTrailingDotsAndSpace(value: string): string {
+  let end = value.length;
+  while (end > 0) {
+    const ch = value[end - 1]!;
+    if (ch !== '.' && !/\s/.test(ch)) break;
+    end--;
+  }
+  return value.slice(0, end).trim();
+}
+
 export function renderClaudeMember(
   id: string,
   charter: string,
@@ -145,8 +155,19 @@ export function renderClaudeMember(
   const role = parsed.identity.role;
   const notes = [...host.rejected];
 
-  const routed = routing.filter((r) => r.routeTo === id).map((r) => r.workType);
-  const summary = parsed.identity.purpose ?? (role ? `${name}, ${role.replace(/[.\s]+$/, '')}.` : `${name}, Squad team member.`);
+  const cleanRole = role ? stripTrailingDotsAndSpace(role) : undefined;
+  const roleKey = cleanRole ? cleanRole.toLowerCase() : undefined;
+  const routed = routing
+    .filter((r) => r.routeTo === id)
+    .map((r) => r.workType)
+    .filter((workType) => !roleKey || stripTrailingDotsAndSpace(workType).toLowerCase() !== roleKey);
+  const summary =
+    parsed.identity.purpose ??
+    (cleanRole
+      ? name.trim().toLowerCase() === roleKey
+        ? `${cleanRole}.`
+        : `${name}, ${cleanRole}.`
+      : `${name}, Squad team member.`);
   const description = oneLine(
     `${summary}${routed.length > 0 ? ` Owns: ${routed.join('; ')}.` : ''} Spawned by the Squad coordinator.`,
   );

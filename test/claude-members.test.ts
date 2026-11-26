@@ -93,6 +93,48 @@ describe('renderClaudeMember: charter → Claude subagent frontmatter', () => {
     expect(description).toBe('Owns the "API" layer. Owns: Backend. Spawned by the Squad coordinator.');
   });
 
+  it('omits duplicated member name and routed work types that match role', () => {
+    const qaCharter = '# QA Engineer — QA Engineer\n\n## Identity\n- **ID:** `qa-engineer`\n';
+    const mdOnlyRole = renderClaudeMember(
+      'qa-engineer',
+      qaCharter,
+      [{ workType: 'qa engineer.', routeTo: 'qa-engineer' }],
+      '.squad',
+      NOTE,
+    );
+    expect(JSON.parse(frontmatter(mdOnlyRole).description!)).toBe(
+      'QA Engineer. Spawned by the Squad coordinator.',
+    );
+
+    const mdWithExtraWorkType = renderClaudeMember(
+      'qa-engineer',
+      '# qa engineer — QA Engineer.\n',
+      [
+        { workType: 'QA Engineer', routeTo: 'qa-engineer' },
+        { workType: 'E2E Regression', routeTo: 'qa-engineer' },
+      ],
+      '.squad',
+      NOTE,
+    );
+    expect(JSON.parse(frontmatter(mdWithExtraWorkType).description!)).toBe(
+      'QA Engineer. Owns: E2E Regression. Spawned by the Squad coordinator.',
+    );
+
+    const mdWithPurpose = renderClaudeMember(
+      'dallas',
+      charter({ purpose: 'Owns the API layer.' }),
+      [
+        { workType: 'Backend Dev', routeTo: 'dallas' },
+        { workType: 'API Contracts', routeTo: 'dallas' },
+      ],
+      '.squad',
+      NOTE,
+    );
+    expect(JSON.parse(frontmatter(mdWithPurpose).description!)).toBe(
+      'Owns the API layer. Owns: API Contracts. Spawned by the Squad coordinator.',
+    );
+  });
+
   it('points the subagent at its charter and history, and forbids nested dispatch', () => {
     const md = renderClaudeMember('dallas', charter(), [], 'team/.squad', NOTE);
     expect(md).toContain('`team/.squad/agents/dallas/charter.md`');
